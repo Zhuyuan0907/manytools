@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="zh-Hant-TW">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>預覽・ZhuyuanLovePDF</title>
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="assets/viewer.css">
+</head>
+<body>
+<main class="stage" id="stage" tabindex="0" aria-label="頁面，用左右方向鍵翻頁">
+  <div class="spread" id="spread"></div>
+</main>
+
+<nav class="vnav" id="vnav" aria-label="翻頁">
+  <button type="button" class="vnav-btn" id="prevBtn" aria-label="上一頁">‹</button>
+  <span class="vnav-label" id="plabel">—</span>
+  <button type="button" class="vnav-btn" id="nextBtn" aria-label="下一頁">›</button>
+</nav>
+
+<div class="waiting" id="waiting">
+  <div class="wait-box" id="waitBox">
+    <span class="spinner" aria-hidden="true"></span>
+    <p class="stage-text">正在開啟預覽…</p>
+  </div>
+</div>
+
+<script src="lib/pdf.min.js"></script>
+<script src="lib/pdf.worker.src.js"></script>
+<script src="assets/core.js"></script>
+<script src="assets/viewer.js"></script>
+</body>
+</html>

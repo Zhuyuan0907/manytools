@@ -1,0 +1,1447 @@
+<title>備審 PDF 壓縮</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<meta name="description" content="把 PDF 每一頁轉成圖片再重新組合，自動壓到上傳限制以下。全部在瀏覽器內處理。">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500&family=LXGW+WenKai+TC:wght@400;700&family=Noto+Sans+TC:wght@400;500;700&display=swap">
+<style>
+/* Layout: one narrow "application form" column. A manuscript-grid (稿紙) drop zone up top,
+   settings as labelled form rows, finished files filed below as slips with a seal when they pass the limit. */
+:root {
+  --paper: #eef2ee;        /* page ground: cool, slightly green paper */
+  --sheet: #ffffff;        /* form surface */
+  --ink: #1b2530;          /* body text */
+  --ink-soft: #586470;     /* secondary text */
+  --rule: #d6ded7;         /* hairlines, borders */
+  --grid: #cfe1d3;         /* 稿紙 grid lines */
+  --accent: #2c6a4b;       /* manuscript green: primary actions, progress */
+  --accent-soft: #e1eee5;  /* tinted fills */
+  --on-accent: #ffffff;
+  --seal: #c0382b;         /* seal-stamp red, used only on the pass stamp */
+  --ok: #2b7a47;
+  --warn: #9a5b00;
+  --bad: #b3261e;
+  --shadow: 0 1px 2px rgba(27, 37, 48, .06), 0 6px 24px rgba(27, 37, 48, .06);
+
+  --font-display: "LXGW WenKai TC", "Kaiti TC", "BiauKai", "DFKai-SB", "STKaiti", serif;
+  --font-body: "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", "Heiti TC", system-ui, sans-serif;
+  --font-data: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+
+  --step--1: .8125rem;
+  --step-0: .9375rem;
+  --step-1: 1.125rem;
+  --step-2: 1.5rem;
+  --step-3: clamp(1.9rem, 1.4rem + 2.2vw, 2.6rem);
+  --radius: 10px;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #111714; --sheet: #182019; --ink: #e5ece7; --ink-soft: #9aa8a0; --rule: #2a352e;
+    --grid: #22322a; --accent: #7cc49b; --accent-soft: #1f3128; --on-accent: #0b1a12;
+    --seal: #ef6a5a; --ok: #7cc49b; --warn: #e2a64a; --bad: #ff8a80;
+    --shadow: 0 1px 2px rgba(0, 0, 0, .3), 0 8px 28px rgba(0, 0, 0, .25);
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --paper: #111714; --sheet: #182019; --ink: #e5ece7; --ink-soft: #9aa8a0; --rule: #2a352e;
+  --grid: #22322a; --accent: #7cc49b; --accent-soft: #1f3128; --on-accent: #0b1a12;
+  --seal: #ef6a5a; --ok: #7cc49b; --warn: #e2a64a; --bad: #ff8a80;
+  --shadow: 0 1px 2px rgba(0, 0, 0, .3), 0 8px 28px rgba(0, 0, 0, .25);
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+body {
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: var(--step-0);
+  line-height: 1.65;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 32px 56px;
+  -webkit-font-smoothing: antialiased;
+}
+.wrap { max-width: 760px; margin: 0 auto; display: grid; gap: 28px; }
+h1, h2, h3 { text-wrap: balance; margin: 0; }
+p { margin: 0; }
+button, input, select { font: inherit; color: inherit; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.num { font-family: var(--font-data); font-variant-numeric: tabular-nums; letter-spacing: -.01em; }
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+
+/* ---------- masthead ---------- */
+.masthead { display: grid; gap: 10px; }
+.eyebrow { font-size: var(--step--1); letter-spacing: .14em; color: var(--accent); font-weight: 500; }
+.masthead h1 { font-family: var(--font-display); font-weight: 700; font-size: var(--step-3); line-height: 1.2; letter-spacing: .04em; }
+.lede { color: var(--ink-soft); max-width: 36em; }
+.privacy { display: inline-flex; align-items: center; gap: 8px; font-size: var(--step--1); color: var(--ink-soft); }
+.privacy svg { flex: none; color: var(--accent); }
+
+/* ---------- drop zone: manuscript grid ---------- */
+.drop {
+  position: relative;
+  display: grid; place-items: center; text-align: center; gap: 6px;
+  min-height: 210px; padding: 28px 20px;
+  border: 1.5px solid var(--accent);
+  border-radius: var(--radius);
+  background-color: var(--sheet);
+  background-image:
+    linear-gradient(var(--grid) 1px, transparent 1px),
+    linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+  background-size: 28px 28px;
+  background-position: -1px -1px;
+  cursor: pointer;
+  transition: background-color .15s ease, border-color .15s ease;
+}
+.drop:focus-within { outline: 2px solid var(--accent); outline-offset: 3px; }
+.drop.is-over { background-color: var(--accent-soft); border-style: dashed; }
+.drop input[type="file"] { position: absolute; inset: 0; opacity: 0; width: 100%; height: 100%; cursor: pointer; }
+.drop-inner { position: relative; pointer-events: none; display: grid; gap: 6px; justify-items: center; background: var(--sheet); padding: 14px 22px; border-radius: 8px; box-shadow: 0 0 0 1px var(--rule); }
+.drop-title { font-family: var(--font-display); font-size: var(--step-2); font-weight: 700; letter-spacing: .06em; }
+.drop-hint { color: var(--ink-soft); font-size: var(--step--1); }
+.fake-btn { display: inline-block; margin-top: 4px; padding: 7px 16px; border-radius: 999px; background: var(--accent); color: var(--on-accent); font-weight: 500; font-size: var(--step--1); }
+
+/* ---------- settings form ---------- */
+.form { background: var(--sheet); border: 1px solid var(--rule); border-radius: var(--radius); box-shadow: var(--shadow); }
+.row { display: grid; grid-template-columns: 8.5em 1fr; gap: 8px 18px; align-items: start; padding: 16px 20px; border-top: 1px solid var(--rule); }
+.row:first-child { border-top: 0; }
+.row > .label { font-weight: 500; padding-top: 6px; }
+.row > .label small { display: block; font-weight: 400; color: var(--ink-soft); font-size: var(--step--1); line-height: 1.4; margin-top: 2px; }
+.field { display: grid; gap: 8px; min-width: 0; }
+.help { color: var(--ink-soft); font-size: var(--step--1); line-height: 1.55; }
+
+.chips { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.chip { position: relative; }
+.chip input { position: absolute; opacity: 0; inset: 0; margin: 0; cursor: pointer; }
+.chip span { display: inline-flex; align-items: center; gap: 6px; padding: 6px 13px; border: 1px solid var(--rule); border-radius: 999px; background: var(--sheet); cursor: pointer; white-space: nowrap; transition: border-color .12s, background .12s; }
+.chip input:checked + span { border-color: var(--accent); background: var(--accent-soft); color: var(--ink); box-shadow: inset 0 0 0 1px var(--accent); }
+.chip input:focus-visible + span { outline: 2px solid var(--accent); outline-offset: 2px; }
+.chip.disabled span { opacity: .45; cursor: not-allowed; }
+.custom-mb { display: inline-flex; align-items: center; gap: 6px; }
+.custom-mb input { width: 5.5em; padding: 5px 10px; border: 1px solid var(--rule); border-radius: 8px; background: var(--sheet); }
+
+.seg { display: inline-flex; flex-wrap: wrap; border: 1px solid var(--rule); border-radius: 10px; padding: 3px; gap: 3px; background: var(--paper); }
+.seg label { position: relative; }
+.seg input { position: absolute; opacity: 0; inset: 0; margin: 0; cursor: pointer; }
+.seg span { display: block; padding: 6px 14px; border-radius: 7px; cursor: pointer; white-space: nowrap; color: var(--ink-soft); }
+.seg input:checked + span { background: var(--sheet); color: var(--ink); font-weight: 500; box-shadow: 0 0 0 1px var(--rule), 0 1px 2px rgba(0,0,0,.06); }
+.seg input:focus-visible + span { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+.slider { display: grid; grid-template-columns: 1fr auto; gap: 4px 14px; align-items: center; }
+.slider input[type="range"] { width: 100%; accent-color: var(--accent); }
+.slider output { min-width: 5.5em; text-align: right; }
+.slider .ticks { grid-column: 1 / -1; display: flex; justify-content: space-between; color: var(--ink-soft); font-size: var(--step--1); }
+select.select { padding: 6px 10px; border: 1px solid var(--rule); border-radius: 8px; background: var(--sheet); max-width: 100%; }
+.check { display: inline-flex; gap: 10px; align-items: flex-start; cursor: pointer; }
+.check input { margin-top: 5px; accent-color: var(--accent); width: 16px; height: 16px; flex: none; }
+
+details.how { border-top: 1px solid var(--rule); }
+details.how summary { padding: 14px 20px; cursor: pointer; color: var(--accent); font-weight: 500; list-style-position: inside; }
+details.how .how-body { padding: 0 20px 18px; display: grid; gap: 10px; color: var(--ink-soft); max-width: 62ch; }
+details.how ol { margin: 0; padding-left: 1.3em; display: grid; gap: 4px; }
+details.how strong { color: var(--ink); font-weight: 500; }
+
+/* ---------- results ---------- */
+.results-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.results-head h2 { font-family: var(--font-display); font-size: var(--step-2); letter-spacing: .05em; }
+.results-head .help { margin: 0; }
+.jobs { display: grid; gap: 14px; }
+
+.job { position: relative; background: var(--sheet); border: 1px solid var(--rule); border-radius: var(--radius); box-shadow: var(--shadow); padding: 18px 20px; display: grid; gap: 12px; overflow: hidden; }
+.job.example { border-style: dashed; box-shadow: none; }
+.job-head { display: grid; grid-template-columns: 1fr auto; gap: 4px 12px; align-items: start; }
+.job-name { font-weight: 700; overflow-wrap: anywhere; min-width: 0; }
+.job-meta { color: var(--ink-soft); font-size: var(--step--1); grid-column: 1; }
+.tag-example { display: inline-block; font-size: 11px; letter-spacing: .1em; padding: 1px 8px; border-radius: 999px; border: 1px solid var(--rule); color: var(--ink-soft); margin-right: 8px; vertical-align: 2px; font-weight: 500; }
+
+.status { color: var(--ink-soft); font-size: var(--step--1); min-height: 1.4em; }
+.progress { height: 6px; background: var(--accent-soft); border-radius: 999px; overflow: hidden; }
+.progress > span { display: block; height: 100%; width: 0; background: var(--accent); border-radius: inherit; transition: width .25s ease; }
+
+.sizes { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 14px; }
+.size-before { color: var(--ink-soft); }
+.size-before .num { text-decoration: line-through; text-decoration-color: color-mix(in srgb, var(--ink-soft) 60%, transparent); }
+.size-arrow { color: var(--ink-soft); }
+.size-after { font-size: var(--step-2); font-weight: 700; line-height: 1.1; }
+.size-after .num { font-size: 1em; }
+.pill { display: inline-flex; align-items: center; gap: 6px; font-size: var(--step--1); padding: 2px 10px; border-radius: 999px; border: 1px solid currentColor; font-weight: 500; white-space: nowrap; }
+.pill.ok { color: var(--ok); }
+.pill.warn { color: var(--warn); }
+.pill.bad { color: var(--bad); }
+
+.meter { display: grid; gap: 4px; }
+.meter-track { position: relative; height: 10px; border-radius: 3px; background: var(--paper); box-shadow: inset 0 0 0 1px var(--rule); }
+.meter-fill { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 3px; background: var(--accent); }
+.meter-fill.over { background: var(--bad); }
+.meter-limit { position: absolute; top: -4px; bottom: -4px; width: 2px; background: var(--ink); border-radius: 1px; }
+.meter-labels { position: relative; height: 1.3em; font-size: var(--step--1); color: var(--ink-soft); }
+.meter-labels span { position: absolute; top: 0; white-space: nowrap; }
+
+.detail { color: var(--ink-soft); font-size: var(--step--1); }
+.notice { font-size: var(--step--1); padding: 10px 12px; border-radius: 8px; background: var(--paper); border: 1px solid var(--rule); }
+.notice.bad { color: var(--bad); border-color: color-mix(in srgb, var(--bad) 40%, var(--rule)); }
+.notice.warn { color: var(--warn); border-color: color-mix(in srgb, var(--warn) 40%, var(--rule)); }
+
+.actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 8px 16px; border-radius: 8px; border: 1px solid var(--rule); background: var(--sheet); cursor: pointer; font-weight: 500; transition: background .12s, border-color .12s; }
+.btn:hover:not(:disabled) { border-color: var(--accent); }
+.btn:disabled { opacity: .5; cursor: not-allowed; }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+.btn.primary:hover:not(:disabled) { filter: brightness(1.08); }
+.btn.ghost { border-color: transparent; background: transparent; color: var(--ink-soft); padding: 4px 8px; }
+.btn.ghost:hover:not(:disabled) { color: var(--ink); border-color: var(--rule); }
+.pw { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.pw input { padding: 7px 10px; border: 1px solid var(--rule); border-radius: 8px; background: var(--sheet); min-width: 0; flex: 1 1 12em; }
+
+/* the seal stamp: only on files that came in under the limit */
+.seal {
+  position: absolute; right: 18px; top: 52px;
+  font-family: var(--font-display); font-weight: 700; font-size: 1.15rem; letter-spacing: .2em;
+  color: var(--seal); border: 2.5px solid var(--seal); border-radius: 6px;
+  padding: 2px 6px 2px 10px; transform: rotate(-9deg); opacity: .88;
+  box-shadow: inset 0 0 0 2px var(--sheet), inset 0 0 0 3.5px var(--seal);
+  pointer-events: none; user-select: none;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .seal.stamp-in { animation: stamp .38s cubic-bezier(.2, 1.4, .4, 1) both; }
+  @keyframes stamp { from { transform: rotate(-9deg) scale(1.6); opacity: 0; } to { transform: rotate(-9deg) scale(1); opacity: .88; } }
+}
+
+.notes { display: grid; gap: 10px; color: var(--ink-soft); font-size: var(--step--1); border-top: 1px solid var(--rule); padding-top: 18px; }
+.notes h3 { font-size: var(--step-0); color: var(--ink); font-weight: 500; }
+.notes ul { margin: 0; padding-left: 1.2em; display: grid; gap: 4px; max-width: 64ch; }
+.banner { padding: 12px 14px; border-radius: 8px; border: 1px solid var(--bad); color: var(--bad); background: var(--sheet); }
+
+/* ---------- preview dialog ---------- */
+dialog.preview { width: min(980px, calc(100vw - 24px)); height: min(92vh, 1100px); max-height: calc(100vh - 24px); padding: 0; border: 1px solid var(--rule); border-radius: 12px; background: var(--sheet); color: var(--ink); box-shadow: 0 20px 60px rgba(0,0,0,.35); }
+dialog.preview::backdrop { background: rgba(10, 16, 13, .55); }
+.pv { display: grid; grid-template-rows: auto 1fr; height: 100%; }
+.pv-bar { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; justify-content: space-between; padding: 10px 14px; border-bottom: 1px solid var(--rule); }
+.pv-bar .group { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.pv-title { font-weight: 500; min-width: 0; overflow-wrap: anywhere; font-size: var(--step--1); color: var(--ink-soft); }
+.pv-stage { overflow: auto; background: var(--paper); padding: 16px; display: grid; justify-items: center; align-content: start; }
+.pv-stage canvas { background: #fff; box-shadow: 0 1px 6px rgba(0,0,0,.18); max-width: none; }
+.pv-stage.fit canvas { max-width: 100%; height: auto; }
+.pv-msg { color: var(--ink-soft); padding: 24px; text-align: center; }
+
+@media (max-width: 560px) {
+  body { padding-block: 20px 40px; }
+  .row { grid-template-columns: 1fr; padding: 14px 16px; }
+  .row > .label { padding-top: 0; }
+  .job { padding: 16px; }
+  .seal { top: auto; bottom: 16px; right: 14px; font-size: 1rem; }
+  .drop { min-height: 180px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  * { transition: none !important; animation: none !important; }
+}
+</style>
+
+<div class="wrap" lang="zh-Hant-TW">
+  <header class="masthead">
+    <div class="eyebrow">大學申請・備審資料</div>
+    <h1>備審 PDF 壓縮</h1>
+    <p class="lede">把 PDF 的每一頁轉成圖片，再重新組成一份 PDF，自動找出塞得進上傳限制的最高畫質。50 MB 的備審資料壓到 5 MB 以下，靠的就是這個方法。</p>
+    <p class="privacy">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="10" width="16" height="11" rx="2"></rect><path d="M8 10V7a4 4 0 0 1 8 0v3"></path></svg>
+      檔案只在你的瀏覽器裡處理，不會上傳到任何伺服器。
+    </p>
+  </header>
+
+  <div id="libError" class="banner" hidden>處理 PDF 需要的程式庫沒有載入成功。請確認網路連線後重新整理頁面。</div>
+
+  <label class="drop" id="drop" for="fileInput">
+    <input type="file" id="fileInput" accept="application/pdf,.pdf" multiple aria-label="選擇要壓縮的 PDF 檔">
+    <span class="drop-inner">
+      <span class="drop-title">把 PDF 拖進這裡</span>
+      <span class="drop-hint">或點一下選擇檔案・可一次放多個</span>
+      <span class="fake-btn" aria-hidden="true">選擇 PDF 檔</span>
+    </span>
+  </label>
+
+  <section class="form" aria-label="壓縮設定">
+    <div class="row">
+      <div class="label" id="lblTarget">上傳限制<small>每個檔案不能超過</small></div>
+      <div class="field">
+        <div class="chips" role="radiogroup" aria-labelledby="lblTarget">
+          <label class="chip"><input type="radio" name="target" value="2" id="t2"><span class="num">2 MB</span></label>
+          <label class="chip"><input type="radio" name="target" value="3" id="t3"><span class="num">3 MB</span></label>
+          <label class="chip"><input type="radio" name="target" value="4" id="t4"><span class="num">4 MB</span></label>
+          <label class="chip"><input type="radio" name="target" value="5" id="t5" checked><span class="num">5 MB</span></label>
+          <label class="chip"><input type="radio" name="target" value="10" id="t10"><span class="num">10 MB</span></label>
+          <label class="chip"><input type="radio" name="target" value="custom" id="tCustom"><span>自訂</span></label>
+          <span class="custom-mb" id="customWrap" hidden>
+            <input type="number" id="customMB" min="0.2" max="500" step="0.1" value="8" inputmode="decimal" aria-label="自訂上限（MB）"><span>MB</span>
+          </span>
+        </div>
+        <p class="help">為了保險，1 MB 以 1,000,000 bytes 計算，並預留一點空間，確保上傳系統一定收。</p>
+      </div>
+    </div>
+
+    <div class="row">
+      <div class="label" id="lblMode">壓縮方式</div>
+      <div class="field">
+        <div class="seg" role="radiogroup" aria-labelledby="lblMode">
+          <label><input type="radio" name="mode" value="auto" id="mAuto" checked><span>自動：壓到限制以下</span></label>
+          <label><input type="radio" name="mode" value="manual" id="mManual"><span>手動：自己調整</span></label>
+        </div>
+        <p class="help" id="modeHelp">自動模式會從高畫質往下試，找出剛好低於上限、畫質最好的設定。</p>
+      </div>
+    </div>
+
+    <div class="row">
+      <div class="label" id="lblFormat">頁面圖片格式</div>
+      <div class="field">
+        <div class="seg" role="radiogroup" aria-labelledby="lblFormat">
+          <label><input type="radio" name="format" value="jpeg" id="fJpeg" checked><span>JPEG（建議）</span></label>
+          <label><input type="radio" name="format" value="png" id="fPng"><span>PNG</span></label>
+        </div>
+        <p class="help" id="formatHelp">JPEG 檔案最小，照片和掃描頁也清楚，適合大多數備審資料。</p>
+      </div>
+    </div>
+
+    <div class="row" id="rowDpi" hidden>
+      <div class="label">解析度<small>越高越清楚，檔案越大</small></div>
+      <div class="field">
+        <div class="slider">
+          <input type="range" id="dpi" min="72" max="300" step="2" value="150" aria-label="解析度 DPI">
+          <output for="dpi" id="dpiOut" class="num">150 DPI</output>
+          <div class="ticks"><span>72 螢幕</span><span>150 一般</span><span>300 印刷</span></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="row" id="rowQuality" hidden>
+      <div class="label">JPEG 品質</div>
+      <div class="field">
+        <div class="slider">
+          <input type="range" id="quality" min="30" max="95" step="1" value="75" aria-label="JPEG 品質">
+          <output for="quality" id="qualityOut" class="num">75</output>
+          <div class="ticks"><span>30 很小</span><span>95 幾乎無損</span></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="row" id="rowColors" hidden>
+      <div class="label"><label for="colors">PNG 色彩數</label></div>
+      <div class="field">
+        <select id="colors" class="select">
+          <option value="0">無損（全彩，檔案最大）</option>
+          <option value="256" selected>256 色</option>
+          <option value="64">64 色</option>
+          <option value="16">16 色（純文字頁很適合）</option>
+        </select>
+        <p class="help">減少色彩數會讓 PNG 變小很多；純文字頁幾乎看不出差別，照片會出現色塊。</p>
+      </div>
+    </div>
+
+    <div class="row">
+      <div class="label">其他</div>
+      <div class="field">
+        <label class="check"><input type="checkbox" id="gray"><span>轉成灰階（黑白）<br><span class="help">檔案再小一些。如果資料裡有彩色照片或圖表，建議不要勾。</span></span></label>
+      </div>
+    </div>
+
+    <details class="how">
+      <summary>運作方式，以及為什麼建議 JPEG</summary>
+      <div class="how-body">
+        <ol>
+          <li><strong>拆頁轉圖：</strong>用 pdf.js 把每一頁畫成一張圖片，原本塞在 PDF 裡的高解析照片、內嵌字型、圖層全部被「拍平」。</li>
+          <li><strong>找最佳畫質：</strong>自動模式會用二分搜尋試不同的解析度與品質，挑出總大小剛好低於上限、畫質最高的組合。</li>
+          <li><strong>重組 PDF：</strong>每張圖片照原本的頁面尺寸放回新的 PDF，網址連結和目錄跳頁連結也會一併保留。</li>
+        </ol>
+        <p>「先轉圖再組合」的想法是對的，真正決定檔案大小的是圖片格式。PNG 是無損格式，遇到照片、漸層、掃描頁會非常大，一頁 2～5 MB 很常見，有時候比原檔還大。JPEG 對這類內容小很多，文字在 100 DPI 以上依然清楚。如果你的資料幾乎都是文字，可以試試 PNG 加上「16 色」。</p>
+      </div>
+    </details>
+  </section>
+
+  <section aria-labelledby="resultsTitle" class="results">
+    <div class="results-head">
+      <h2 id="resultsTitle">處理結果</h2>
+      <p class="help" id="queueInfo">放入 PDF 後會自動開始處理。</p>
+    </div>
+    <div class="jobs" id="jobs">
+      <article class="job example" id="exampleJob" aria-label="範例結果">
+        <div class="job-head">
+          <div class="job-name"><span class="tag-example">範例</span>備審資料_完整版.pdf</div>
+          <div class="job-meta">36 頁・自動模式・上限 5 MB</div>
+        </div>
+        <div class="sizes">
+          <span class="size-before">原始 <span class="num">48.6 MB</span></span>
+          <span class="size-arrow" aria-hidden="true">→</span>
+          <span class="size-after"><span class="num">4.71 MB</span></span>
+          <span class="pill ok">符合 5 MB 限制</span>
+        </div>
+        <div class="meter" aria-hidden="true">
+          <div class="meter-track"><div class="meter-fill" style="width: 94.2%"></div><div class="meter-limit" style="left: calc(100% - 1px)"></div></div>
+          <div class="meter-labels"><span style="left: 0">0</span><span style="right: 0">上限 5 MB</span></div>
+        </div>
+        <p class="detail">130 DPI・JPEG 品質 71・縮小 90%・保留 4 個連結</p>
+        <div class="actions">
+          <button class="btn primary" type="button" disabled>下載壓縮檔</button>
+          <button class="btn" type="button" disabled>預覽檢查</button>
+        </div>
+        <div class="seal" aria-hidden="true">合格</div>
+      </article>
+    </div>
+  </section>
+
+  <footer class="notes">
+    <h3>上傳前請注意</h3>
+    <ul>
+      <li>壓縮後每頁都是圖片，文字不能再被選取或搜尋；審查委員閱讀不受影響。</li>
+      <li>網址連結與目錄跳頁會保留。QR code 會跟著變成圖片，壓得很小時請用手機實際掃一次。</li>
+      <li>請按「預覽檢查」放大看最小的字，確認清楚再上傳。</li>
+      <li>有密碼的 PDF 需要先輸入開啟密碼。</li>
+    </ul>
+  </footer>
+</div>
+
+<dialog class="preview" id="preview" aria-labelledby="pvTitle">
+  <div class="pv">
+    <div class="pv-bar">
+      <div class="group">
+        <div class="seg" role="radiogroup" aria-label="要看哪一份">
+          <label><input type="radio" name="pvSource" value="out" id="pvOut" checked><span>壓縮後</span></label>
+          <label><input type="radio" name="pvSource" value="orig" id="pvOrig"><span>原始檔</span></label>
+        </div>
+        <button class="btn" type="button" id="pvPrev" aria-label="上一頁">‹</button>
+        <span class="num" id="pvPage">1 / 1</span>
+        <button class="btn" type="button" id="pvNext" aria-label="下一頁">›</button>
+        <button class="btn" type="button" id="pvZoom" aria-pressed="false">放大檢查</button>
+      </div>
+      <div class="group">
+        <span class="pv-title" id="pvTitle"></span>
+        <button class="btn" type="button" id="pvClose">關閉</button>
+      </div>
+    </div>
+    <div class="pv-stage fit" id="pvStage"><div class="pv-msg">載入中…</div></div>
+  </div>
+</dialog>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pako/2.1.0/pako.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/upng-js/2.1.0/UPNG.min.js"></script>
+<script>
+(() => {
+  'use strict';
+  document.documentElement.lang = 'zh-Hant-TW';
+
+  const PDFJS_VERSION = '3.11.174';
+  const PDFJS_CDN = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${PDFJS_VERSION}/`;
+  const PDFJS_DIST = `https://cdn.jsdelivr.net/npm/pdfjs-dist@${PDFJS_VERSION}/`;
+  const MB = 1000 * 1000;
+  const SAFETY = 0.98;              // keep 2% headroom under the stated limit
+  const MAX_PIXELS = 15_000_000;    // per rendered page; stays under iOS canvas limits
+  const PAGE_OVERHEAD = 900;        // bytes of PDF structure per page (estimate before assembling)
+  const DOC_OVERHEAD = 6000;
+
+  // Quality ladders, best first. Auto mode binary-searches for the first rung that fits.
+  const JPEG_LADDER = [
+    [200, .85], [180, .82], [165, .80], [150, .77], [140, .74], [130, .71], [120, .68], [110, .65],
+    [100, .62], [96, .57], [90, .52], [84, .48], [78, .44], [72, .40], [66, .36], [60, .32],
+  ].map(([dpi, q]) => ({ fmt: 'jpeg', dpi, q }));
+  const PNG_LADDER = [
+    [150, 0], [150, 256], [140, 128], [130, 64], [120, 64], [120, 32], [110, 32], [100, 32],
+    [100, 16], [90, 16], [84, 16], [78, 16], [72, 16], [72, 8], [66, 8], [60, 8],
+  ].map(([dpi, colors]) => ({ fmt: 'png', dpi, colors }));
+
+  const $ = (sel, el = document) => el.querySelector(sel);
+  const libsOk = typeof window.pdfjsLib !== 'undefined' && typeof window.PDFLib !== 'undefined'
+    && typeof window.pako !== 'undefined' && typeof window.UPNG !== 'undefined';
+  if (!libsOk) { $('#libError').hidden = false; }
+  else { pdfjsLib.GlobalWorkerOptions.workerSrc = PDFJS_CDN + 'pdf.worker.min.js'; }
+
+  // ---------- helpers ----------
+  const fmtMB = (bytes, digits) => {
+    const v = bytes / MB;
+    const d = digits ?? (v < 10 ? 2 : 1);
+    return v.toFixed(d) + ' MB';
+  };
+  const fmtLimit = (mb) => (Math.round(mb * 10) / 10).toString() + ' MB';
+  const el = (tag, attrs = {}, ...kids) => {
+    const n = document.createElement(tag);
+    for (const [k, v] of Object.entries(attrs)) {
+      if (v == null || v === false) continue;
+      if (k === 'class') n.className = v;
+      else if (k === 'text') n.textContent = v;
+      else if (k.startsWith('on')) n.addEventListener(k.slice(2), v);
+      else n.setAttribute(k, v === true ? '' : v);
+    }
+    for (const kid of kids) if (kid != null) n.append(kid);
+    return n;
+  };
+  const nextFrame = () => new Promise((r) => setTimeout(r, 0));
+  class Cancelled extends Error { constructor() { super('cancelled'); this.name = 'Cancelled'; } }
+  const store = {
+    get(k) { try { return localStorage.getItem('pdfsquash:' + k); } catch { return null; } },
+    set(k, v) { try { localStorage.setItem('pdfsquash:' + k, v); } catch { /* storage unavailable */ } },
+  };
+
+  // cMaps and standard fonts: try the copies published next to the page first (base64 in JSON,
+  // since the artifact host serves no raw binary types), then the CDN (works for the standalone file).
+  const localOk = /^https?:$/.test(location.protocol);
+  const sources = (dir, file) => [
+    ...(localOk ? [{ url: `pdfjs-data/${dir}/${file}.json`, b64: true }] : []),
+    { url: `${PDFJS_DIST}${dir}/${file}` },
+  ];
+  async function fetchFirst(list) {
+    let lastErr = new Error('no source');
+    for (const { url, b64 } of list) {
+      try {
+        const r = await fetch(url);
+        if (!r.ok) { lastErr = new Error(`${r.status} ${url}`); continue; }
+        if (!b64) return new Uint8Array(await r.arrayBuffer());
+        const bin = atob((await r.json()).b64);
+        const out = new Uint8Array(bin.length);
+        for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+        return out;
+      } catch (e) { lastErr = e; }
+    }
+    throw lastErr;
+  }
+  // Remember assets that could not be loaded: pdf.js then silently drops the affected text.
+  const assetMisses = new Set();
+  class CMapFactory {
+    async fetch({ name }) {
+      try {
+        const cMapData = await fetchFirst(sources('cmaps', name + '.bcmap'));
+        return { cMapData, compressionType: pdfjsLib.CMapCompressionType.BINARY };
+      } catch (e) { assetMisses.add(name); throw e; }
+    }
+  }
+  class FontFactory {
+    async fetch({ filename }) {
+      try { return await fetchFirst(sources('standard_fonts', filename)); }
+      catch (e) { assetMisses.add(filename); throw e; }
+    }
+  }
+
+  function openPdf(data, password) {
+    return pdfjsLib.getDocument({
+      data,
+      password,
+      isEvalSupported: false,
+      CMapReaderFactory: CMapFactory,
+      StandardFontDataFactory: FontFactory,
+      cMapUrl: 'cmaps/',
+      cMapPacked: true,
+      standardFontDataUrl: 'standard_fonts/',
+      useWorkerFetch: false,
+    });
+  }
+
+  function canvasToBlob(canvas, type, quality) {
+    return new Promise((resolve, reject) => {
+      canvas.toBlob((b) => (b ? resolve(b) : reject(new Error('圖片編碼失敗，頁面可能太大'))), type, quality);
+    });
+  }
+
+  function toGray(ctx, w, h) {
+    const img = ctx.getImageData(0, 0, w, h);
+    const d = img.data;
+    for (let i = 0; i < d.length; i += 4) {
+      const y = (d[i] * 299 + d[i + 1] * 587 + d[i + 2] * 114 + 500) / 1000 | 0;
+      d[i] = d[i + 1] = d[i + 2] = y;
+    }
+    ctx.putImageData(img, 0, 0);
+  }
+
+  // Draw `src` into a fresh canvas of dw×dh, halving step by step so text stays smooth.
+  function drawScaled(src, sw, sh, dw, dh) {
+    let cur = src, cw = sw, ch = sh;
+    const temps = [];
+    while (cw / 2 >= dw && ch / 2 >= dh) {
+      const nw = Math.round(cw / 2), nh = Math.round(ch / 2);
+      const t = document.createElement('canvas');
+      t.width = nw; t.height = nh;
+      const tc = t.getContext('2d');
+      tc.imageSmoothingEnabled = true; tc.imageSmoothingQuality = 'high';
+      tc.drawImage(cur, 0, 0, nw, nh);
+      temps.push(t); cur = t; cw = nw; ch = nh;
+    }
+    const out = document.createElement('canvas');
+    out.width = dw; out.height = dh;
+    const ctx = out.getContext('2d', { willReadFrequently: false });
+    ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, dw, dh);
+    ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = 'high';
+    ctx.drawImage(cur, 0, 0, dw, dh);
+    for (const t of temps) { t.width = 0; t.height = 0; }
+    return out;
+  }
+
+  // ---------- PNG → PDF image without re-encoding ----------
+  function parsePng(bytes) {
+    if (bytes.length < 8 || bytes[0] !== 0x89 || bytes[1] !== 0x50) return null;
+    const dv = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+    let pos = 8, ihdr = null, plte = null;
+    const idat = [];
+    while (pos + 8 <= bytes.length) {
+      const len = dv.getUint32(pos);
+      const type = String.fromCharCode(bytes[pos + 4], bytes[pos + 5], bytes[pos + 6], bytes[pos + 7]);
+      const data = bytes.subarray(pos + 8, pos + 8 + len);
+      if (type === 'IHDR') ihdr = { w: dv.getUint32(pos + 8), h: dv.getUint32(pos + 12), depth: bytes[pos + 16], ctype: bytes[pos + 17], interlace: bytes[pos + 20] };
+      else if (type === 'PLTE') plte = data;
+      else if (type === 'IDAT') idat.push(data);
+      else if (type === 'IEND') break;
+      pos += 12 + len;
+    }
+    if (!ihdr || !idat.length) return null;
+    let total = 0;
+    for (const c of idat) total += c.length;
+    const data = new Uint8Array(total);
+    let o = 0;
+    for (const c of idat) { data.set(c, o); o += c.length; }
+    return { ...ihdr, plte, data };
+  }
+
+  function embedFlateImage(doc, { w, h, depth, colorSpace, colors, data }) {
+    const dict = doc.context.obj({
+      Type: 'XObject', Subtype: 'Image', Width: w, Height: h, BitsPerComponent: depth,
+      ColorSpace: colorSpace, Filter: 'FlateDecode',
+      DecodeParms: { Predictor: 15, Colors: colors, BitsPerComponent: depth, Columns: w },
+    });
+    return doc.context.register(PDFLib.PDFRawStream.of(dict, data));
+  }
+
+  function embedPngDirect(doc, bytes) {
+    const p = parsePng(bytes);
+    if (!p || p.interlace || p.depth > 8 || ![0, 2, 3].includes(p.ctype)) return null;
+    let colorSpace;
+    if (p.ctype === 0) colorSpace = 'DeviceGray';
+    else if (p.ctype === 2) colorSpace = 'DeviceRGB';
+    else {
+      if (!p.plte || p.plte.length < 3) return null;
+      let hex = '';
+      for (let i = 0; i < p.plte.length; i++) hex += p.plte[i].toString(16).padStart(2, '0');
+      colorSpace = ['Indexed', 'DeviceRGB', p.plte.length / 3 - 1, PDFLib.PDFHexString.of(hex)];
+    }
+    return embedFlateImage(doc, { w: p.w, h: p.h, depth: p.depth, colorSpace, colors: p.ctype === 2 ? 3 : 1, data: p.data });
+  }
+
+  // Lossless grayscale: 1 byte per pixel with PNG row filters, deflated, embedded as DeviceGray.
+  function encodeGrayLossless(rgba, w, h) {
+    const rowLen = w + 1;
+    const out = new Uint8Array(rowLen * h);
+    const cur = new Uint8Array(w), prev = new Uint8Array(w);
+    const cand = [new Uint8Array(w), new Uint8Array(w), new Uint8Array(w), new Uint8Array(w)];
+    for (let y = 0; y < h; y++) {
+      const base = y * w * 4;
+      for (let x = 0; x < w; x++) cur[x] = rgba[base + x * 4];
+      let best = 0, bestSum = Infinity;
+      for (let f = 0; f < 4; f++) {
+        const c = cand[f];
+        let sum = 0;
+        for (let x = 0; x < w; x++) {
+          const a = x ? cur[x - 1] : 0, b = prev[x], cc = x ? prev[x - 1] : 0;
+          let v;
+          if (f === 0) v = cur[x];
+          else if (f === 1) v = cur[x] - a;
+          else if (f === 2) v = cur[x] - b;
+          else {
+            const p = a + b - cc, pa = Math.abs(p - a), pb = Math.abs(p - b), pc = Math.abs(p - cc);
+            v = cur[x] - (pa <= pb && pa <= pc ? a : pb <= pc ? b : cc);
+          }
+          v &= 255; c[x] = v; sum += v < 128 ? v : 256 - v;
+        }
+        if (sum < bestSum) { bestSum = sum; best = f; }
+      }
+      out[y * rowLen] = best === 3 ? 4 : best;
+      out.set(cand[best], y * rowLen + 1);
+      prev.set(cur);
+    }
+    return pako.deflate(out, { level: 6 });
+  }
+
+  // ---------- rendering ----------
+  async function collectLinks(pdf, page, vp1) {
+    const links = [];
+    let annots = [];
+    try { annots = await page.getAnnotations({ intent: 'display' }); } catch { return links; }
+    for (const a of annots) {
+      if (a.subtype !== 'Link' || !Array.isArray(a.rect)) continue;
+      const r = vp1.convertToViewportRectangle(a.rect);
+      const x1 = Math.min(r[0], r[2]), x2 = Math.max(r[0], r[2]);
+      const y1 = Math.min(r[1], r[3]), y2 = Math.max(r[1], r[3]);
+      const rect = [x1, vp1.height - y2, x2, vp1.height - y1];
+      if (a.url) { links.push({ rect, url: a.url }); continue; }
+      if (a.dest) {
+        try {
+          const explicit = typeof a.dest === 'string' ? await pdf.getDestination(a.dest) : a.dest;
+          if (!Array.isArray(explicit)) continue;
+          const ref = explicit[0];
+          const idx = ref && typeof ref === 'object' ? await pdf.getPageIndex(ref) : Number.isInteger(ref) ? ref : null;
+          if (idx != null) links.push({ rect, page: idx });
+        } catch { /* unresolved destination: skip */ }
+      }
+    }
+    return links;
+  }
+
+  async function renderPage(job, pdf, n, dpi, gray) {
+    const page = await pdf.getPage(n);
+    try {
+      const vp1 = page.getViewport({ scale: 1 });
+      const wPt = vp1.width, hPt = vp1.height;
+      const scale = Math.min(dpi / 72, Math.sqrt(MAX_PIXELS / (wPt * hPt)));
+      const vp = page.getViewport({ scale });
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.max(1, Math.round(vp.width));
+      canvas.height = Math.max(1, Math.round(vp.height));
+      const ctx = canvas.getContext('2d', { alpha: false });
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      const task = page.render({
+        canvasContext: ctx, viewport: vp, background: '#ffffff',
+        annotationMode: pdfjsLib.AnnotationMode.ENABLE,
+      });
+      job.renderTask = task;
+      try { await task.promise; }
+      catch (e) { if (job.cancelled) throw new Cancelled(); throw e; }
+      finally { job.renderTask = null; }
+      if (gray) toGray(ctx, canvas.width, canvas.height);
+      const links = await collectLinks(pdf, page, vp1);
+      return { canvas, wPt, hPt, links };
+    } finally {
+      page.cleanup();
+    }
+  }
+
+  // Encode one page image from a source canvas/bitmap at the given setting.
+  async function encodeFrom(src, sw, sh, entry, s) {
+    let dw = Math.max(1, Math.round(entry.wPt * s.dpi / 72));
+    let dh = Math.max(1, Math.round(entry.hPt * s.dpi / 72));
+    if (dw > sw || dh > sh) { dw = sw; dh = sh; }   // never upscale
+    const c = (dw === sw && dh === sh && src instanceof HTMLCanvasElement) ? src : drawScaled(src, sw, sh, dw, dh);
+    try {
+      if (s.fmt === 'jpeg') {
+        const blob = await canvasToBlob(c, 'image/jpeg', s.q);
+        return { kind: 'jpeg', blob, size: blob.size };
+      }
+      const ctx = c.getContext('2d');
+      const rgba = ctx.getImageData(0, 0, dw, dh).data;
+      if (s.colors === 0 && s.gray) {
+        const data = encodeGrayLossless(rgba, dw, dh);
+        return { kind: 'gray', data, w: dw, h: dh, size: data.length };
+      }
+      // UPNG's quantizer can merge distinct flat colours (white+red+blue -> purple) when the page has
+      // fewer colours than the palette; such pages get an exact palette from the lossless path instead.
+      let cnum = s.colors;
+      if (cnum) {
+        const u32 = new Uint32Array(rgba.buffer, rgba.byteOffset, rgba.length >> 2);
+        const seen = new Set();
+        for (let i = 0; i < u32.length && seen.size <= cnum; i++) seen.add(u32[i]);
+        if (seen.size <= cnum) cnum = 0;
+      }
+      const png = new Uint8Array(UPNG.encode([rgba.buffer], dw, dh, cnum));
+      return { kind: 'png', data: png, size: png.length };
+    } finally {
+      if (c !== src) { c.width = 0; c.height = 0; }
+    }
+  }
+
+  // ---------- bookmarks (outline) ----------
+  async function copyOutline(pdf, doc, pages) {
+    const outline = await pdf.getOutline().catch(() => null);
+    if (!outline || !outline.length) return 0;
+    const { PDFHexString, PDFString, PDFName } = PDFLib;
+    const ctx = doc.context;
+    let count = 0;
+    const pageOf = async (dest) => {
+      try {
+        const d = typeof dest === 'string' ? await pdf.getDestination(dest) : dest;
+        if (!Array.isArray(d)) return null;
+        const ref = d[0];
+        const idx = ref && typeof ref === 'object' ? await pdf.getPageIndex(ref) : Number.isInteger(ref) ? ref : null;
+        return idx != null && pages[idx] ? idx : null;
+      } catch { return null; }
+    };
+    const build = async (items, parentRef) => {
+      const nodes = items.map((it) => ({ it, ref: ctx.nextRef(), dict: { Title: PDFHexString.fromText(it.title || ''), Parent: parentRef } }));
+      for (let i = 0; i < nodes.length; i++) {
+        const { it, ref, dict } = nodes[i];
+        if (it.url) dict.A = { Type: 'Action', S: 'URI', URI: PDFString.of(it.url.replace(/[^\x21-\x7e]/g, encodeURIComponent).replace(/[\\()]/g, '\\$&')) };
+        else { const idx = await pageOf(it.dest); if (idx != null) dict.Dest = [pages[idx].ref, 'Fit']; }
+        if (i > 0) dict.Prev = nodes[i - 1].ref;
+        if (i < nodes.length - 1) dict.Next = nodes[i + 1].ref;
+        if (it.items && it.items.length) {
+          const kids = await build(it.items, ref);
+          dict.First = kids[0]; dict.Last = kids[kids.length - 1]; dict.Count = -kids.length;
+        }
+        ctx.assign(ref, ctx.obj(dict));
+        count++;
+      }
+      return nodes.map((n) => n.ref);
+    };
+    const rootRef = ctx.nextRef();
+    const top = await build(outline, rootRef);
+    ctx.assign(rootRef, ctx.obj({ Type: 'Outlines', First: top[0], Last: top[top.length - 1], Count: top.length }));
+    doc.catalog.set(PDFName.of('Outlines'), rootRef);
+    return count;
+  }
+
+  // ---------- assembly ----------
+  async function assemble(job, entries, images, title) {
+    const { PDFDocument, PDFString } = PDFLib;
+    const doc = await PDFDocument.create();
+    const pages = [];
+    for (let i = 0; i < entries.length; i++) {
+      if (job.cancelled) throw new Cancelled();
+      const e = entries[i], im = images[i];
+      const page = doc.addPage([e.wPt, e.hPt]);
+      if (im.kind === 'jpeg') {
+        const bytes = new Uint8Array(await im.blob.arrayBuffer());
+        const img = await doc.embedJpg(bytes);
+        page.drawImage(img, { x: 0, y: 0, width: e.wPt, height: e.hPt });
+      } else {
+        let ref = null;
+        if (im.kind === 'gray') ref = embedFlateImage(doc, { w: im.w, h: im.h, depth: 8, colorSpace: 'DeviceGray', colors: 1, data: im.data });
+        else ref = embedPngDirect(doc, im.data);
+        if (ref) {
+          const name = page.node.newXObject('Im', ref);
+          page.pushOperators(
+            PDFLib.pushGraphicsState(),
+            PDFLib.concatTransformationMatrix(e.wPt, 0, 0, e.hPt, 0, 0),
+            PDFLib.drawObject(name),
+            PDFLib.popGraphicsState(),
+          );
+        } else {
+          const img = await doc.embedPng(im.data);
+          page.drawImage(img, { x: 0, y: 0, width: e.wPt, height: e.hPt });
+        }
+      }
+      pages.push(page);
+      if (i % 8 === 7) await nextFrame();
+    }
+    let linkCount = 0;
+    entries.forEach((e, i) => {
+      for (const l of e.links) {
+        let action = null;
+        if (l.url) {
+          const safe = l.url.replace(/[^\x21-\x7e]/g, (ch) => encodeURIComponent(ch));
+          // PDFString.of() writes the value verbatim: escape \ ( ) or an unbalanced paren corrupts the object stream
+          action = { A: { Type: 'Action', S: 'URI', URI: PDFString.of(safe.replace(/[\\()]/g, '\\$&')) } };
+        } else if (l.page != null && pages[l.page]) {
+          action = { Dest: [pages[l.page].ref, 'Fit'] };
+        }
+        if (!action) continue;
+        const annot = doc.context.obj({ Type: 'Annot', Subtype: 'Link', Rect: l.rect.map((v) => Math.round(v * 100) / 100), Border: [0, 0, 0], ...action });
+        pages[i].node.addAnnot(doc.context.register(annot));
+        linkCount++;
+      }
+    });
+    if (job.pdf) { try { await copyOutline(job.pdf, doc, pages); } catch (e) { console.warn('outline', e); } }
+    doc.setTitle(title);
+    doc.setCreator('備審 PDF 壓縮');
+    doc.setProducer('備審 PDF 壓縮 (pdf.js + pdf-lib)');
+    const bytes = await doc.save({ useObjectStreams: true });
+    return { bytes, linkCount };
+  }
+
+  // ---------- the pipeline ----------
+  function estimateFits(sum, entries, target) {
+    return sum + DOC_OVERHEAD + entries.length * PAGE_OVERHEAD <= target;
+  }
+
+  async function encodeAll(job, entries, s, limit, onPage) {
+    const images = [];
+    let sum = 0;
+    for (let i = 0; i < entries.length; i++) {
+      if (job.cancelled) throw new Cancelled();
+      const e = entries[i];
+      const bmp = await createImageBitmap(e.blob);
+      let im;
+      try { im = await encodeFrom(bmp, bmp.width, bmp.height, e, { ...s, gray: job.settings.gray }); }
+      finally { bmp.close && bmp.close(); }
+      images.push(im);
+      sum += im.size;
+      onPage(i + 1);
+      if (limit != null && !estimateFits(sum, entries, limit)) return { fits: false, images: null, sum };
+    }
+    return { fits: true, images, sum };
+  }
+
+  async function processJob(job) {
+    const st = job.settings;
+    const targetBytes = Math.floor(st.targetMB * MB * SAFETY);
+    job.ui.setProgress(0.01, '讀取檔案…');
+    const buf = new Uint8Array(await job.file.arrayBuffer());
+    const head = new TextDecoder('latin1').decode(buf.subarray(0, Math.min(1024, buf.length)));
+    if (!head.includes('%PDF')) throw Object.assign(new Error('這個檔案不是 PDF。請確認副檔名是 .pdf 且檔案沒有損壞。'), { friendly: true });
+
+    if (st.mode === 'auto' && job.file.size <= targetBytes && !job.force) {
+      return { skipped: true };
+    }
+
+    assetMisses.clear();
+    const loading = openPdf(buf, job.password || undefined);
+    job.loading = loading;
+    let pdf;
+    try { pdf = await loading.promise; }
+    catch (e) {
+      if (e && e.name === 'PasswordException') {
+        throw Object.assign(new Error(e.code === 2 ? '密碼不正確，請再試一次。' : '這份 PDF 有開啟密碼。'), { needPassword: true, friendly: true });
+      }
+      if (e && (e.name === 'InvalidPDFException' || e.name === 'MissingPDFException')) {
+        throw Object.assign(new Error('這份 PDF 無法讀取，檔案可能損壞。可以先用其他軟體「另存成 PDF」後再試。'), { friendly: true });
+      }
+      throw e;
+    }
+    job.pdf = pdf;
+    const N = pdf.numPages;
+    job.pages = N;
+    job.ui.setMeta();
+    const title = job.file.name.replace(/\.pdf$/i, '');
+
+    try {
+      if (st.mode === 'manual') {
+        const s = st.format === 'jpeg'
+          ? { fmt: 'jpeg', dpi: st.dpi, q: st.quality / 100 }
+          : { fmt: 'png', dpi: st.dpi, colors: st.colors };
+        const entries = [], images = [];
+        for (let n = 1; n <= N; n++) {
+          if (job.cancelled) throw new Cancelled();
+          job.ui.setProgress(0.02 + 0.9 * (n - 1) / N, `轉成圖片：第 ${n} / ${N} 頁`);
+          const r = await renderPage(job, pdf, n, s.dpi, st.gray);
+          try {
+            entries.push({ wPt: r.wPt, hPt: r.hPt, links: r.links });
+            images.push(await encodeFrom(r.canvas, r.canvas.width, r.canvas.height, r, { ...s, gray: st.gray }));
+          } finally { r.canvas.width = 0; r.canvas.height = 0; }
+        }
+        job.ui.setProgress(0.95, '組合 PDF…');
+        const { bytes, linkCount } = await assemble(job, entries, images, title);
+        return { bytes, setting: s, linkCount, over: bytes.length > targetBytes, targetBytes, missing: [...assetMisses] };
+      }
+
+      // Auto: render every page once at the top rung, keep a high-quality copy,
+      // then binary-search the ladder by re-encoding those copies (fast, no re-render).
+      const ladder = st.format === 'png' ? PNG_LADDER : JPEG_LADDER;
+      const cacheType = st.format === 'png' ? 'image/png' : 'image/jpeg';
+      const entries = [];
+      for (let n = 1; n <= N; n++) {
+        if (job.cancelled) throw new Cancelled();
+        job.ui.setProgress(0.02 + 0.55 * (n - 1) / N, `轉成圖片：第 ${n} / ${N} 頁`);
+        const r = await renderPage(job, pdf, n, ladder[0].dpi, st.gray);
+        try {
+          const blob = await canvasToBlob(r.canvas, cacheType, 0.92);
+          entries.push({ wPt: r.wPt, hPt: r.hPt, links: r.links, blob });
+        } finally { r.canvas.width = 0; r.canvas.height = 0; }
+      }
+      pdf.cleanup();
+
+      const maxProbes = Math.ceil(Math.log2(ladder.length + 1)) + 1;
+      let probe = 0;
+      const describe = (s) => s.fmt === 'jpeg' ? `${s.dpi} DPI・品質 ${Math.round(s.q * 100)}` : `${s.dpi} DPI・${s.colors ? s.colors + ' 色' : '無損'}`;
+      const runProbe = async (idx, limit) => {
+        probe++;
+        const s = ladder[idx];
+        const base = 0.58 + 0.36 * Math.min(probe - 1, maxProbes - 1) / maxProbes;
+        const span = 0.36 / maxProbes;
+        return encodeAll(job, entries, s, limit, (done) => {
+          job.ui.setProgress(base + span * done / N, `尋找最佳畫質：試 ${describe(s)}（第 ${probe} 次）`);
+        });
+      };
+
+      let lo = 0, hi = ladder.length - 1, best = null;
+      while (lo <= hi) {
+        const mid = (lo + hi) >> 1;
+        const r = await runProbe(mid, targetBytes);
+        if (r.fits) { best = { idx: mid, images: r.images }; hi = mid - 1; }
+        else lo = mid + 1;
+      }
+      let idx, images;
+      if (best) { idx = best.idx; images = best.images; }
+      else {
+        idx = ladder.length - 1;
+        images = (await runProbe(idx, null)).images;
+      }
+      // Assemble; if real overhead pushes it over, step down a rung and retry.
+      for (;;) {
+        job.ui.setProgress(0.96, '組合 PDF…');
+        const { bytes, linkCount } = await assemble(job, entries, images, title);
+        if (bytes.length <= targetBytes || idx >= ladder.length - 1) {
+          let out = { bytes, linkCount };
+          // Below ~120 DPI, shrinking the cached copy makes thin strokes lighter than a direct render.
+          // Re-render straight at the chosen resolution and keep that version if it still fits.
+          const s = ladder[idx];
+          if (s.dpi < 120 && bytes.length <= targetBytes) {
+            const sharp = [];
+            for (let n = 1; n <= N; n++) {
+              if (job.cancelled) throw new Cancelled();
+              job.ui.setProgress(0.96 + 0.03 * (n - 1) / N, `讓小字更清楚：重新轉換第 ${n} / ${N} 頁`);
+              const r = await renderPage(job, pdf, n, s.dpi, st.gray);
+              try { sharp.push(await encodeFrom(r.canvas, r.canvas.width, r.canvas.height, r, { ...s, gray: st.gray })); }
+              finally { r.canvas.width = 0; r.canvas.height = 0; }
+            }
+            const alt = await assemble(job, entries, sharp, title);
+            if (alt.bytes.length <= targetBytes) out = alt;
+          }
+          return { bytes: out.bytes, setting: s, linkCount: out.linkCount, over: out.bytes.length > targetBytes, targetBytes, missing: [...assetMisses] };
+        }
+        idx++;
+        images = (await runProbe(idx, null)).images;
+      }
+    } finally {
+      job.pdf = null;
+      pdf.destroy();
+    }
+  }
+
+  // ---------- downloads (artifact capability, with a plain-link fallback) ----------
+  const downloadsReady = (window.claude && typeof window.claude.use === 'function')
+    ? window.claude.use('downloads').catch(() => null)
+    : Promise.resolve(null);
+
+  async function saveFile(blob, filename) {
+    const dl = await downloadsReady;
+    if (dl) {
+      try {
+        await dl.save({ filename, data: blob });
+        return { ok: true };
+      } catch (e) {
+        const code = e && e.code;
+        if (code === 'declined') return { ok: false, msg: '已取消下載。' };
+        if (code === 'rate_limited') return { ok: false, msg: '已經有一個下載視窗開著，請先處理它。' };
+        if (code === 'too_large') return { ok: false, msg: '檔案太大，這個環境無法下載。' };
+        // anything else: fall back to a normal link below
+      }
+    }
+    const url = URL.createObjectURL(blob);
+    const a = el('a', { href: url, download: filename });
+    a.style.display = 'none';
+    document.body.append(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 120000);
+    return { ok: true, fallback: !!window.claude };
+  }
+
+  // ---------- settings UI ----------
+  const settings = {
+    target: store.get('target') || '5',
+    customMB: parseFloat(store.get('customMB')) || 8,
+    mode: store.get('mode') || 'auto',
+    format: store.get('format') || 'jpeg',
+    dpi: parseInt(store.get('dpi'), 10) || 150,
+    quality: parseInt(store.get('quality'), 10) || 75,
+    colors: store.get('colors') != null ? parseInt(store.get('colors'), 10) : 256,
+    gray: store.get('gray') === '1',
+  };
+  const targetMB = () => {
+    if (settings.target === 'custom') {
+      const v = settings.customMB;
+      return Number.isFinite(v) && v >= 0.2 ? Math.min(v, 500) : 5;
+    }
+    return parseFloat(settings.target);
+  };
+
+  function syncSettingsUI() {
+    const tr = document.querySelector(`input[name="target"][value="${CSS.escape(settings.target)}"]`) || $('#t5');
+    tr.checked = true;
+    $('#customWrap').hidden = settings.target !== 'custom';
+    $('#customMB').value = settings.customMB;
+    (settings.mode === 'manual' ? $('#mManual') : $('#mAuto')).checked = true;
+    (settings.format === 'png' ? $('#fPng') : $('#fJpeg')).checked = true;
+    $('#dpi').value = settings.dpi; $('#dpiOut').textContent = settings.dpi + ' DPI';
+    $('#quality').value = settings.quality; $('#qualityOut').textContent = settings.quality;
+    $('#colors').value = String(settings.colors);
+    $('#gray').checked = settings.gray;
+    const manual = settings.mode === 'manual';
+    $('#rowDpi').hidden = !manual;
+    $('#rowQuality').hidden = !manual || settings.format !== 'jpeg';
+    $('#rowColors').hidden = !manual || settings.format !== 'png';
+    $('#modeHelp').textContent = manual
+      ? '手動模式照你設定的解析度與品質轉換一次。完成後會顯示是否超過上限。'
+      : '自動模式會從高畫質往下試，找出剛好低於上限、畫質最好的設定。';
+    $('#formatHelp').textContent = settings.format === 'png'
+      ? 'PNG 是無損格式，純文字頁很清晰；照片和掃描頁會很大。自動模式會在需要時減少色彩數。'
+      : 'JPEG 檔案最小，照片和掃描頁也清楚，適合大多數備審資料。';
+  }
+
+  document.addEventListener('change', (ev) => {
+    const t = ev.target;
+    if (t.name === 'target') { settings.target = t.value; store.set('target', t.value); if (t.value === 'custom') setTimeout(() => $('#customMB').focus(), 0); }
+    else if (t.id === 'customMB') { settings.customMB = parseFloat(t.value); store.set('customMB', String(settings.customMB)); }
+    else if (t.name === 'mode') { settings.mode = t.value; store.set('mode', t.value); }
+    else if (t.name === 'format') { settings.format = t.value; store.set('format', t.value); }
+    else if (t.id === 'colors') { settings.colors = parseInt(t.value, 10); store.set('colors', t.value); }
+    else if (t.id === 'gray') { settings.gray = t.checked; store.set('gray', t.checked ? '1' : '0'); }
+    else return;
+    syncSettingsUI();
+  });
+  $('#customMB').addEventListener('input', (ev) => { settings.customMB = parseFloat(ev.target.value); store.set('customMB', ev.target.value); });
+  $('#dpi').addEventListener('input', (ev) => { settings.dpi = parseInt(ev.target.value, 10); $('#dpiOut').textContent = settings.dpi + ' DPI'; store.set('dpi', ev.target.value); });
+  $('#quality').addEventListener('input', (ev) => { settings.quality = parseInt(ev.target.value, 10); $('#qualityOut').textContent = settings.quality; store.set('quality', ev.target.value); });
+  syncSettingsUI();
+
+  // ---------- jobs ----------
+  const jobs = [];
+  let running = false;
+  let seq = 0;
+
+  function snapshotSettings() {
+    return {
+      targetMB: targetMB(), mode: settings.mode, format: settings.format,
+      dpi: settings.dpi, quality: settings.quality, colors: settings.colors, gray: settings.gray,
+    };
+  }
+
+  function addFiles(fileList) {
+    const files = [...fileList];
+    if (!files.length) return;
+    $('#exampleJob')?.remove();
+    for (const file of files) {
+      const job = { id: ++seq, file, settings: snapshotSettings(), status: 'queued', cancelled: false, force: false, password: '', result: null };
+      job.ui = buildJobCard(job);
+      jobs.push(job);
+      if (!/\.pdf$/i.test(file.name) && file.type !== 'application/pdf') {
+        job.status = 'error';
+        job.ui.showError('只能處理 PDF 檔。這個檔案看起來不是 PDF。');
+      }
+    }
+    updateQueueInfo();
+    pump();
+  }
+
+  function updateQueueInfo() {
+    const waiting = jobs.filter((j) => j.status === 'queued').length;
+    const busy = jobs.find((j) => j.status === 'running');
+    $('#queueInfo').textContent = busy
+      ? (waiting ? `處理中，另外 ${waiting} 個檔案排隊中。` : '處理中…')
+      : (jobs.length ? '全部處理完成。可以調整設定後按「用目前設定重新壓縮」。' : '放入 PDF 後會自動開始處理。');
+  }
+
+  async function pump() {
+    if (running || !libsOk) return;
+    running = true;
+    try {
+      for (;;) {
+        const job = jobs.find((j) => j.status === 'queued');
+        if (!job) break;
+        job.status = 'running';
+        job.cancelled = false;
+        job.ui.setRunning();
+        updateQueueInfo();
+        const t0 = performance.now();
+        try {
+          const r = await processJob(job);
+          if (r.skipped) { job.status = 'skipped'; job.ui.showSkipped(); }
+          else {
+            job.status = 'done';
+            job.result = { ...r, blob: new Blob([r.bytes], { type: 'application/pdf' }), seconds: (performance.now() - t0) / 1000 };
+            delete job.result.bytes;
+            job.ui.showDone();
+          }
+        } catch (e) {
+          if (e instanceof Cancelled || job.cancelled) { job.status = 'cancelled'; job.ui.showCancelled(); }
+          else if (e && e.needPassword) { job.status = 'password'; job.ui.showPassword(e.message); }
+          else {
+            job.status = 'error';
+            console.error(e);
+            job.ui.showError(e && e.friendly ? e.message : `處理失敗：${(e && e.message) || e}。可以試試手動模式、降低解析度，或先用其他軟體重新「另存成 PDF」。`);
+          }
+        }
+        updateQueueInfo();
+        await nextFrame();
+      }
+    } finally {
+      running = false;
+      updateQueueInfo();
+    }
+  }
+
+  function requeue(job, patch = {}) {
+    Object.assign(job, { status: 'queued', cancelled: false, result: null }, patch);
+    job.ui.setQueued();
+    updateQueueInfo();
+    pump();
+  }
+
+  function describeSetting(s) {
+    if (!s) return '';
+    return s.fmt === 'jpeg' ? `${s.dpi} DPI・JPEG 品質 ${Math.round(s.q * 100)}` : `${s.dpi} DPI・PNG ${s.colors ? s.colors + ' 色' : '無損'}`;
+  }
+
+  function buildJobCard(job) {
+    const name = el('div', { class: 'job-name', text: job.file.name });
+    const meta = el('div', { class: 'job-meta' });
+    const removeBtn = el('button', { class: 'btn ghost', type: 'button', text: '移除' });
+    const head = el('div', { class: 'job-head' }, name, removeBtn, meta);
+    const status = el('div', { class: 'status', role: 'status', 'aria-live': 'polite' });
+    const bar = el('span');
+    const progress = el('div', { class: 'progress', role: 'progressbar', 'aria-valuemin': '0', 'aria-valuemax': '100', 'aria-label': '處理進度' }, bar);
+    const body = el('div', { style: 'display:grid;gap:12px' });
+    const card = el('article', { class: 'job', 'aria-label': job.file.name }, head, status, progress, body);
+    $('#jobs').prepend(card);
+
+    const setMeta = () => {
+      const st = job.settings;
+      const bits = [];
+      if (job.pages) bits.push(`${job.pages} 頁`);
+      bits.push(fmtMB(job.file.size));
+      bits.push(st.mode === 'auto' ? `自動・上限 ${fmtLimit(st.targetMB)}` : `手動・${st.dpi} DPI`);
+      if (st.gray) bits.push('灰階');
+      meta.textContent = bits.join('・');
+    };
+    const clearBody = () => body.replaceChildren();
+    const showProgress = (on) => { progress.hidden = !on; status.hidden = false; };
+
+    const reBtn = (label = '用目前設定重新壓縮') => el('button', {
+      class: 'btn', type: 'button', text: label,
+      onclick: () => { job.settings = snapshotSettings(); job.force = false; requeue(job); },
+    });
+
+    removeBtn.addEventListener('click', () => {
+      if (job.status === 'running') {
+        job.cancelled = true;
+        try { job.renderTask && job.renderTask.cancel(); } catch { /* ignore */ }
+      }
+      const i = jobs.indexOf(job);
+      if (i >= 0) jobs.splice(i, 1);
+      card.remove();
+      updateQueueInfo();
+    });
+
+    const ui = {
+      setMeta,
+      setQueued() {
+        setMeta(); clearBody(); showProgress(true);
+        bar.style.width = '0%'; status.textContent = '排隊中…';
+        card.querySelector('.seal')?.remove();
+        removeBtn.textContent = '移除';
+      },
+      setRunning() {
+        setMeta(); clearBody(); showProgress(true);
+        removeBtn.textContent = '取消';
+        body.append(el('div', { class: 'actions' }, el('button', {
+          class: 'btn', type: 'button', text: '停止',
+          onclick: () => { job.cancelled = true; try { job.renderTask && job.renderTask.cancel(); } catch { /* ignore */ } },
+        })));
+      },
+      setProgress(f, text) {
+        const pct = Math.max(0, Math.min(100, Math.round(f * 100)));
+        bar.style.width = pct + '%';
+        progress.setAttribute('aria-valuenow', String(pct));
+        if (text) status.textContent = text;
+      },
+      showDone() {
+        removeBtn.textContent = '移除';
+        const r = job.result, st = job.settings;
+        const limit = st.targetMB * MB;
+        const size = r.blob.size;
+        const shrink = Math.round((1 - size / job.file.size) * 100);
+        showProgress(false); status.hidden = true; clearBody();
+        const fits = size <= limit;
+        const bigger = size >= job.file.size;
+        const pill = fits
+          ? el('span', { class: 'pill ok', text: `符合 ${fmtLimit(st.targetMB)} 限制` })
+          : el('span', { class: 'pill bad', text: `超過 ${fmtLimit(st.targetMB)} 限制` });
+        const sizes = el('div', { class: 'sizes' },
+          el('span', { class: 'size-before' }, '原始 ', el('span', { class: 'num', text: fmtMB(job.file.size) })),
+          el('span', { class: 'size-arrow', 'aria-hidden': 'true', text: '→' }),
+          el('span', { class: 'size-after' }, el('span', { class: 'num', text: fmtMB(size) })),
+          pill);
+        // meter, to scale: 0 … max(limit, result) with the limit marked
+        const scaleMax = Math.max(limit, size) * 1.0;
+        const fillPct = Math.min(100, size / scaleMax * 100);
+        const limitPct = limit / scaleMax * 100;
+        const meter = el('div', { class: 'meter', 'aria-hidden': 'true' },
+          el('div', { class: 'meter-track' },
+            el('div', { class: 'meter-fill' + (fits ? '' : ' over'), style: `width:${fillPct.toFixed(1)}%` }),
+            el('div', { class: 'meter-limit', style: `left:calc(${limitPct.toFixed(1)}% - 1px)` })),
+          el('div', { class: 'meter-labels' },
+            el('span', { style: 'left:0', text: '0' }),
+            el('span', { style: limitPct > 80 ? 'right:0' : `left:calc(${limitPct.toFixed(1)}% - 2.5em)`, text: `上限 ${fmtLimit(st.targetMB)}` })));
+        const bits = [describeSetting(r.setting)];
+        if (st.gray) bits.push('灰階');
+        bits.push(shrink > 0 ? `縮小 ${shrink}%` : `變大 ${-shrink}%`);
+        if (r.linkCount) bits.push(`保留 ${r.linkCount} 個連結`);
+        bits.push(`花了 ${r.seconds < 60 ? Math.max(1, Math.round(r.seconds)) + ' 秒' : (r.seconds / 60).toFixed(1) + ' 分鐘'}`);
+        const detail = el('p', { class: 'detail', text: bits.join('・') });
+
+        const fileName = job.file.name.replace(/\.pdf$/i, '') + '_壓縮.pdf';
+        const dlMsg = el('p', { class: 'help', role: 'status' });
+        const dlBtn = el('button', {
+          class: 'btn primary', type: 'button', text: '下載壓縮檔',
+          onclick: async () => {
+            dlBtn.disabled = true;
+            try {
+              const res = await saveFile(r.blob, fileName);
+              dlMsg.textContent = res.ok ? (res.fallback ? '如果沒有開始下載，這個檢視可能不允許下載檔案。' : '') : res.msg;
+            } finally { dlBtn.disabled = false; }
+          },
+        });
+        const pvBtn = el('button', { class: 'btn', type: 'button', text: '預覽檢查', onclick: () => openPreview(job) });
+        const actions = el('div', { class: 'actions' }, dlBtn, pvBtn, reBtn());
+        body.append(sizes, meter, detail);
+        if (r.missing && r.missing.length) {
+          body.append(el('p', { class: 'notice bad', text: `有 ${r.missing.length} 個字型對應檔沒有載入（${r.missing.slice(0, 3).join('、')}），部分文字可能沒有出現在壓縮檔裡。請重新整理頁面再試，並用「預覽檢查」逐頁確認。` }));
+        }
+        if (!fits) {
+          const tips = [];
+          if (st.mode === 'manual') tips.push('改用自動模式，或降低解析度／品質');
+          else tips.push('已經用到最低畫質仍然太大');
+          if (!st.gray) tips.push('勾選「轉成灰階」再試一次');
+          if (st.format === 'png') tips.push('改用 JPEG 格式');
+          tips.push('或把檔案拆成兩份上傳');
+          body.append(el('p', { class: 'notice bad', text: `還是超過上限。建議：${tips.join('；')}。` }));
+          if (!st.gray) actions.append(el('button', {
+            class: 'btn', type: 'button', text: '改用灰階再壓一次',
+            onclick: () => { job.settings = { ...job.settings, gray: true }; requeue(job); },
+          }));
+        } else if (bigger) {
+          body.append(el('p', { class: 'notice warn', text: '壓縮後反而比原檔大，原檔本身就很精簡，建議直接上傳原檔。' }));
+        } else if (r.setting && r.setting.dpi < 96) {
+          body.append(el('p', { class: 'notice warn', text: '為了塞進上限，解析度降得比較低。請按「預覽檢查」放大確認小字是否清楚；若不清楚，可以考慮刪減頁數或拆成兩份。' }));
+        }
+        body.append(actions, dlMsg);
+        if (fits && !bigger && !(r.missing && r.missing.length)) {
+          const seal = el('div', { class: 'seal stamp-in', 'aria-hidden': 'true', text: '合格' });
+          card.append(seal);
+        }
+      },
+      showSkipped() {
+        removeBtn.textContent = '移除';
+        showProgress(false); clearBody();
+        status.textContent = '';
+        body.append(
+          el('p', { class: 'notice', text: `原檔 ${fmtMB(job.file.size)} 已經在 ${fmtLimit(job.settings.targetMB)} 以內，可以直接上傳原檔，不需要壓縮。` }),
+          el('div', { class: 'actions' }, el('button', {
+            class: 'btn', type: 'button', text: '仍要壓縮',
+            onclick: () => { requeue(job, { force: true }); },
+          }), reBtn()));
+      },
+      showCancelled() {
+        removeBtn.textContent = '移除';
+        showProgress(false); clearBody();
+        status.textContent = '已停止。';
+        body.append(el('div', { class: 'actions' }, reBtn('重新開始')));
+      },
+      showError(msg) {
+        removeBtn.textContent = '移除';
+        setMeta(); showProgress(false); clearBody();
+        status.textContent = '';
+        body.append(el('p', { class: 'notice bad', text: msg }));
+        if (/\.pdf$/i.test(job.file.name) || job.file.type === 'application/pdf') body.append(el('div', { class: 'actions' }, reBtn('再試一次')));
+      },
+      showPassword(msg) {
+        removeBtn.textContent = '移除';
+        showProgress(false); clearBody();
+        status.textContent = '';
+        const id = 'pw' + job.id;
+        const input = el('input', { type: 'password', id, autocomplete: 'off', placeholder: '輸入 PDF 開啟密碼' });
+        const form = el('form', { class: 'pw' },
+          el('label', { for: id, class: 'sr-only', text: 'PDF 開啟密碼' }), input,
+          el('button', { class: 'btn primary', type: 'submit', text: '解鎖並壓縮' }));
+        form.addEventListener('submit', (ev) => { ev.preventDefault(); requeue(job, { password: input.value }); });
+        body.append(el('p', { class: 'notice warn', text: msg + '密碼只用來在你的瀏覽器裡打開檔案，不會被儲存或傳送。' }), form);
+        setTimeout(() => input.focus(), 0);
+      },
+    };
+    ui.setQueued();
+    return ui;
+  }
+
+  // ---------- file input / drag & drop ----------
+  const drop = $('#drop');
+  const input = $('#fileInput');
+  input.addEventListener('change', () => { addFiles(input.files); input.value = ''; });
+  ['dragenter', 'dragover'].forEach((t) => drop.addEventListener(t, (e) => { e.preventDefault(); drop.classList.add('is-over'); }));
+  ['dragleave', 'dragend'].forEach((t) => drop.addEventListener(t, (e) => { if (e.target === drop || !drop.contains(e.relatedTarget)) drop.classList.remove('is-over'); }));
+  drop.addEventListener('drop', (e) => {
+    e.preventDefault();
+    drop.classList.remove('is-over');
+    if (e.dataTransfer && e.dataTransfer.files) addFiles(e.dataTransfer.files);
+  });
+  // A file dropped anywhere else on the page shouldn't navigate away.
+  window.addEventListener('dragover', (e) => e.preventDefault());
+  window.addEventListener('drop', (e) => {
+    e.preventDefault();
+    if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length) addFiles(e.dataTransfer.files);
+  });
+
+  // ---------- preview ----------
+  const pv = {
+    dlg: $('#preview'), stage: $('#pvStage'), job: null, docs: {}, source: 'out', page: 1, zoom: false, token: 0,
+  };
+  async function pvDoc(source) {
+    if (pv.docs[source]) return pv.docs[source];
+    const job = pv.job;
+    const data = source === 'out'
+      ? new Uint8Array(await job.result.blob.arrayBuffer())
+      : new Uint8Array(await job.file.arrayBuffer());
+    const p = openPdf(data, job.password || undefined).promise;
+    pv.docs[source] = p;
+    return p;
+  }
+  async function pvRender() {
+    const token = ++pv.token;
+    const stage = pv.stage;
+    try {
+      const doc = await pvDoc(pv.source);
+      if (token !== pv.token) return;
+      pv.page = Math.min(Math.max(1, pv.page), doc.numPages);
+      $('#pvPage').textContent = `${pv.page} / ${doc.numPages}`;
+      $('#pvPrev').disabled = pv.page <= 1;
+      $('#pvNext').disabled = pv.page >= doc.numPages;
+      const page = await doc.getPage(pv.page);
+      const vp1 = page.getViewport({ scale: 1 });
+      const avail = Math.max(200, stage.clientWidth - 32);
+      const cssW = pv.zoom ? avail * 2.2 : avail;
+      const dpr = Math.min(window.devicePixelRatio || 1, 2);
+      const scale = Math.min(cssW / vp1.width * dpr, Math.sqrt(MAX_PIXELS / (vp1.width * vp1.height)));
+      const vp = page.getViewport({ scale });
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.round(vp.width); canvas.height = Math.round(vp.height);
+      canvas.style.width = Math.round(vp.width / dpr) + 'px';
+      const ctx = canvas.getContext('2d', { alpha: false });
+      ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, canvas.width, canvas.height);
+      await page.render({ canvasContext: ctx, viewport: vp, annotationMode: pdfjsLib.AnnotationMode.ENABLE }).promise;
+      if (token !== pv.token) return;
+      stage.classList.toggle('fit', !pv.zoom);
+      stage.replaceChildren(canvas);
+    } catch (e) {
+      if (token !== pv.token) return;
+      stage.replaceChildren(el('div', { class: 'pv-msg', text: '無法顯示這一頁：' + ((e && e.message) || e) }));
+    }
+  }
+  function openPreview(job) {
+    pv.job = job; pv.docs = {}; pv.source = 'out'; pv.page = 1; pv.zoom = false;
+    $('#pvOut').checked = true;
+    $('#pvZoom').setAttribute('aria-pressed', 'false');
+    $('#pvZoom').textContent = '放大檢查';
+    $('#pvTitle').textContent = `${job.file.name}・壓縮後 ${fmtMB(job.result.blob.size)}`;
+    pv.stage.replaceChildren(el('div', { class: 'pv-msg', text: '載入中…' }));
+    if (typeof pv.dlg.showModal === 'function') pv.dlg.showModal(); else pv.dlg.setAttribute('open', '');
+    pvRender();
+  }
+  function closePreview() {
+    pv.token++;
+    for (const p of Object.values(pv.docs)) p.then((d) => d.destroy()).catch(() => {});
+    pv.docs = {};
+    if (typeof pv.dlg.close === 'function') pv.dlg.close(); else pv.dlg.removeAttribute('open');
+  }
+  $('#pvClose').addEventListener('click', closePreview);
+  pv.dlg.addEventListener('cancel', (e) => { e.preventDefault(); closePreview(); });
+  pv.dlg.addEventListener('click', (e) => { if (e.target === pv.dlg) closePreview(); });
+  $('#pvPrev').addEventListener('click', () => { pv.page--; pvRender(); });
+  $('#pvNext').addEventListener('click', () => { pv.page++; pvRender(); });
+  $('#pvZoom').addEventListener('click', () => {
+    pv.zoom = !pv.zoom;
+    $('#pvZoom').setAttribute('aria-pressed', String(pv.zoom));
+    $('#pvZoom').textContent = pv.zoom ? '符合寬度' : '放大檢查';
+    pvRender();
+  });
+  document.querySelectorAll('input[name="pvSource"]').forEach((r) => r.addEventListener('change', () => { pv.source = r.value; pvRender(); }));
+  pv.dlg.addEventListener('keydown', (e) => {
+    if (e.key === 'ArrowLeft' && !$('#pvPrev').disabled) { pv.page--; pvRender(); }
+    if (e.key === 'ArrowRight' && !$('#pvNext').disabled) { pv.page++; pvRender(); }
+  });
+
+  // Test hook: lets an automated check feed files without a real file picker.
+  window.__pdfSquash = { addFiles, jobs, settings, syncSettingsUI };
+})();
+</script>

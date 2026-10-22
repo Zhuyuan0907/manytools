@@ -1,0 +1,156 @@
+<!doctype html>
+<html lang="zh-Hant-TW">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#ffffff">
+<title>影片碼率壓縮・ManyTools</title>
+<meta name="description" content="把業務機錄出來的高碼率影片壓到指定碼率。影片只在你的電腦裡處理，不會上傳到任何伺服器。">
+<link rel="icon" href="assets/logo.svg" type="image/svg+xml">
+<link rel="stylesheet" href="assets/app.css">
+</head>
+<body>
+<div class="app">
+  <header class="top">
+    <a class="brand" href="../home/index.html" title="回到工具首頁">
+      <img class="logo" src="assets/logo.svg" alt="" width="44" height="44">
+      <span class="brand-text">
+        <span class="wordmark">影片碼率壓縮</span>
+        <span class="tagline">ManyTools・業務機素材減重</span>
+      </span>
+    </a>
+    <p class="privacy">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="10" width="16" height="11" rx="2"></rect><path d="M8 10V7a4 4 0 0 1 8 0v3"></path></svg>
+      <span class="privacy-long">影片只在你的電腦裡處理，不會上傳到任何伺服器。</span><span class="privacy-short">不上傳</span>
+    </p>
+  </header>
+
+  <div id="support" class="banner" hidden></div>
+
+  <main class="layout">
+    <section class="col-files" aria-label="影片">
+      <label class="drop" id="drop" for="fileInput">
+        <input type="file" id="fileInput" accept="video/*,.mp4,.mov,.m4v,.mts,.m2ts,.ts,.mkv,.webm,.mxf" multiple aria-label="選擇影片檔">
+        <span class="drop-inner">
+          <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2.5" y="5" width="14" height="14" rx="2.5"></rect><path d="m16.5 10 5-3v10l-5-3"></path><path d="M9.5 15.5v-6"></path><path d="m7 12 2.5-2.5L12 12"></path></svg>
+          <span class="drop-title">把影片拖進這裡</span>
+          <span class="drop-hint">或點一下選擇檔案・可以一次放很多支・MP4 / MOV / MTS</span>
+        </span>
+      </label>
+      <ol class="files" id="files" aria-label="已加入的影片"></ol>
+    </section>
+
+    <aside class="col-settings panel" aria-labelledby="setTitle">
+      <div class="panel-head">
+        <h2 id="setTitle">壓縮設定</h2>
+        <p class="sub">套用到清單裡所有還沒處理的影片</p>
+      </div>
+      <div class="panel-body settings">
+        <div class="field">
+          <label for="rate">目標影像碼率</label>
+          <div class="rate-row">
+            <input type="range" id="rateRange" min="2" max="60" step="1" value="12" aria-label="目標碼率滑桿">
+            <span class="rate-box"><input type="number" id="rate" min="1" max="200" step="0.5" value="12" inputmode="decimal"><span>Mbps</span></span>
+          </div>
+          <div class="chips" id="rateChips" role="group" aria-label="常用碼率">
+            <button type="button" data-rate="6">6</button>
+            <button type="button" data-rate="8">8</button>
+            <button type="button" data-rate="10">10</button>
+            <button type="button" data-rate="12">12</button>
+            <button type="button" data-rate="16">16</button>
+            <button type="button" data-rate="20">20</button>
+            <button type="button" data-rate="25">25</button>
+          </div>
+        </div>
+
+        <div class="field">
+          <span class="label">碼率模式</span>
+          <div class="seg" role="radiogroup" aria-label="碼率模式">
+            <label><input type="radio" name="mode" value="variable" checked><span>VBR 平均碼率<small>畫質較好，檔案大小接近目標</small></span></label>
+            <label><input type="radio" name="mode" value="constant"><span>CBR 固定碼率<small>給要求固定碼率的播出系統</small></span></label>
+          </div>
+        </div>
+
+        <div class="field">
+          <span class="label">編碼格式</span>
+          <div class="seg" role="radiogroup" aria-label="編碼格式">
+            <label><input type="radio" name="codec" value="avc" checked><span>H.264<small>相容性最好，剪接軟體都能開</small></span></label>
+            <label id="hevcOpt"><input type="radio" name="codec" value="hevc"><span>H.265 / HEVC<small>同碼率畫質更好</small></span></label>
+          </div>
+        </div>
+
+        <div class="field two">
+          <div>
+            <label for="res">解析度</label>
+            <select id="res">
+              <option value="0">維持原始</option>
+              <option value="2160">4K（2160p）</option>
+              <option value="1080">1080p</option>
+              <option value="720">720p</option>
+            </select>
+          </div>
+          <div>
+            <label for="gop">關鍵影格間隔</label>
+            <select id="gop">
+              <option value="1">每 1 秒</option>
+              <option value="2" selected>每 2 秒</option>
+              <option value="5">每 5 秒</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="field two">
+          <div>
+            <label for="audio">聲音</label>
+            <select id="audio">
+              <option value="copy">原樣保留（不重壓）</option>
+              <option value="aac">轉成 AAC 320 kbps</option>
+              <option value="none">移除聲音</option>
+            </select>
+          </div>
+          <div>
+            <label for="fmt">輸出格式</label>
+            <select id="fmt">
+              <option value="auto">跟原檔一樣</option>
+              <option value="mp4">MP4</option>
+              <option value="mov">MOV</option>
+            </select>
+          </div>
+        </div>
+
+        <p class="fine">輸出影像為 8-bit 4:2:0。原檔是 10-bit、4:2:2 或 HDR 時，色彩會轉成一般 SDR 規格；要進調光的素材請保留原檔。</p>
+      </div>
+      <div class="panel-foot">
+        <span class="foot-note" id="sumNote">還沒有加入影片。</span>
+        <button type="button" class="btn primary" id="runAll" disabled>開始壓縮</button>
+      </div>
+    </aside>
+  </main>
+</div>
+
+<template id="cardTpl">
+  <li class="card">
+    <div class="card-head">
+      <span class="thumb"><canvas width="160" height="90"></canvas></span>
+      <div class="card-title">
+        <b class="fname"></b>
+        <span class="fmeta"></span>
+      </div>
+      <button type="button" class="btn small ghost remove" aria-label="移除這支影片">移除</button>
+    </div>
+    <dl class="info"></dl>
+    <div class="plan"></div>
+    <div class="prog" hidden>
+      <div class="bar"><i></i></div>
+      <div class="prog-row"><span class="prog-text"></span><button type="button" class="btn small cancel">取消</button></div>
+    </div>
+    <div class="result" hidden></div>
+  </li>
+</template>
+
+<div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+
+<script src="lib/mediabunny.min.js"></script>
+<script src="assets/app.js"></script>
+</body>
+</html>

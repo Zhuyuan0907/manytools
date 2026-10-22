@@ -1,0 +1,319 @@
+<!doctype html>
+<html lang="zh-Hant-TW">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#ffffff">
+<title>ZhuyuanLovePDF・備審資料壓縮拆分</title>
+<meta name="description" content="ZhuyuanLovePDF：備審資料 PDF 壓縮、拆分工具。檔案只在你的瀏覽器裡處理，不會上傳到任何伺服器。">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="assets/logo-180.png">
+<link rel="stylesheet" href="assets/app.css">
+</head>
+<body>
+<div class="app">
+  <header class="top">
+    <div class="brand">
+      <img class="logo" src="assets/logo.svg" alt="" width="44" height="44">
+      <div class="brand-text">
+        <h1 class="wordmark">Zhuyuan<span class="w-love">Love</span><span class="w-pdf">PDF</span></h1>
+        <p class="tagline">備審資料壓縮・拆分工具</p>
+      </div>
+    </div>
+    <p class="privacy">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="10" width="16" height="11" rx="2"></rect><path d="M8 10V7a4 4 0 0 1 8 0v3"></path></svg>
+      <span class="privacy-long">檔案只在你的瀏覽器裡處理，不會上傳到任何伺服器。</span><span class="privacy-short">不上傳</span>
+    </p>
+  </header>
+
+  <nav class="stepper" aria-label="步驟">
+    <p class="m-step" id="mStep" aria-hidden="true"></p>
+    <ol>
+      <li><button type="button" data-goto="1"><span class="dot">1</span><span class="lbl">上傳檔案</span></button></li>
+      <li><button type="button" data-goto="2"><span class="dot">2</span><span class="lbl">整份或拆分</span></button></li>
+      <li><button type="button" data-goto="3"><span class="dot">3</span><span class="lbl">壓縮設定</span></button></li>
+      <li><button type="button" data-goto="4"><span class="dot">4</span><span class="lbl">處理與下載</span></button></li>
+    </ol>
+  </nav>
+
+  <main>
+    <div id="libError" class="banner" hidden>程式檔案不完整，請重新解壓縮整個資料夾。</div>
+
+    <!-- ============ STEP 1 ============ -->
+    <section class="panel" id="step1" aria-labelledby="h1t">
+      <div class="hero" id="hero">
+        <div class="hero-text">
+          <h2 class="hero-title" id="h1t">備審 PDF，壓到<em>剛剛好</em></h2>
+          <p class="hero-count" id="heroCount" aria-live="polite">免費・免註冊・檔案不上傳</p>
+        </div>
+        <div class="hero-art" aria-hidden="true">
+          <svg viewBox="0 0 300 170" width="300" height="170">
+            <g class="ha-big">
+              <rect x="10" y="12" width="104" height="138" rx="10" class="ha-page"/>
+              <path d="M84 12v22a6 6 0 0 0 6 6h24" class="ha-fold"/>
+              <path d="M28 52h56M28 66h68M28 80h68M28 94h48" class="ha-lines"/>
+              <rect x="22" y="108" width="80" height="30" rx="8" class="ha-chip-bad"/>
+              <text x="62" y="128" class="ha-chip-text">50 MB</text>
+            </g>
+            <g class="ha-arrow">
+              <path d="M132 81h42" /><path d="M166 71l10 10-10 10" />
+            </g>
+            <g class="ha-small">
+              <rect x="196" y="38" width="80" height="106" rx="9" class="ha-page"/>
+              <path d="M254 38v16a5 5 0 0 0 5 5h17" class="ha-fold"/>
+              <path d="M210 70h42M210 81h52M210 92h36" class="ha-lines"/>
+              <rect x="204" y="106" width="64" height="26" rx="7" class="ha-chip-ok"/>
+              <text x="236" y="124" class="ha-chip-text">5 MB</text>
+              <circle cx="270" cy="40" r="15" class="ha-check-bg"/>
+              <path d="M263 40.5l5 5 9-10" class="ha-check"/>
+            </g>
+          </svg>
+        </div>
+      </div>
+      <div class="panel-body step1-body">
+        <label class="drop" id="drop" for="fileInput">
+          <input type="file" id="fileInput" accept="application/pdf,.pdf" multiple aria-label="選擇 PDF 檔">
+          <span class="drop-inner">
+            <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"></path><path d="M14 3v5h5"></path><path d="M12 18v-6"></path><path d="m9 15 3-3 3 3"></path></svg>
+            <span class="drop-title"><span class="d-desk">把 PDF 拖進這裡</span><span class="d-mob">選擇 PDF 檔案</span></span>
+            <span class="drop-hint"><span class="d-desk">或點一下選擇檔案・</span>可以一次選多個</span>
+          </span>
+        </label>
+        
+        <ol class="how" aria-label="怎麼用">
+          <li><span class="how-no">1</span><b>放入 PDF</b><span>可以一次放好幾個</span></li>
+          <li><span class="how-no">2</span><b>選一份或多份</b><span>學校要分項就拆開</span></li>
+          <li><span class="how-no">3</span><b>設定上限並下載</b><span>自動壓到剛剛好</span></li>
+        </ol>
+        <ol class="sources" id="sources" aria-label="已加入的檔案"></ol>
+      </div>
+      <div class="panel-foot">
+        <span class="foot-note" id="note1">還沒有加入檔案。</span>
+        <button type="button" class="btn primary" id="next1" disabled>下一步：整份或拆分 →</button>
+      </div>
+    </section>
+
+    <!-- ============ STEP 2 ============ -->
+    <section class="panel" id="step2" aria-labelledby="h2t" hidden>
+      <div class="panel-head">
+        <span class="step-no" aria-hidden="true">2</span>
+        <div class="head-text">
+          <h2 id="h2t">要上傳一份檔案，還是多份？</h2>
+          <p>學校要求分項上傳時，選「多份檔案」。</p>
+        </div>
+      </div>
+      <div class="panel-body step2-body">
+        <div class="pick-mode" id="pickMode" role="group" aria-label="輸出方式">
+          <button type="button" class="mode-card" id="chooseSingle">
+            <span class="mc-art" aria-hidden="true"><svg width="64" height="64" viewBox="0 0 64 64" fill="none"><rect x="16" y="8" width="32" height="44" rx="5" fill="#fff" stroke="currentColor" stroke-width="3"/><path d="M23 20h18M23 28h18M23 36h12" stroke="currentColor" stroke-width="3" stroke-linecap="round"/></svg></span>
+            <span class="mc-title">一份檔案</span>
+            <span class="mc-desc">全部頁面合成一個 PDF</span>
+            <span class="mc-go">選這個，下一步 →</span>
+          </button>
+          <button type="button" class="mode-card" id="chooseSplit">
+            <span class="mc-art" aria-hidden="true"><svg width="64" height="64" viewBox="0 0 64 64" fill="none"><rect x="6" y="12" width="22" height="34" rx="4" fill="#fff" stroke="currentColor" stroke-width="3"/><rect x="21" y="16" width="22" height="34" rx="4" fill="#fff" stroke="currentColor" stroke-width="3"/><rect x="36" y="20" width="22" height="34" rx="4" fill="#fff" stroke="currentColor" stroke-width="3"/><path d="M41 30h12M41 37h12M41 44h8" stroke="currentColor" stroke-width="3" stroke-linecap="round"/></svg></span>
+            <span class="mc-title">多份檔案</span>
+            <span class="mc-desc">依學校要求拆成好幾份</span>
+            <span class="mc-go">開始拆分 →</span>
+          </button>
+        </div>
+
+        <div class="split-area" id="splitArea" hidden>
+          <div class="split-top">
+            <button type="button" class="btn back-single" id="backToSingle" title="改回輸出一份檔案"><span aria-hidden="true">←</span> 返回</button>
+            <h2 class="split-title">拆成多份檔案</h2>
+            <details class="quick" id="quick">
+              <summary class="btn small">快速拆分<span class="caret" aria-hidden="true"></span></summary>
+              <div class="quick-menu">
+                <button type="button" class="qm-item" id="byOutline"><b>依書籤拆分</b><span>一個書籤一份</span></button>
+                <button type="button" class="qm-item" id="byFile"><b>依上傳的檔案拆分</b><span>每個上傳的檔案各一份</span></button>
+                <div class="qm-item qm-every">
+                  <b>每幾頁一份</b>
+                  <span class="qm-row"><input type="number" id="everyN" min="1" value="5" inputmode="numeric" aria-label="每幾頁一份"><span>頁一份</span><button type="button" class="btn small" id="applyEvery">套用</button></span>
+                </div>
+                <button type="button" class="qm-item" id="clearCuts"><b>重設成一份</b><span>清掉所有切分</span></button>
+              </div>
+            </details>
+          </div>
+          <div class="m-panes seg" role="radiogroup" aria-label="要看哪一部分">
+            <label><input type="radio" name="mPane" value="pages" checked><span>頁面</span></label>
+            <label><input type="radio" name="mPane" value="files"><span>輸出的檔案 <b class="sec-count" id="mSecCount">0</b></span></label>
+          </div>
+          <div class="split-layout" id="splitLayout" data-pane="pages">
+            <section class="pane pane-pages" aria-label="所有頁面">
+              <p class="pane-hint"><b>點頁面</b>就從那頁切開，再點一次取消</p>
+              <div class="thumbs" id="thumbs" aria-label="頁面縮圖"></div>
+            </section>
+            <section class="pane pane-files" aria-labelledby="secTitle">
+              <div class="pane-head">
+                <h3 id="secTitle">將輸出的檔案 <b class="sec-count" id="secCount">0</b></h3>
+                <button type="button" class="btn small" id="addSec">＋ 新增一份</button>
+              </div>
+              <ol class="sections" id="sectionList"></ol>
+              <p class="pane-note">頁碼寫法：<code>1-5</code>、<code>1-3, 7</code>、<code>9-</code></p>
+            </section>
+          </div>
+        </div>
+      </div>
+      <div class="panel-foot">
+        <button type="button" class="btn back" data-goto="1" aria-label="上一步"><span aria-hidden="true">←</span><span class="lbl">上一步</span></button>
+        <span class="foot-note" id="note2"></span>
+        <button type="button" class="btn primary" id="next2">下一步：壓縮設定 →</button>
+      </div>
+    </section>
+
+    <!-- ============ STEP 3 ============ -->
+    <section class="panel" id="step3" aria-labelledby="h3t" hidden>
+      <div class="panel-head">
+        <span class="step-no" aria-hidden="true">3</span>
+        <div class="head-text">
+          <h2 id="h3t">設定檔案大小上限</h2>
+          <p>選學校規定的檔案大小上限。</p>
+        </div>
+      </div>
+      <div class="panel-body">
+        <div class="settings">
+          <div class="set-col">
+            <div class="set">
+              <div class="set-label" id="lblTarget">每個檔案上限</div>
+              <div class="chips" role="radiogroup" aria-labelledby="lblTarget">
+                <label class="chip"><input type="radio" name="target" value="2"><span>2 MB</span></label>
+                <label class="chip"><input type="radio" name="target" value="3"><span>3 MB</span></label>
+                <label class="chip"><input type="radio" name="target" value="4"><span>4 MB</span></label>
+                <label class="chip"><input type="radio" name="target" value="5" checked><span>5 MB</span></label>
+                <label class="chip"><input type="radio" name="target" value="8"><span>8 MB</span></label>
+                <label class="chip"><input type="radio" name="target" value="10"><span>10 MB</span></label>
+                <label class="chip"><input type="radio" name="target" value="custom"><span>自訂</span></label>
+                <span class="custom-mb" id="customWrap" hidden>
+                  <input type="number" id="customMB" min="0.2" max="500" step="0.1" value="6" inputmode="decimal" aria-label="自訂上限（MB）"><span>MB</span>
+                </span>
+              </div>
+              <p class="help">保守計算，上傳系統一定收得下。</p>
+            </div>
+            <div class="set">
+              <label class="switch"><input type="checkbox" id="keepOriginal" checked><span class="track" aria-hidden="true"></span><span class="sw-text"><b>優先保留文字（最清楚）</b><span class="help">放不下才把頁面轉成圖片</span></span></label>
+            </div>
+            <div class="set">
+              <label class="switch"><input type="checkbox" id="gray"><span class="track" aria-hidden="true"></span><span class="sw-text"><b>轉成灰階</b><span class="help">更小，但照片會變黑白</span></span></label>
+            </div>
+          </div>
+          <details class="set-col adv" id="adv" open>
+            <summary class="adv-sum">進階設定<span class="adv-hint">壓縮方式、圖片格式</span></summary>
+            <div class="adv-body">
+            <div class="set">
+              <div class="set-label" id="lblMode">壓縮方式</div>
+              <div class="seg" role="radiogroup" aria-labelledby="lblMode">
+                <label><input type="radio" name="mode" value="auto" checked><span>自動（建議）</span></label>
+                <label><input type="radio" name="mode" value="manual"><span>手動調整</span></label>
+              </div>
+              <p class="help" id="modeHelp"></p>
+            </div>
+            <div class="set">
+              <div class="set-label" id="lblFormat">頁面轉成</div>
+              <div class="seg" role="radiogroup" aria-labelledby="lblFormat">
+                <label><input type="radio" name="format" value="jpeg" checked><span>JPEG（建議）</span></label>
+                <label><input type="radio" name="format" value="png"><span>PNG</span></label>
+              </div>
+              <p class="help" id="formatHelp"></p>
+            </div>
+            <div class="set" id="rowDpi" hidden>
+              <div class="set-label">解析度</div>
+              <div class="slider">
+                <input type="range" id="dpi" min="72" max="300" step="2" value="150" aria-label="解析度 DPI">
+                <output for="dpi" id="dpiOut" class="num">150 DPI</output>
+              </div>
+            </div>
+            <div class="set" id="rowQuality" hidden>
+              <div class="set-label">JPEG 品質</div>
+              <div class="slider">
+                <input type="range" id="quality" min="30" max="95" step="1" value="75" aria-label="JPEG 品質">
+                <output for="quality" id="qualityOut" class="num">75</output>
+              </div>
+            </div>
+            <div class="set" id="rowColors" hidden>
+              <label class="set-label" for="colors">PNG 色彩數</label>
+              <select id="colors" class="select">
+                <option value="0">無損（全彩，檔案最大）</option>
+                <option value="256" selected>256 色</option>
+                <option value="64">64 色</option>
+                <option value="16">16 色（純文字頁很適合）</option>
+              </select>
+            </div>
+            </div>
+          </details>
+        </div>
+      </div>
+      <div class="panel-foot">
+        <button type="button" class="btn back" data-goto="2" aria-label="上一步"><span aria-hidden="true">←</span><span class="lbl">上一步</span></button>
+        <span class="foot-note plan" id="plan" aria-live="polite"></span>
+        <button type="button" class="btn primary" id="start">開始處理 →</button>
+      </div>
+    </section>
+
+    <!-- ============ STEP 4 ============ -->
+    <section class="panel" id="step4" aria-labelledby="h4t" hidden>
+      <div class="panel-head">
+        <span class="step-no" aria-hidden="true">4</span>
+        <div class="head-text">
+          <h2 id="h4t">處理與下載</h2>
+          <p id="runSummary" aria-live="polite">處理中，請勿關閉分頁</p>
+        </div>
+        <div class="head-aside">
+          <details class="notes">
+            <summary><span class="lg-text">上傳前請</span>注意</summary>
+            <ul>
+              <li>大多只壓縮圖片，文字保持清晰</li>
+              <li>連結、目錄和書籤都會保留</li>
+              <li>QR code 請用手機實際掃一次</li>
+              <li>上傳前先預覽，看清楚最小的字</li>
+            </ul>
+          </details>
+        </div>
+      </div>
+      <div class="panel-body step4-body">
+        <div class="run-bar" id="runBar">
+          <button type="button" class="btn" id="stopRun" hidden>停止</button>
+          <button type="button" class="btn" id="rerun" hidden>重新處理</button>
+          <span class="stale" id="staleNote" hidden>設定改過了，這是上一次的結果</span>
+        </div>
+        <aside class="ad-slot" id="adSlot" hidden aria-label="贊助內容"></aside>
+        <div class="outputs" id="outputs"></div>
+        <button type="button" class="btn small ghost restart" id="restart"><span aria-hidden="true">↺</span> 換一份資料重新開始</button>
+      </div>
+      <div class="panel-foot">
+        <button type="button" class="btn back" data-goto="3" aria-label="回去修改設定"><span aria-hidden="true">←</span><span class="lbl">回去修改設定</span></button>
+        <span class="foot-note" id="note4"></span>
+        <button type="button" class="btn primary" id="zipAll" hidden>全部下載（ZIP）</button>
+      </div>
+    </section>
+  </main>
+</div>
+
+<datalist id="secPresets">
+  <option value="課程學習成果"></option>
+  <option value="多元表現"></option>
+  <option value="多元表現綜整心得"></option>
+  <option value="學習歷程自述"></option>
+  <option value="學習歷程反思"></option>
+  <option value="就讀動機"></option>
+  <option value="未來學習計畫與生涯規劃"></option>
+  <option value="其他有利審查資料"></option>
+  <option value="自傳"></option>
+  <option value="讀書計畫"></option>
+  <option value="作品集"></option>
+  <option value="證照與獎狀"></option>
+</datalist>
+
+<div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+
+<script src="lib/pdf.min.js"></script>
+<script src="lib/pdf.worker.src.js"></script>
+<script src="lib/pdf-lib.min.js"></script>
+<script src="lib/pako.min.js"></script>
+<script src="lib/UPNG.min.js"></script>
+<script src="assets/core.js"></script>
+<script src="assets/engine.js"></script>
+<script src="assets/ads.js"></script>
+<script src="assets/app.js"></script>
+</body>
+</html>

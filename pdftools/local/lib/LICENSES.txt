@@ -1,0 +1,2 @@
+pdf.js 3.11.174 (Apache-2.0, Mozilla), cmaps (Adobe, BSD-3-Clause), standard fonts (Foxit BSD / Liberation OFL)
+pdf-lib 1.17.1 (MIT), pako 2.1.0 (MIT/Zlib), UPNG.js 2.1.0 (MIT)

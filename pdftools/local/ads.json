@@ -1,0 +1,91 @@
+{
+  "rotateSeconds": 8,
+  "ads": [
+    {
+      "id": "atomroute",
+      "active": true,
+      "weight": 1,
+      "sponsor": "AtomRoute Global Network",
+      "banner": {
+        "wide": "ads/atomroute/banner-wide.png",
+        "narrow": "ads/atomroute/banner-mid.png",
+        "alt": "AtomRoute Global Network：網路・雲端・主機・機房"
+      },
+      "logo": "ads/atomroute/logo.png",
+      "icon": "ads/atomroute/mark.png",
+      "partner": {
+        "text": "由 AtomRoute Global Network (US) LLC 提供"
+      },
+      "cta": "前往官網",
+      "url": "https://www.atomroute.com/",
+      "theme": {
+        "bg": "#f2f0ff",
+        "fg": "#1f1846",
+        "accent": "#7d70e5",
+        "accent2": "#9a8ff0"
+      },
+      "start": "2026-01-01",
+      "end": ""
+    },
+    {
+      "id": "vproxy-cloud",
+      "active": false,
+      "weight": 1,
+      "sponsor": "vProxy Cloud",
+      "logo": "ads/vproxy-cloud/logo.png",
+      "icon": "ads/vproxy-cloud/icon.png",
+      "headline": "讓你的伺服器，從這裡開始運行。",
+      "tagline": "為亞洲玩家、創作者與小團隊打造",
+      "points": [
+        "Minecraft 伺服器",
+        "Discord Bot 主機",
+        "網頁主機"
+      ],
+      "cta": "前往 vProxy Cloud",
+      "url": "https://www.atomroute.com/",
+      "theme": {
+        "bg": "#ffffff",
+        "fg": "#1f1846",
+        "accent": "#6151f3",
+        "accent2": "#8b7bff"
+      },
+      "start": "2026-01-01",
+      "end": "",
+      "partner": {
+        "name": "AtomRoute",
+        "logo": "ads/vproxy-cloud/atomroute.png",
+        "text": "由 AtomRoute 提供"
+      }
+    },
+    {
+      "id": "example-template",
+      "active": false,
+      "weight": 1,
+      "sponsor": "廣告主名稱",
+      "logo": "ads/example-template/logo.png",
+      "icon": "ads/example-template/icon.png",
+      "headline": "主標（16 字內）",
+      "tagline": "副標（20 字內）",
+      "points": [
+        "重點一（10 字內）",
+        "重點二",
+        "重點三"
+      ],
+      "cta": "按鈕文字",
+      "url": "https://example.com/",
+      "theme": {
+        "bg": "#ffffff",
+        "fg": "#17202c",
+        "accent": "#0d9b6c",
+        "accent2": "#2cc58f"
+      },
+      "start": "",
+      "end": "",
+      "partner": {
+        "name": "",
+        "logo": "",
+        "text": ""
+      }
+    }
+  ]
+}
