@@ -24,8 +24,8 @@
   --warn: #a96400;
   --bad: #d13a2c;
   --shadow: 0 1px 2px rgba(23, 32, 44, .05), 0 8px 28px rgba(23, 32, 44, .07);
-  --font: "PingFang TC", "Noto Sans TC", "Microsoft JhengHei", "Heiti TC", "Source Han Sans TC", system-ui, sans-serif;
-  --font-latin: "Avenir Next", "Segoe UI", "Helvetica Neue", var(--font);
+  --font: -apple-system, BlinkMacSystemFont, "PingFang TC", "Noto Sans TC Web", "Noto Sans TC", "Microsoft JhengHei", "Heiti TC", sans-serif;
+  --font-latin: var(--font);
   --font-num: ui-monospace, "SF Mono", "Cascadia Mono", Menlo, Consolas, monospace;
   --radius: 16px;
   --r-sm: 10px;

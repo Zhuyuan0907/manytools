@@ -27,7 +27,7 @@
       const v = (st && st.video) || {}, p = (st && st.pdf) || {};
       // Before the first real file the line keeps its default instead of showing 0.
       if (!(v.files > 0) && !(p.files > 0)) return;
-      const pill = span('pill', '已在大家的電腦上處理');
+      const pill = span('', '已在大家的電腦上處理');
       const nums = [];
       if (v.files > 0) {
         const b = document.createElement('b');

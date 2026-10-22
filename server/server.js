@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /* ManyTools static server + the public counters. No dependencies: `node server/server.js`.
    Clean URLs, each tool still in its own folder:
-     /       → home/            /video → videotools/            /pdf → pdftools/local/
+     /       → home/            /video → videotools/            /pdf → pdftools/local/     /fonts → fonts/
    A tool's page is served at /video (no trailing slash) with <base href="/video/"> injected, so its relative
    asset paths keep working both here and when the folder is opened straight from disk.
    Counters keep only totals (files, seconds/pages, bytes saved) per tool — never file content:
@@ -21,10 +21,11 @@ const PORT = +process.env.PORT || 8080;
 const HOST = process.env.HOST || '127.0.0.1';
 const STATS_FILE = process.env.STATS_FILE || path.join(__dirname, 'data', 'stats.json');
 
-// route → folder. The root mount must stay last.
+// route → folder. The root mount must stay last. /fonts is shared by every page and never changes.
 const MOUNTS = [
   { route: '/video', dir: path.join(ROOT, 'videotools'), tool: 'video' },
   { route: '/pdf', dir: path.join(ROOT, 'pdftools', 'local'), tool: 'pdf' },
+  { route: '/fonts', dir: path.join(ROOT, 'fonts'), immutable: true },
   { route: '', dir: path.join(ROOT, 'home') },
 ];
 // Old addresses from before the clean URLs.
@@ -42,7 +43,7 @@ const LIMITS = { files: 50, seconds: 6 * 3600 * 50, pages: 5000, savedBytes: 200
 const TYPES = {
   '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8',
   '.json': 'application/json; charset=utf-8', '.svg': 'image/svg+xml', '.png': 'image/png', '.jpg': 'image/jpeg',
-  '.txt': 'text/plain; charset=utf-8', '.wasm': 'application/wasm', '.ico': 'image/x-icon',
+  '.txt': 'text/plain; charset=utf-8', '.woff2': 'font/woff2', '.wasm': 'application/wasm', '.ico': 'image/x-icon',
 };
 
 let stats = { video: {}, pdf: {} };
@@ -93,11 +94,11 @@ function handleApi(req, res, url) {
   return false;
 }
 
-function serveFile(req, res, file, base) {
+function serveFile(req, res, file, base, immutable) {
   fs.stat(file, (err, st) => {
     if (err || !st.isFile()) return send(res, 404, 'not found', 'text/plain; charset=utf-8');
     const type = TYPES[path.extname(file).toLowerCase()] || 'application/octet-stream';
-    const head = { ...HEADERS, 'Content-Type': type, 'Cache-Control': 'no-cache' };
+    const head = { ...HEADERS, 'Content-Type': type, 'Cache-Control': immutable ? 'public, max-age=31536000, immutable' : 'no-cache' };
     if (base) {
       // the tool's own index.html, served at /video: point its relative paths into /video/
       return fs.readFile(file, 'utf8', (e, html) => {
@@ -117,19 +118,19 @@ function route(req, res, url) {
   let p;
   try { p = decodeURIComponent(url); } catch { return send(res, 400, 'bad path', 'text/plain'); }
   for (const [re, to] of LEGACY) if (re.test(p)) return redirect(res, to);
-  for (const { route: r, dir, tool } of MOUNTS) {
+  for (const { route: r, dir, tool, immutable } of MOUNTS) {
     if (tool) {
       if (p === r) return serveFile(req, res, path.join(dir, 'index.html'), `${r}/`);
       if (p === `${r}/` || p === `${r}/index.html`) return redirect(res, r);
-      if (!p.startsWith(`${r}/`)) continue;
     }
-    const rel = tool ? p.slice(r.length) : p;
+    if (r && !p.startsWith(`${r}/`)) continue;
+    const rel = p.slice(r.length);
     if (rel === '/' || rel === '') return serveFile(req, res, path.join(dir, 'index.html'));
     if (rel === '/index.html') return redirect(res, r || '/');
     const file = path.normalize(path.join(dir, rel));
     // stay inside the mount; no dotfiles
     if (!file.startsWith(dir + path.sep) || /(^|[\\/])\./.test(path.relative(dir, file))) return send(res, 404, 'not found', 'text/plain');
-    return serveFile(req, res, file);
+    return serveFile(req, res, file, null, immutable);
   }
   send(res, 404, 'not found', 'text/plain');
 }

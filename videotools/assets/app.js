@@ -97,7 +97,7 @@
     if (!ok) {
       const opt = $('#hevcOpt');
       opt.querySelector('input').disabled = true;
-      opt.querySelector('small').textContent = '不支援';
+      opt.querySelector('i').textContent = '這台電腦不支援';
     }
   })();
 
@@ -119,7 +119,6 @@
   }
 
   // ---------- steps ----------
-  const STEP_NAMES = ['放入影片', '影片資訊', '壓縮設定', '處理與下載'];
   function allowed(n) {
     if (S.running) return n === 4;
     if (n === 1) return true;
@@ -145,7 +144,6 @@
       b.disabled = !allowed(n);
       b.setAttribute('aria-current', n === S.step ? 'step' : 'false');
     }
-    $('#mStep').replaceChildren(`第 ${S.step} 步，共 4 步・`, el('b', { text: STEP_NAMES[S.step - 1] }));
   }
   function render() {
     renderStepper();
@@ -343,20 +341,45 @@
   }
 
   // ---------- step 3: settings + estimate ----------
-  const rateInput = $('#rate'), rateRange = $('#rateRange');
-  function syncRate(v, from) {
-    v = Math.min(200, Math.max(0.5, v));
+  // A big number with −/+, and a slider from 1 Mbps to a little above the highest source bitrate,
+  // with a tick where the original sits.
+  const rateInput = $('#rate'), rateRange = $('#rateRange'), slider = $('.slider');
+  let rateTouched = false;
+  const clampRate = (v) => Math.min(400, Math.max(0.5, Math.round(v * 2) / 2));
+  function paintSlider() {
+    const min = +rateRange.min, max = +rateRange.max, v = Math.min(max, Math.max(min, +rateRange.value));
+    slider.style.setProperty('--p', `${((v - min) / (max - min)) * 100}%`);
+  }
+  function syncRate(v, from, byUser = true) {
+    v = clampRate(v);
+    if (byUser) rateTouched = true;
     if (from !== 'input') rateInput.value = v;
-    if (from !== 'range') rateRange.value = Math.min(+rateRange.max, Math.max(+rateRange.min, v));
-    for (const b of $$('#rateChips button')) b.classList.toggle('on', +b.dataset.rate === v);
+    if (from !== 'range') rateRange.value = v;
+    paintSlider();
     if (S.step === 3) renderStep3();
+  }
+  function layoutSlider(maxSrc, count) {
+    const src = maxSrc / 1e6;
+    const max = src > 0 && Number.isFinite(src) ? Math.max(10, Math.ceil((src * 1.25) / 5) * 5) : 30;
+    if (+rateRange.max !== max) {
+      rateRange.max = max;
+      $('#scaleMax').textContent = `${max} Mbps`;
+      rateRange.value = Math.min(max, +rateInput.value);
+    }
+    const mark = $('#srcMark');
+    mark.hidden = !(src > 0 && Number.isFinite(src));
+    if (!mark.hidden) {
+      mark.style.setProperty('--m', Math.min(1, (src - 1) / (max - 1)));
+      $('#srcMarkText').textContent = `${count > 1 ? '原始最高' : '原始'} ${mbps(maxSrc)}`;
+    }
+    paintSlider();
   }
   rateInput.addEventListener('input', () => { const v = parseFloat(rateInput.value); if (v > 0) syncRate(v, 'input'); });
   rateInput.addEventListener('change', () => syncRate(parseFloat(rateInput.value) || 12));
   rateRange.addEventListener('input', () => syncRate(+rateRange.value, 'range'));
-  $('#rateChips').addEventListener('click', (e) => { const b = e.target.closest('button'); if (b) syncRate(+b.dataset.rate); });
+  for (const b of $$('.nudge')) b.addEventListener('click', () => syncRate((parseFloat(rateInput.value) || 12) + +b.dataset.nudge));
   for (const n of $$('.settings input[type=radio], .settings select')) n.addEventListener('change', renderStep3);
-  syncRate(12);
+  syncRate(12, null, false);
 
   // Camera rates are exact fractions (60000/1001…); the measured average is a hair off, so snap to the nearest one.
   const STD_FPS = [24000 / 1001, 24, 25, 30000 / 1001, 30, 48, 50, 60000 / 1001, 60, 100, 120000 / 1001, 120];
@@ -394,8 +417,12 @@
     const s = settings();
     const ok = S.items.filter(valid);
     const rates = ok.map((it) => it.info.vRate);
-    const max = rates.length ? Math.max(...rates) : Infinity;
-    for (const b of $$('#rateChips button')) b.classList.toggle('over', +b.dataset.rate * 1e6 >= max * 0.97);
+    // Until the user picks a number: 12 Mbps, or 6 成 of the lowest source when 12 wouldn't shrink anything.
+    if (!rateTouched && rates.length && s.rate >= Math.min(...rates) * 0.97) {
+      syncRate(Math.max(1, Math.round(Math.min(...rates) * 0.6 / 1e6)), null, false);
+      return;
+    }
+    layoutSlider(rates.length ? Math.max(...rates) : 0, rates.length);
 
     const todo = todoList(s);
     const src = todo.reduce((a, it) => a + it.file.size, 0), est = todo.reduce((a, it) => a + plan(it, s).est, 0);
@@ -597,7 +624,7 @@
       if (r) state.append(`${fmtBytes(it.file.size)} → `, el('b', { text: fmtBytes(r.size) }), ' ', el('span', { class: 'saved', text: `小了 ${pct(r.size, it.file.size)}%` }), el('span', { class: 'r-rate', text: `・${fmtRate((r.size * 8) / it.info.duration)}` }));
       else state.textContent = t;
       const act = el('div', { class: 'r-act' });
-      if (r && r.url) act.append(el('a', { class: 'btn small primary', href: r.url, download: r.name, text: '下載' }));
+      if (r && r.url) act.append(el('a', { class: 'btn small', href: r.url, download: r.name, text: '下載' }));
       else if (r) act.append(el('span', { class: 'tag', text: '✓ 已存檔' }));
       return el('li', { class: `ritem ${it.run === 'running' ? 'running' : it.run === 'done' ? 'done' : it.run === 'fail' ? 'err' : it.run === 'wait' ? 'wait' : ''}`, 'data-id': it.id },
         el('div', { class: 'r-main' }, el('span', { class: 'r-name', text: it.file.name, title: it.file.name }), state),

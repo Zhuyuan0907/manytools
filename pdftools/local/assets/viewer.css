@@ -8,7 +8,7 @@
   --accent: #0d9b6c;
   --accent-soft: #e3f6ee;
   --nav-h: 46px;
-  --font: "PingFang TC", "Noto Sans TC", "Microsoft JhengHei", "Heiti TC", system-ui, sans-serif;
+  --font: -apple-system, BlinkMacSystemFont, "PingFang TC", "Noto Sans TC Web", "Noto Sans TC", "Microsoft JhengHei", "Heiti TC", sans-serif;
   color-scheme: light;
 }
 * { box-sizing: border-box; }
