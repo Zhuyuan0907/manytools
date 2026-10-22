@@ -1,8 +1,12 @@
-/* The counter line on the home page. Reads only totals from the server (see server/server.js);
-   opened as a local file it keeps the default line. */
+/* Home page: tool links and the counter line. The counter reads only totals from the server
+   (see server/server.js); opened as a local file the links point at the sibling folders instead. */
 (() => {
   'use strict';
-  if (!/^https?:$/.test(location.protocol)) return;
+  const onServer = /^https?:$/.test(location.protocol);
+  if (!onServer) {
+    for (const a of document.querySelectorAll('a[data-local]')) a.href = a.dataset.local;
+    return;
+  }
   const line = document.getElementById('count');
 
   function countUp(node, to) {
@@ -15,31 +19,29 @@
     };
     requestAnimationFrame(step);
   }
+  const span = (cls, ...kids) => { const s = document.createElement('span'); if (cls) s.className = cls; s.append(...kids); return s; };
 
-  fetch('../api/stats', { cache: 'no-store' })
+  fetch('api/stats', { cache: 'no-store' })
     .then((r) => (r.ok ? r.json() : null))
     .then((st) => {
       const v = (st && st.video) || {}, p = (st && st.pdf) || {};
       // Before the first real file the line keeps its default instead of showing 0.
       if (!(v.files > 0) && !(p.files > 0)) return;
-      const parts = ['已在大家自己的電腦上處理'];
+      const pill = span('pill', '已在大家的電腦上處理');
       const nums = [];
       if (v.files > 0) {
         const b = document.createElement('b');
-        parts.push(b, '部影片');
+        pill.append(span('', b, '部影片'));
         nums.push([b, v.files]);
       }
       if (p.files > 0) {
-        const span = document.createElement('span');
-        span.className = 'pdf';
         const b = document.createElement('b');
-        span.append(v.files > 0 ? '、' : '', b, '份 PDF');
-        parts.push(span);
+        pill.append(span('pdf', v.files > 0 ? '・' : '', b, '份 PDF'));
         nums.push([b, p.files]);
       }
       const saved = (v.savedBytes || 0) + (p.savedBytes || 0);
-      if (saved > 1e9) parts.push(`・共省下 ${(saved / 1e9).toFixed(1)} GB`);
-      line.replaceChildren(...parts);
+      if (saved >= 1e9) pill.append(span('saved', `・省下 ${(saved / 1e9).toFixed(1)} GB`));
+      line.replaceChildren(pill);
       for (const [b, n] of nums) countUp(b, n);
     })
     .catch(() => {});

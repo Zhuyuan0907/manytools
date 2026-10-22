@@ -1,22 +1,28 @@
 /* 影片碼率壓縮 — everything runs in this browser tab.
    Reading/demuxing/muxing: Mediabunny. Decoding/encoding: the browser's WebCodecs (hardware when available).
-   Nothing about the video leaves the computer; on a server only the counts (files, seconds, bytes saved) are sent. */
+   Nothing about the video leaves the computer; on a server only the counts (files, seconds, bytes saved) are sent.
+   Four steps: 1 drop files → 2 read each file's details → 3 settings + estimate → 4 encode and save. */
 (() => {
   'use strict';
   const MB = window.Mediabunny;
   const $ = (s, root = document) => root.querySelector(s);
+  const $$ = (s, root = document) => [...root.querySelectorAll(s)];
   const el = (tag, attrs = {}, ...kids) => {
     const n = document.createElement(tag);
     for (const [k, v] of Object.entries(attrs)) {
-      if (k === 'class') n.className = v; else if (k === 'text') n.textContent = v; else n.setAttribute(k, v);
+      if (v == null || v === false) continue;
+      if (k === 'class') n.className = v; else if (k === 'text') n.textContent = v; else if (k.startsWith('on')) n.addEventListener(k.slice(2), v); else n.setAttribute(k, v);
     }
-    n.append(...kids);
+    n.append(...kids.filter((k) => k != null && k !== false));
     return n;
   };
+  const onServer = /^https?:$/.test(location.protocol);
+  if (onServer) $('#brand').href = '/';
 
   // ---------- formatting ----------
   const fmtBytes = (b) => b >= 1e9 ? `${(b / 1e9).toFixed(2)} GB` : b >= 1e6 ? `${(b / 1e6).toFixed(1)} MB` : `${Math.max(1, Math.round(b / 1e3))} KB`;
-  const fmtRate = (bps) => bps >= 1e6 ? `${(bps / 1e6).toFixed(bps >= 1e8 ? 0 : 1)} Mbps` : `${Math.round(bps / 1e3)} kbps`;
+  const mbps = (bps) => bps >= 1e8 ? String(Math.round(bps / 1e6)) : (bps / 1e6).toFixed(1).replace(/\.0$/, '');
+  const fmtRate = (bps) => bps >= 1e6 ? `${mbps(bps)} Mbps` : `${Math.round(bps / 1e3)} kbps`;
   const fmtDur = (s) => {
     s = Math.max(0, Math.round(s));
     const h = Math.floor(s / 3600), m = Math.floor(s / 60) % 60, ss = s % 60;
@@ -24,9 +30,10 @@
   };
   const fmtFps = (f) => {
     if (!f) return '—';
-    for (const [n, label] of [[23.976, '23.98'], [29.97, '29.97'], [59.94, '59.94']]) if (Math.abs(f - n) < 0.02) return label;
+    for (const [n, label] of [[23.976, '23.98'], [29.97, '29.97'], [59.94, '59.94'], [119.88, '119.88']]) if (Math.abs(f - n) < 0.02) return label;
     return String(Math.round(f * 100) / 100);
   };
+  const pct = (a, b) => Math.max(0, Math.round((1 - a / b) * 100));
 
   // avc1.PPCCLL / hvc1.P.x.Lnnn → readable profile names; broadcast people care about 4:2:2 / 10-bit.
   function describeCodec(codec, str) {
@@ -39,12 +46,12 @@
       const m = /^(?:hvc1|hev1)\.[A-C]?(\d+)\.[^.]*\.([LH])(\d+)/i.exec(str);
       if (m) {
         const prof = { 1: 'Main', 2: 'Main 10', 3: 'Main Still', 4: 'Range Ext' }[m[1]] || `Profile ${m[1]}`;
-        return { name: 'H.265 / HEVC', detail: `${prof} @ L${(+m[3] / 30).toFixed(1).replace(/\.0$/, '')}`, deep: +m[1] !== 1 };
+        return { name: 'H.265', detail: `${prof} @ L${(+m[3] / 30).toFixed(1).replace(/\.0$/, '')}`, deep: +m[1] !== 1 };
       }
-      return { name: 'H.265 / HEVC', detail: '', deep: false };
+      return { name: 'H.265', detail: '', deep: false };
     }
-    const names = { avc: 'H.264', hevc: 'H.265 / HEVC', prores: 'ProRes', vp9: 'VP9', av1: 'AV1', vp8: 'VP8', mpeg2: 'MPEG-2' };
-    return { name: names[codec] || (codec ? codec.toUpperCase() : '不支援的格式'), detail: '', deep: false };
+    const names = { avc: 'H.264', hevc: 'H.265', prores: 'ProRes', vp9: 'VP9', av1: 'AV1', vp8: 'VP8', mpeg2: 'MPEG-2' };
+    return { name: names[codec] || (codec ? codec.toUpperCase() : '不支援'), detail: '', deep: false };
   }
   function describeAudio(codec) {
     if (!codec) return '不支援';
@@ -52,13 +59,20 @@
       const m = /pcm-([suf])(\d+)/.exec(codec);
       return m ? `LPCM ${m[2]}-bit${m[1] === 'f' ? ' float' : ''}` : 'LPCM';
     }
-    return { aac: 'AAC', mp3: 'MP3', opus: 'Opus', ac3: 'Dolby AC-3', eac3: 'Dolby E-AC-3', flac: 'FLAC', vorbis: 'Vorbis', dts: 'DTS' }[codec] || codec.toUpperCase();
+    return { aac: 'AAC', mp3: 'MP3', opus: 'Opus', ac3: 'AC-3', eac3: 'E-AC-3', flac: 'FLAC', vorbis: 'Vorbis', dts: 'DTS' }[codec] || codec.toUpperCase();
   }
   const chLabel = (n) => ({ 1: '單聲道', 2: '立體聲' }[n] || `${n} 聲道`);
-  function colorLabel(cs, hdr) {
-    if (hdr) return cs && cs.transfer === 'arib-std-b67' ? 'HDR（HLG）' : 'HDR（PQ）';
-    if (cs && cs.primaries === 'bt2020') return 'BT.2020';
-    return 'SDR（BT.709）';
+  function colorInfo(cs, hdr) {
+    if (hdr) return ['HDR', cs && cs.transfer === 'arib-std-b67' ? 'HLG' : 'PQ'];
+    if (cs && cs.primaries === 'bt2020') return ['SDR', 'BT.2020'];
+    return ['SDR', 'BT.709'];
+  }
+  function resName(w, h) {
+    const s = Math.min(w, h), l = Math.max(w, h), v = h > w ? '直式 ' : '';
+    if (s >= 2160) return v + (l >= 4096 ? 'DCI 4K' : '4K UHD');
+    if (s >= 1080) return v + 'Full HD';
+    if (s >= 720) return v + 'HD';
+    return v + 'SD';
   }
 
   // ---------- browser support ----------
@@ -68,12 +82,14 @@
     support.textContent = '程式檔案不完整，請重新下載整個資料夾。';
     support.hidden = false;
   } else if (!hasCodecs) {
-    support.textContent = '這個瀏覽器不支援影片編碼（WebCodecs）。請改用最新版的 Chrome 或 Edge 開啟。';
+    support.textContent = window.isSecureContext === false
+      ? '影片編碼只能在 https 網址使用，請用正式網址開啟這個頁面。'
+      : '這個瀏覽器不支援影片編碼。請改用最新版的 Chrome 或 Edge。';
     support.hidden = false;
   }
   const canPickFolder = typeof window.showDirectoryPicker === 'function';
 
-  // H.265 encoding depends on the computer's hardware; hide the choice when it isn't there.
+  // H.265 encoding depends on the computer's hardware; disable the choice when it isn't there.
   (async () => {
     if (!hasCodecs) return;
     let ok = false;
@@ -81,14 +97,14 @@
     if (!ok) {
       const opt = $('#hevcOpt');
       opt.querySelector('input').disabled = true;
-      opt.querySelector('small').textContent = '這台電腦不支援 H.265 編碼';
+      opt.querySelector('small').textContent = '不支援';
     }
   })();
 
   // ---------- state ----------
-  const items = [];
+  const S = { step: 1, items: [], sel: null, running: false, hasRun: false, stop: false, dir: null, queue: [], t0: 0 };
   let nextId = 1;
-  let running = false;
+  const valid = (it) => it.status === 'ready';
 
   function settings() {
     return {
@@ -102,70 +118,84 @@
     };
   }
 
-  // ---------- settings controls ----------
-  const rateInput = $('#rate'), rateRange = $('#rateRange');
-  function syncRate(v, from) {
-    v = Math.min(200, Math.max(0.5, v));
-    if (from !== 'input') rateInput.value = v;
-    if (from !== 'range') rateRange.value = Math.min(+rateRange.max, Math.max(+rateRange.min, v));
-    for (const b of document.querySelectorAll('#rateChips button')) b.classList.toggle('on', +b.dataset.rate === v);
-    renderAllPlans();
+  // ---------- steps ----------
+  const STEP_NAMES = ['放入影片', '影片資訊', '壓縮設定', '處理與下載'];
+  function allowed(n) {
+    if (S.running) return n === 4;
+    if (n === 1) return true;
+    if (n === 2) return S.items.length > 0;
+    if (n === 3) return S.items.some(valid);
+    return S.hasRun;
   }
-  rateInput.addEventListener('input', () => { const v = parseFloat(rateInput.value); if (v > 0) syncRate(v, 'input'); });
-  rateInput.addEventListener('change', () => syncRate(parseFloat(rateInput.value) || 12));
-  rateRange.addEventListener('input', () => syncRate(+rateRange.value, 'range'));
-  $('#rateChips').addEventListener('click', (e) => { const b = e.target.closest('button'); if (b) syncRate(+b.dataset.rate); });
-  for (const n of document.querySelectorAll('.settings input[type=radio], .settings select')) n.addEventListener('change', renderAllPlans);
-  syncRate(12);
-
-  // Grey out the chips that are above every loaded file's video bitrate (they wouldn't compress anything).
-  function markChips() {
-    const rates = items.filter((it) => it.info && it.info.vRate).map((it) => it.info.vRate);
-    const max = rates.length ? Math.max(...rates) : Infinity;
-    for (const b of document.querySelectorAll('#rateChips button')) b.classList.toggle('over', +b.dataset.rate * 1e6 >= max);
+  function goto(n) {
+    if (!allowed(n)) return;
+    S.step = n;
+    for (let i = 1; i <= 4; i++) $(`#step${i}`).hidden = i !== n;
+    render();
+  }
+  document.addEventListener('click', (e) => {
+    const b = e.target.closest('[data-goto]');
+    if (b && !b.disabled) goto(+b.dataset.goto);
+  });
+  function renderStepper() {
+    for (const b of $$('.stepper button')) {
+      const n = +b.dataset.goto;
+      b.classList.toggle('current', n === S.step);
+      b.classList.toggle('done', n < S.step || (n === 4 && S.hasRun && !S.running && S.step !== 4));
+      b.disabled = !allowed(n);
+      b.setAttribute('aria-current', n === S.step ? 'step' : 'false');
+    }
+    $('#mStep').replaceChildren(`第 ${S.step} 步，共 4 步・`, el('b', { text: STEP_NAMES[S.step - 1] }));
+  }
+  function render() {
+    renderStepper();
+    if (S.step === 1) renderStep1();
+    if (S.step === 2) renderStep2();
+    if (S.step === 3) renderStep3();
+    if (S.step === 4) renderStep4();
   }
 
-  // ---------- adding files ----------
+  // ---------- step 1: adding files ----------
   const drop = $('#drop'), fileInput = $('#fileInput');
   fileInput.addEventListener('change', () => { addFiles(fileInput.files); fileInput.value = ''; });
   for (const t of ['dragenter', 'dragover']) drop.addEventListener(t, (e) => { e.preventDefault(); drop.classList.add('is-over'); });
   for (const t of ['dragleave', 'drop']) drop.addEventListener(t, () => drop.classList.remove('is-over'));
-  drop.addEventListener('drop', (e) => { e.preventDefault(); addFiles(e.dataTransfer.files); });
-  // Dropping a file anywhere else on the page shouldn't navigate away from it.
+  drop.addEventListener('drop', (e) => { e.preventDefault(); e.stopPropagation(); addFiles(e.dataTransfer.files); });
+  // Dropping a file anywhere else on the page adds it too, instead of the browser opening it.
   window.addEventListener('dragover', (e) => e.preventDefault());
-  window.addEventListener('drop', (e) => { e.preventDefault(); if (!drop.contains(e.target)) addFiles(e.dataTransfer.files); });
+  window.addEventListener('drop', (e) => { e.preventDefault(); if (!S.running && e.dataTransfer) addFiles(e.dataTransfer.files); });
+  $('#addMore').addEventListener('click', () => fileInput.click());
+  $('#next1').addEventListener('click', () => goto(2));
 
   function addFiles(list) {
+    if (S.running) return;
+    let first = null;
     for (const file of list) {
-      if (items.some((it) => it.file.name === file.name && it.file.size === file.size && it.status !== 'done')) continue;
-      const it = { id: nextId++, file, status: 'loading', info: null, error: '' };
-      items.push(it);
-      it.node = makeCard(it);
-      $('#files').append(it.node);
+      if (S.items.some((it) => it.file.name === file.name && it.file.size === file.size)) continue;
+      const it = { id: nextId++, file, status: 'loading', info: null, error: '', thumb: null, run: null, result: null };
+      S.items.push(it);
+      first = first || it;
       probe(it);
     }
-    document.body.classList.toggle('has-files', items.length > 0);
-    updateSummary();
-  }
-
-  function makeCard(it) {
-    const node = $('#cardTpl').content.firstElementChild.cloneNode(true);
-    $('.fname', node).textContent = it.file.name;
-    $('.fmeta', node).textContent = `${fmtBytes(it.file.size)}・讀取中…`;
-    $('.info', node).append(el('p', { class: 'loading', text: '正在讀取影片資訊…' }));
-    $('.remove', node).addEventListener('click', () => removeItem(it));
-    $('.cancel', node).addEventListener('click', () => { if (it.conversion) it.conversion.cancel().catch(() => {}); it.canceled = true; });
-    return node;
+    if (!first) return;
+    S.sel = first;
+    if (S.step === 1) goto(2); else render();
   }
 
   function removeItem(it) {
-    if (it.status === 'running') return;
-    items.splice(items.indexOf(it), 1);
-    it.node.remove();
+    if (S.running) return;
+    const i = S.items.indexOf(it);
+    S.items.splice(i, 1);
     try { it.input && it.input.dispose(); } catch {}
-    document.body.classList.toggle('has-files', items.length > 0);
-    markChips();
-    updateSummary();
+    if (it.result && it.result.url) URL.revokeObjectURL(it.result.url);
+    if (S.sel === it) S.sel = S.items[Math.min(i, S.items.length - 1)] || null;
+    if (!S.items.length) goto(1); else render();
+  }
+
+  function renderStep1() {
+    const n = S.items.length;
+    $('#note1').textContent = n ? `已加入 ${n} 支影片` : '還沒有加入影片';
+    $('#next1').disabled = !n;
   }
 
   // ---------- reading the file's details ----------
@@ -177,8 +207,8 @@
       it.input = input;
       if (!(await input.canRead())) {
         throw new Error(ext === 'mxf'
-          ? 'MXF 格式目前不支援。請在機器上改錄 MP4（XAVC S / XAVC HS），或先用剪接軟體轉成 MOV / MP4。'
-          : '看不懂這個檔案，可能不是影片或格式不支援。');
+          ? 'MXF 格式目前不支援。請在機器上改錄 MP4（XAVC S / HS），或先轉成 MOV / MP4。'
+          : '看不懂這個檔案，可能不是影片，或是不支援的格式。');
       }
       const format = await input.getFormat();
       const isTs = format.name === 'MPEG Transport Stream';
@@ -201,11 +231,11 @@
         audio.push({ codec, channels: await at.getNumberOfChannels(), sampleRate: await at.getSampleRate(), rate });
       }
       it.info = {
-        format: format.name === 'QuickTime File Format' ? 'MOV' : format.name === 'MPEG Transport Stream' ? 'MTS / TS' : format.name,
+        format: format.name === 'QuickTime File Format' ? 'MOV' : isTs ? 'MTS' : format.name,
         isMov: format.name === 'QuickTime File Format',
         duration,
         overall: duration > 0 ? (it.file.size * 8) / duration : 0,
-        vCodec, vStr, codec: describeCodec(vCodec, vStr),
+        codec: describeCodec(vCodec, vStr),
         width: await vt.getDisplayWidth(), height: await vt.getDisplayHeight(),
         fps: vStats.averagePacketRate,
         vRate: vStats.averageBitrate,
@@ -215,60 +245,119 @@
       };
       it.status = it.info.canDecode ? 'ready' : 'error';
       if (!it.info.canDecode) it.error = `這台電腦的瀏覽器無法解碼這種影像（${it.info.codec.name} ${it.info.codec.detail}）。`;
-      renderInfo(it);
-      thumbnail(it, vt, duration);
+      render();
+      if (it.info.canDecode) await thumbnail(it, vt, duration);
     } catch (e) {
       it.status = 'error';
       it.error = e && e.message ? e.message : String(e);
-      $('.info', it.node).replaceChildren();
-      $('.fmeta', it.node).textContent = fmtBytes(it.file.size);
     }
-    markChips();
-    renderPlan(it);
-    updateSummary();
+    render();
   }
 
   async function thumbnail(it, vt, duration) {
-    if (!it.info.canDecode) return;
     try {
       const sink = new MB.CanvasSink(vt, { width: 320, height: 180, fit: 'contain' });
       const start = await vt.getFirstTimestamp().catch(() => 0);
       const w = await sink.getCanvas(start + Math.min(duration * 0.1, 3));
       if (!w) return;
-      const c = $('.thumb canvas', it.node);
+      const c = document.createElement('canvas');
       c.width = 320; c.height = 180;
       c.getContext('2d').drawImage(w.canvas, 0, 0, 320, 180);
+      it.thumb = c;
     } catch {}
   }
+  function thumbCanvas(it, w, h, cls) {
+    const c = el('canvas', { class: cls, width: w, height: h, 'aria-hidden': 'true' });
+    if (it.thumb) c.getContext('2d').drawImage(it.thumb, 0, 0, w, h);
+    return c;
+  }
 
-  function renderInfo(it) {
+  // ---------- step 2: details ----------
+  $('#next2').addEventListener('click', () => goto(3));
+  function renderStep2() {
+    const list = $('#flist');
+    list.replaceChildren(...S.items.map((it) => {
+      const sub = it.status === 'loading' ? '讀取中…'
+        : it.status === 'error' ? '無法處理'
+        : null;
+      return el('li', {},
+        el('div', { class: `fitem${S.sel === it ? ' on' : ''}${it.status === 'error' ? ' err' : ''}`, role: 'button', tabindex: '0', 'aria-pressed': String(S.sel === it),
+          onclick: () => { S.sel = it; renderStep2(); },
+          onkeydown: (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); S.sel = it; renderStep2(); } } },
+          thumbCanvas(it, 128, 72),
+          el('span', { class: 'fi-text' },
+            el('span', { class: 'fi-name', text: it.file.name, title: it.file.name }),
+            sub ? el('span', { class: 'fi-sub', text: sub })
+              : el('span', { class: 'fi-sub' }, el('b', { text: fmtRate(it.info.vRate) }), `・${it.info.height}p・${fmtDur(it.info.duration)}`)),
+          el('button', { type: 'button', class: 'x', 'aria-label': `移除 ${it.file.name}`, title: '移除', text: '×',
+            onclick: (e) => { e.stopPropagation(); removeItem(it); } })));
+    }));
+    renderDetail(S.sel);
+    const ok = S.items.filter(valid), loading = S.items.filter((it) => it.status === 'loading').length;
+    const size = S.items.reduce((a, it) => a + it.file.size, 0);
+    $('#note2').replaceChildren(el('b', { text: `${S.items.length} 支影片` }), `・共 ${fmtBytes(size)}`, loading ? `・${loading} 支讀取中` : '');
+    $('#next2').disabled = !ok.length || loading > 0;
+  }
+
+  function renderDetail(it) {
+    const box = $('#detail');
+    if (!it) { box.replaceChildren(); return; }
+    if (it.status === 'loading') { box.replaceChildren(el('p', { class: 'd-loading', text: '正在讀取影片資訊…' })); return; }
     const i = it.info;
-    $('.fmeta', it.node).textContent = `${fmtBytes(it.file.size)}・${i.format}・${fmtDur(i.duration)}`;
-    const cell = (label, value, sub, cls) => {
-      const dd = el('dd', { text: value });
-      if (sub) dd.append(el('small', { text: sub }));
-      return el('div', cls ? { class: cls } : {}, el('dt', { text: label }), dd);
-    };
-    const kids = [
-      cell('影像碼率', fmtRate(i.vRate), i.overall ? `整體 ${fmtRate(i.overall)}` : '', 'hl'),
-      cell('解析度', `${i.width} × ${i.height}`, `${fmtFps(i.fps)} fps`),
-      cell('影像編碼', i.codec.name, i.codec.detail),
-      cell('色彩', colorLabel(i.cs, i.hdr), i.cs && i.cs.fullRange ? 'Full range' : ''),
-      cell('長度', fmtDur(i.duration), fmtBytes(it.file.size)),
-    ];
-    if (!i.audio.length) kids.push(cell('聲音', '沒有聲音'));
-    i.audio.forEach((a, n) => kids.push(cell(i.audio.length > 1 ? `聲音軌 ${n + 1}` : '聲音',
-      describeAudio(a.codec), [chLabel(a.channels), a.sampleRate ? `${a.sampleRate / 1000} kHz` : '', a.rate ? fmtRate(a.rate) : ''].filter(Boolean).join('・'))));
-    $('.info', it.node).replaceChildren(...kids);
+    const head = el('div', { class: 'd-head' },
+      el('span', { class: 'd-name', text: it.file.name, title: it.file.name }),
+      el('span', { class: 'd-meta', text: i ? `${i.format}・${fmtBytes(it.file.size)}・${fmtDur(i.duration)}` : fmtBytes(it.file.size) }));
+    if (it.status === 'error' && !i) {
+      box.replaceChildren(el('div', { class: 'd-top' }, thumbCanvas(it, 320, 180, 'd-thumb'), head), el('p', { class: 'd-msg bad', text: it.error }));
+      return;
+    }
+    const s = settings();
+    const est = estimate(it, s);
+    head.append(
+      el('span', { class: 'd-rate-label', text: '影像碼率' }),
+      el('span', { class: 'd-rate' }, mbps(i.vRate), el('small', { text: 'Mbps' })),
+      s.rate < i.vRate * 0.97
+        ? el('span', { class: 'd-sub' }, el('span', { text: `壓到 ${mbps(s.rate)} Mbps，` }), el('span', { text: `大約可以省下 ${pct(est, it.file.size)}%` }))
+        : el('span', { class: 'd-sub' }, el('span', { text: `目前設定的 ${mbps(s.rate)} Mbps，` }), el('span', { text: '沒有比原始低' })));
+    const [cName, cSub] = colorInfo(i.cs, i.hdr);
+    const tile = (label, value, sub) => el('div', {}, el('dt', { text: label }), el('dd', { title: value }, value, el('small', { text: sub || ' ' })));
+    const tiles = el('dl', { class: 'tiles' },
+      tile('解析度', `${i.width} × ${i.height}`, resName(i.width, i.height)),
+      tile('幀率', `${fmtFps(i.fps)} fps`),
+      tile('影像編碼', i.codec.name, i.codec.detail),
+      tile('色彩', cName, cSub),
+      tile('長度', fmtDur(i.duration)),
+      tile('檔案大小', fmtBytes(it.file.size)),
+      tile('封裝格式', i.format),
+      tile('整體碼率', fmtRate(i.overall), '含聲音'));
+    const audio = el('div', { class: 'audio-row' }, el('span', { class: 'a-label', text: '聲音' }),
+      ...(i.audio.length ? i.audio.map((a, n) => el('span', { class: 'atrack' },
+        i.audio.length > 1 ? el('span', { class: 'a-no', text: n + 1 }) : null,
+        el('b', { text: describeAudio(a.codec) }),
+        el('span', { text: [chLabel(a.channels), a.sampleRate ? `${a.sampleRate / 1000} kHz` : '', a.rate ? fmtRate(a.rate) : ''].filter(Boolean).join('・') })))
+        : [el('span', { class: 'atrack' }, el('span', { text: '沒有聲音' }))]));
+    const kids = [el('div', { class: 'd-top' }, thumbCanvas(it, 320, 180, 'd-thumb'), head, audio), tiles];
+    if (it.status === 'error') kids.splice(1, 0, el('p', { class: 'd-msg bad', text: it.error }));
+    else if (i.hdr || i.codec.deep) kids.splice(1, 0, el('p', { class: 'd-msg warn', text: `這是 ${i.hdr ? 'HDR' : '10-bit / 4:2:2'} 素材，輸出會轉成 8-bit 4:2:0${i.hdr ? ' SDR' : ''}。` }));
+    box.replaceChildren(...kids);
   }
 
-  // ---------- the plan for each file under the current settings ----------
-  function outputDims(i, s) {
-    const short = Math.min(i.width, i.height);
-    if (!s.res || s.res >= short) return null;
-    const k = s.res / short;
-    return { width: Math.round((i.width * k) / 2) * 2, height: Math.round((i.height * k) / 2) * 2 };
+  // ---------- step 3: settings + estimate ----------
+  const rateInput = $('#rate'), rateRange = $('#rateRange');
+  function syncRate(v, from) {
+    v = Math.min(200, Math.max(0.5, v));
+    if (from !== 'input') rateInput.value = v;
+    if (from !== 'range') rateRange.value = Math.min(+rateRange.max, Math.max(+rateRange.min, v));
+    for (const b of $$('#rateChips button')) b.classList.toggle('on', +b.dataset.rate === v);
+    if (S.step === 3) renderStep3();
   }
+  rateInput.addEventListener('input', () => { const v = parseFloat(rateInput.value); if (v > 0) syncRate(v, 'input'); });
+  rateInput.addEventListener('change', () => syncRate(parseFloat(rateInput.value) || 12));
+  rateRange.addEventListener('input', () => syncRate(+rateRange.value, 'range'));
+  $('#rateChips').addEventListener('click', (e) => { const b = e.target.closest('button'); if (b) syncRate(+b.dataset.rate); });
+  for (const n of $$('.settings input[type=radio], .settings select')) n.addEventListener('change', renderStep3);
+  syncRate(12);
+
   // Camera rates are exact fractions (60000/1001…); the measured average is a hair off, so snap to the nearest one.
   const STD_FPS = [24000 / 1001, 24, 25, 30000 / 1001, 30, 48, 50, 60000 / 1001, 60, 100, 120000 / 1001, 120];
   function snapFps(f) {
@@ -276,59 +365,60 @@
     const best = STD_FPS.reduce((a, b) => (Math.abs(b - f) < Math.abs(a - f) ? b : a));
     return Math.abs(best - f) / best < 0.003 ? best : f;
   }
+  function outputDims(i, s) {
+    const short = Math.min(i.width, i.height);
+    if (!s.res || s.res >= short) return null;
+    const k = s.res / short;
+    return { width: Math.round((i.width * k) / 2) * 2, height: Math.round((i.height * k) / 2) * 2 };
+  }
   function audioRate(i, s) {
     if (s.audio === 'none') return 0;
     if (s.audio === 'aac') return i.audio.length * 320e3;
     return i.audio.reduce((a, t) => a + (t.rate || 0), 0);
   }
-  function plan(it) {
-    const i = it.info, s = settings();
-    const estBytes = ((s.rate + audioRate(i, s)) * i.duration) / 8 * 1.01;
+  const estimate = (it, s) => ((s.rate + audioRate(it.info, s)) * it.info.duration) / 8 * 1.01;
+  function plan(it, s) {
+    const i = it.info;
     const notes = [];
     let skip = false;
-    if (s.rate >= i.vRate * 0.97) { notes.push(['bad', '目標碼率沒有比原始低，壓了也不會變小。請把目標調低。']); skip = true; }
-    else if (s.rate < i.vRate * 0.2) notes.push(['warn', '目標碼率不到原始的 2 成，畫面可能明顯變糊，建議先試一支看看。']);
-    if (i.hdr || i.codec.deep) notes.push(['warn', `原檔是 ${i.hdr ? 'HDR' : '10-bit / 4:2:2'}，輸出會轉成 8-bit 4:2:0${i.hdr ? ' SDR' : ''}。`]);
-    if (!canPickFolder && it.file.size > 1.5e9) notes.push(['warn', '這個瀏覽器不能直接存到資料夾，大檔案會佔用很多記憶體。建議用 Chrome 或 Edge。']);
-    return { estBytes, notes, skip, dims: outputDims(i, s) };
+    if (s.rate >= i.vRate * 0.97) { notes.push(['bad', `原始只有 ${fmtRate(i.vRate)}，目標要更低才會變小，這支會跳過`]); skip = true; }
+    else if (s.rate < i.vRate * 0.2) notes.push(['warn', '不到原始的 2 成，畫面可能明顯變糊，建議先試一支']);
+    if (i.hdr || i.codec.deep) notes.push(['warn', `${i.hdr ? 'HDR' : '10-bit / 4:2:2'} 素材會轉成 8-bit 4:2:0${i.hdr ? ' SDR' : ''}`]);
+    if (!canPickFolder && it.file.size > 1.5e9) notes.push(['warn', '大檔案會佔用很多記憶體，建議改用 Chrome 或 Edge']);
+    return { est: estimate(it, s), notes, skip };
   }
-  function renderPlan(it) {
-    const box = $('.plan', it.node);
-    if (it.status === 'error') {
-      box.replaceChildren(el('span', { class: 'note bad', text: it.error }));
-      $('.remove', it.node).hidden = false;
-      return;
-    }
-    if (!it.info || it.status === 'running' || it.status === 'done') { if (it.status !== 'done') box.replaceChildren(); return; }
-    const p = plan(it), s = settings();
-    it.skip = p.skip;
-    const res = p.dims ? `${p.dims.width}×${p.dims.height}` : `${it.info.width}×${it.info.height}`;
-    box.replaceChildren(
-      el('span', {}, '影像 ', el('b', { text: fmtRate(it.info.vRate) }), el('span', { class: 'arrow', text: ' → ' }), el('b', { text: fmtRate(s.rate) })),
-      el('span', {}, '預估 ', el('b', { text: `${fmtBytes(p.estBytes)}` }), p.skip ? '' : `（省下約 ${Math.max(0, Math.round((1 - p.estBytes / it.file.size) * 100))}%）`),
-      el('span', { text: `${s.codec === 'hevc' ? 'H.265' : 'H.264'}・${res}` }),
-      ...p.notes.map(([cls, t]) => el('span', { class: `note ${cls}`, text: t })),
-    );
-  }
-  function renderAllPlans() { for (const it of items) renderPlan(it); updateSummary(); }
+  const todoList = (s) => S.items.filter((it) => valid(it) && !plan(it, s).skip);
 
-  function updateSummary() {
-    const todo = items.filter((it) => it.status === 'ready' && !it.skip);
-    const loading = items.some((it) => it.status === 'loading');
-    $('#runAll').disabled = running || !todo.length || !hasCodecs;
-    $('#runAll').textContent = running ? '處理中…' : todo.length > 1 ? `開始壓縮（${todo.length} 支）` : '開始壓縮';
-    let note;
-    if (!items.length) note = '還沒有加入影片。';
-    else if (loading) note = '正在讀取影片資訊…';
-    else if (!todo.length) note = items.every((it) => it.status === 'done') ? '全部處理完成。' : '沒有可以壓縮的影片。';
-    else {
-      const est = todo.reduce((a, it) => a + plan(it).estBytes, 0), src = todo.reduce((a, it) => a + it.file.size, 0);
-      note = `${fmtBytes(src)} → 約 ${fmtBytes(est)}`;
-    }
-    $('#sumNote').textContent = note;
+  function renderStep3() {
+    if (S.step !== 3) return;
+    const s = settings();
+    const ok = S.items.filter(valid);
+    const rates = ok.map((it) => it.info.vRate);
+    const max = rates.length ? Math.max(...rates) : Infinity;
+    for (const b of $$('#rateChips button')) b.classList.toggle('over', +b.dataset.rate * 1e6 >= max * 0.97);
+
+    const todo = todoList(s);
+    const src = todo.reduce((a, it) => a + it.file.size, 0), est = todo.reduce((a, it) => a + plan(it, s).est, 0);
+    const cell = (label, value, cls) => el('div', cls ? { class: cls } : {}, el('dt', { text: label }), el('dd', { text: value }));
+    $('#total').replaceChildren(
+      cell(todo.length > 1 ? `原始（${todo.length} 支）` : '原始大小', todo.length ? fmtBytes(src) : '—'),
+      cell('預估輸出', todo.length ? fmtBytes(est) : '—'),
+      cell('省下', todo.length ? `${pct(est, src)}%` : '—', 'big'));
+    $('#plist').replaceChildren(...ok.map((it) => {
+      const p = plan(it, s), dims = outputDims(it.info, s);
+      return el('li', { class: `pitem${p.skip ? ' skip' : ''}` },
+        el('span', { class: 'p-name', text: it.file.name, title: it.file.name }),
+        el('span', { class: 'p-rate' }, `${mbps(it.info.vRate)} → `, el('b', { text: `${mbps(s.rate)} Mbps` }), dims ? `・${dims.height}p` : ''),
+        el('span', { class: 'p-size' }, p.skip ? '跳過' : fmtBytes(p.est), p.skip ? null : el('small', { text: `-${pct(p.est, it.file.size)}%` })),
+        ...p.notes.map(([cls, t]) => el('span', { class: `p-note ${cls}`, text: t, title: t })));
+    }));
+    $('#note3').textContent = !todo.length ? '沒有可以壓縮的影片，請把目標碼率調低'
+      : canPickFolder ? '按下開始後，選一個存放的資料夾' : '壓好會自動下載';
+    $('#runAll').disabled = !todo.length || !hasCodecs;
+    $('#runAll').textContent = todo.length > 1 ? `開始壓縮 ${todo.length} 支 →` : '開始壓縮 →';
   }
 
-  // ---------- running ----------
+  // ---------- step 4: running ----------
   let toastTimer;
   function toast(msg) {
     const t = $('#toast');
@@ -337,31 +427,43 @@
   }
 
   $('#runAll').addEventListener('click', async () => {
-    const todo = items.filter((it) => it.status === 'ready' && !it.skip);
-    if (!todo.length || running) return;
+    const s = settings();
+    const todo = todoList(s);
+    if (!todo.length || S.running) return;
     // One folder for the whole batch, so multi-GB files stream straight to disk instead of into memory.
     let dir = null;
     if (canPickFolder) {
       try { dir = await window.showDirectoryPicker({ id: 'manytools-video-out', mode: 'readwrite', startIn: 'videos' }); }
-      catch (e) { if (e && e.name === 'AbortError') { toast('沒有選擇存放的資料夾，已取消。'); return; } dir = null; }
+      catch (e) { if (e && e.name === 'AbortError') { toast('沒有選擇存放的資料夾，已取消'); return; } dir = null; }
     }
-    running = true;
-    updateSummary();
-    const s = settings();
+    for (const it of S.items) { if (it.result && it.result.url) URL.revokeObjectURL(it.result.url); it.run = null; it.result = null; }
+    for (const it of todo) { it.run = 'wait'; it.progress = 0; }
+    Object.assign(S, { running: true, hasRun: true, stop: false, dir, queue: todo, t0: performance.now(), settings: s });
+    goto(4);
     for (const it of todo) {
-      if (it.status !== 'ready') continue;
+      if (S.stop) { it.run = 'stopped'; continue; }
       await runOne(it, s, dir);
+      renderStep4();
     }
-    running = false;
-    updateSummary();
-    const done = todo.filter((it) => it.status === 'done');
-    if (done.length) toast(dir ? `完成 ${done.length} 支，已存到「${dir.name}」資料夾。` : `完成 ${done.length} 支。`);
+    S.running = false;
+    render();
+    const done = todo.filter((it) => it.run === 'done');
+    if (done.length) toast(dir ? `完成 ${done.length} 支，已存到「${dir.name}」` : `完成 ${done.length} 支`);
+  });
+  $('#stopRun').addEventListener('click', () => {
+    S.stop = true;
+    const cur = S.queue.find((it) => it.run === 'running');
+    if (cur && cur.conversion) cur.conversion.cancel().catch(() => {});
+  });
+  $('#restart').addEventListener('click', () => {
+    for (const it of S.items) { try { it.input && it.input.dispose(); } catch {} if (it.result && it.result.url) URL.revokeObjectURL(it.result.url); }
+    Object.assign(S, { items: [], sel: null, hasRun: false, queue: [] });
+    goto(1);
   });
 
   function outName(it, s, ext) {
     const base = it.file.name.replace(/\.[^.]+$/, '');
-    const mbps = Math.round((s.rate / 1e6) * 10) / 10;
-    return `${base}_${mbps}M.${ext}`;
+    return `${base}_${mbps(s.rate)}M.${ext}`;
   }
   async function freeName(dir, name) {
     const dot = name.lastIndexOf('.');
@@ -373,18 +475,12 @@
   }
 
   async function runOne(it, s, dir) {
-    const node = it.node, i = it.info;
-    it.status = 'running'; it.canceled = false;
-    node.classList.add('is-running');
-    $('.remove', node).hidden = true;
-    $('.result', node).hidden = true;
-    renderPlan(it);
-    const prog = $('.prog', node), bar = $('.bar i', prog), ptext = $('.prog-text', prog);
-    prog.hidden = false; bar.style.width = '0%'; ptext.textContent = '準備中…';
-
+    const i = it.info;
+    it.run = 'running'; it.progress = 0; it.speed = 0; it.err = '';
+    renderStep4();
     const useMov = s.fmt === 'mov' || (s.fmt === 'auto' && i.isMov);
-    const ext = useMov ? 'mov' : 'mp4';
-    let name = outName(it, s, ext), fileHandle = null, writable = null, target;
+    let name = outName(it, s, useMov ? 'mov' : 'mp4'), fileHandle = null, writable = null, target;
+    const t0 = performance.now();
     try {
       if (dir) {
         name = await freeName(dir, name);
@@ -394,9 +490,9 @@
       } else {
         target = new MB.BufferTarget();
       }
-      const format = useMov ? new MB.MovOutputFormat({ fastStart: dir ? false : 'in-memory' }) : new MB.Mp4OutputFormat({ fastStart: dir ? false : 'in-memory' });
+      const fastStart = dir ? false : 'in-memory';
+      const format = useMov ? new MB.MovOutputFormat({ fastStart }) : new MB.Mp4OutputFormat({ fastStart });
       const output = new MB.Output({ format, target });
-      const dims = outputDims(i, s);
       const video = {
         codec: s.codec,
         quality: new MB.Quality({ bitrate: Math.round(s.rate), bitrateMode: s.mode }),
@@ -406,6 +502,7 @@
       // Without a frame rate the browser's encoder assumes 30 fps and a 59.94p file comes out at twice the bitrate.
       const fps = snapFps(i.fps);
       if (fps) video.frameRate = fps;
+      const dims = outputDims(i, s);
       if (dims) Object.assign(video, dims, { fit: 'fill' });
       const audio = s.audio === 'none' ? { discard: true }
         : s.audio === 'aac' ? { codec: 'aac', quality: new MB.Quality({ bitrate: 320e3 }), forceTranscode: true }
@@ -414,72 +511,124 @@
       if (!conv.isValid || !conv.utilizedTracks.some((t) => t.isVideoTrack())) {
         const r = conv.discardedTracks.find((d) => d.track.isVideoTrack());
         throw new Error(r && r.reason === 'no_encodable_target_codec'
-          ? `這台電腦無法用 ${s.codec === 'hevc' ? 'H.265' : 'H.264'} 編碼這個解析度，請換編碼格式或調低解析度。`
-          : r && r.reason === 'undecodable_source_codec' ? '這台電腦的瀏覽器無法解碼這種影像。' : '這支影片無法轉換。');
+          ? `這台電腦無法用 ${s.codec === 'hevc' ? 'H.265' : 'H.264'} 編碼這個解析度，請換編碼格式或調低解析度`
+          : r && r.reason === 'undecodable_source_codec' ? '這台電腦的瀏覽器無法解碼這種影像' : '這支影片無法轉換');
       }
       it.conversion = conv;
-      const t0 = performance.now();
+      if (S.stop) await conv.cancel();
       conv.onProgress = (p, t) => {
-        const el = (performance.now() - t0) / 1000;
-        const speed = el > 1 ? t / el : 0;
-        const left = speed > 0 ? (i.duration - t) / speed : 0;
-        bar.style.width = `${(p * 100).toFixed(1)}%`;
-        ptext.textContent = `${Math.floor(p * 100)}%` + (speed ? `・${speed.toFixed(speed < 10 ? 1 : 0)} 倍速・剩下約 ${fmtDur(left)}` : '');
+        const secs = (performance.now() - t0) / 1000;
+        it.progress = p;
+        it.speed = secs > 1 ? t / secs : 0;
+        progressTick(it);
       };
       await conv.execute();
       const seconds = (performance.now() - t0) / 1000;
-      let size, blob = null;
+      let size, url = null;
       if (dir) size = (await fileHandle.getFile()).size;
-      else { blob = new Blob([target.buffer], { type: useMov ? 'video/quicktime' : 'video/mp4' }); size = blob.size; }
-      it.status = 'done';
-      showResult(it, { name, size, seconds, blob, dir });
+      else {
+        const blob = new Blob([target.buffer], { type: useMov ? 'video/quicktime' : 'video/mp4' });
+        size = blob.size;
+        url = URL.createObjectURL(blob);
+        el('a', { href: url, download: name }).click();
+      }
+      it.run = 'done';
+      it.result = { name, size, seconds, url };
       reportRun(i.duration, Math.max(0, it.file.size - size));
     } catch (e) {
-      const canceled = it.canceled || (e && e.name === 'ConversionCanceledError') || e instanceof (MB.ConversionCanceledError || function () {});
+      const canceled = S.stop || (MB.ConversionCanceledError && e instanceof MB.ConversionCanceledError);
       if (writable) { try { await writable.abort(); } catch {} }
       if (dir && fileHandle) { try { await dir.removeEntry(name); } catch {} }
-      it.status = canceled ? 'ready' : 'error';
-      it.error = canceled ? '' : (e && e.message ? e.message : String(e));
-      const r = $('.result', node);
-      r.className = 'result err';
-      r.replaceChildren(el('b', { text: canceled ? '已取消' : '處理失敗' }), el('span', { text: canceled ? '可以調整設定後再試一次。' : it.error }));
-      r.hidden = false;
+      it.run = canceled ? 'stopped' : 'fail';
+      it.err = canceled ? '' : (e && e.message ? e.message : String(e));
     } finally {
       it.conversion = null;
-      prog.hidden = true;
-      node.classList.remove('is-running');
-      $('.remove', node).hidden = false;
-      renderPlan(it);
     }
   }
 
-  function showResult(it, { name, size, seconds, blob, dir }) {
-    const node = it.node, r = $('.result', node);
-    node.classList.add('is-done');
-    const saved = Math.max(0, Math.round((1 - size / it.file.size) * 100));
-    const rate = it.info.duration > 0 ? (size * 8) / it.info.duration : 0;
-    const kids = [
-      el('b', { text: '完成' }),
-      el('span', {}, `${fmtBytes(it.file.size)} → `, el('b', { text: fmtBytes(size) }), `（小了 ${saved}%）`),
-      el('span', { text: `整體 ${fmtRate(rate)}・花了 ${fmtDur(seconds)}` }),
-      el('span', { class: 'spacer' }),
-    ];
-    if (blob) {
-      const url = URL.createObjectURL(blob);
-      const a = el('a', { class: 'btn small primary', href: url, download: name, text: '下載' });
-      kids.push(a);
-      a.click();
+  // overall progress weighs each file by its length
+  function overall() {
+    const q = S.queue, total = q.reduce((a, it) => a + it.info.duration, 0) || 1;
+    const doneDur = q.reduce((a, it) => a + (it.run === 'done' || it.run === 'fail' || it.run === 'stopped' ? it.info.duration : it.run === 'running' ? it.info.duration * it.progress : 0), 0);
+    const p = doneDur / total, secs = (performance.now() - S.t0) / 1000;
+    const left = p > 0.02 && secs > 3 ? (secs / p) * (1 - p) : 0;
+    return { p, left };
+  }
+
+  function stateText(it) {
+    if (it.run === 'wait') return '等待中';
+    if (it.run === 'running') return `${Math.floor(it.progress * 100)}%` + (it.speed ? `・${it.speed.toFixed(it.speed < 10 ? 1 : 0)} 倍速` : '・準備中');
+    if (it.run === 'stopped') return '已停止';
+    if (it.run === 'fail') return it.err;
+    if (it.run === 'done') return null;
+    return '';
+  }
+
+  function renderStep4() {
+    if (S.step !== 4) return;
+    const q = S.queue, done = q.filter((it) => it.run === 'done');
+    const finished = !S.running;
+    $('#h4t').textContent = !finished ? '正在壓縮' : done.length === q.length ? '全部完成' : S.stop ? '已停止' : '處理結束';
+    $('#h4p').textContent = !finished ? '處理中請不要關閉這個分頁'
+      : S.dir ? `檔案存在「${S.dir.name}」資料夾` : '檔案已經下載，也可以按「下載」再存一次';
+    $('#stopRun').hidden = finished;
+    $('#restart').hidden = !finished;
+    $('#back4').disabled = !finished;
+
+    const ov = $('#overall');
+    ov.classList.toggle('done', finished && done.length > 0);
+    if (finished) {
+      const src = done.reduce((a, it) => a + it.file.size, 0), out = done.reduce((a, it) => a + it.result.size, 0);
+      ov.replaceChildren(
+        el('span', { class: 'ov-big' }, done.length ? `${pct(out, src)}%` : '—', done.length ? el('small', { text: '省下' }) : null),
+        el('span', { class: 'ov-text', text: done.length ? `${fmtBytes(src)} → ${fmtBytes(out)}` : '沒有完成的影片' }),
+        el('span', { class: 'ov-sub', text: `完成 ${done.length} / ${q.length} 支` + (q.length - done.length ? `・${q.length - done.length} 支沒有完成` : '') }));
     } else {
-      kids.push(el('span', { text: `已存到「${dir.name}/${name}」` }));
+      const { p, left } = overall();
+      const idx = q.findIndex((it) => it.run === 'running');
+      ov.replaceChildren(
+        el('span', { class: 'ov-big', id: 'ovPct', text: `${Math.floor(p * 100)}%` }),
+        el('span', { class: 'ov-text', id: 'ovText', text: `第 ${Math.max(1, idx + 1)} / ${q.length} 支` + (left ? `・剩下約 ${fmtDur(left)}` : '') }),
+        el('div', { class: 'bar' }, el('i', { id: 'ovBar', style: `width:${(p * 100).toFixed(1)}%` })));
     }
-    r.className = 'result';
-    r.replaceChildren(...kids);
-    r.hidden = false;
+    $('#rlist').replaceChildren(...q.map((it) => {
+      const t = stateText(it), r = it.result;
+      const state = el('span', { class: 'r-state', title: t || '' });
+      if (r) state.append(`${fmtBytes(it.file.size)} → `, el('b', { text: fmtBytes(r.size) }), ' ', el('span', { class: 'saved', text: `小了 ${pct(r.size, it.file.size)}%` }), el('span', { class: 'r-rate', text: `・${fmtRate((r.size * 8) / it.info.duration)}` }));
+      else state.textContent = t;
+      const act = el('div', { class: 'r-act' });
+      if (r && r.url) act.append(el('a', { class: 'btn small primary', href: r.url, download: r.name, text: '下載' }));
+      else if (r) act.append(el('span', { class: 'tag', text: '✓ 已存檔' }));
+      return el('li', { class: `ritem ${it.run === 'running' ? 'running' : it.run === 'done' ? 'done' : it.run === 'fail' ? 'err' : it.run === 'wait' ? 'wait' : ''}`, 'data-id': it.id },
+        el('div', { class: 'r-main' }, el('span', { class: 'r-name', text: it.file.name, title: it.file.name }), state),
+        el('div', { class: 'bar' }, el('i', { style: `width:${it.run === 'done' ? 100 : it.run === 'running' ? (it.progress * 100).toFixed(1) : 0}%` })),
+        act);
+    }));
+    renderStepper();
+  }
+
+  // cheap update while encoding: only the numbers and bars that move
+  let tickPending = false;
+  function progressTick(it) {
+    if (tickPending || S.step !== 4 || it.run !== 'running') return;
+    tickPending = true;
+    requestAnimationFrame(() => {
+      tickPending = false;
+      if (it.run !== 'running') return;
+      const row = $(`.ritem[data-id="${it.id}"]`);
+      if (row) { $('.bar i', row).style.width = `${(it.progress * 100).toFixed(1)}%`; $('.r-state', row).textContent = stateText(it); }
+      const { p, left } = overall();
+      const idx = S.queue.indexOf(it);
+      if ($('#ovPct')) {
+        $('#ovPct').textContent = `${Math.floor(p * 100)}%`;
+        $('#ovBar').style.width = `${(p * 100).toFixed(1)}%`;
+        $('#ovText').textContent = `第 ${idx + 1} / ${S.queue.length} 支` + (left ? `・剩下約 ${fmtDur(left)}` : '');
+      }
+    });
   }
 
   // ---------- the public counter on the home page ----------
   // Only numbers leave the browser (one file, its length in seconds, bytes saved), never any file content or name.
-  const onServer = /^https?:$/.test(location.protocol);
   function reportRun(seconds, savedBytes) {
     if (!onServer) return;
     fetch('api/stats/processed', {
@@ -488,5 +637,6 @@
     }).catch(() => {});
   }
 
-  window.addEventListener('beforeunload', (e) => { if (running) { e.preventDefault(); e.returnValue = ''; } });
+  window.addEventListener('beforeunload', (e) => { if (S.running) { e.preventDefault(); e.returnValue = ''; } });
+  render();
 })();

@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="影片碼率壓縮">
+  <defs>
+    <linearGradient id="vt-bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#3b82f6"/>
+      <stop offset="1" stop-color="#1d5fd6"/>
+    </linearGradient>
+  </defs>
+  <rect width="64" height="64" rx="15" fill="url(#vt-bg)"/>
+  <!-- the camera body -->
+  <rect x="9" y="19" width="33" height="26" rx="6" fill="#fff"/>
+  <path d="M42 28.5l12-7v21l-12-7z" fill="#fff"/>
+  <!-- the bitrate bars, getting shorter -->
+  <path d="M17 38v-11M24.5 38v-8M32 38v-5" stroke="#3b82f6" stroke-width="3.4" stroke-linecap="round"/>
+  <circle cx="49" cy="15" r="6" fill="#ffb21e"/>
+</svg>

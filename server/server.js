@@ -1,11 +1,15 @@
 #!/usr/bin/env node
 /* ManyTools static server + the public counters. No dependencies: `node server/server.js`.
-   Serves the repo root, and keeps only totals (files, seconds/pages, bytes saved) per tool — never file content.
-     GET  /api/stats                          → { video: {...}, pdf: {...} }   (home page)
-     GET  /videotools/api/stats               → video totals
-     POST /videotools/api/stats/processed     ← { files, seconds, savedBytes }
-     GET  /pdftools/local/api/stats           → pdf totals   (same shape the PDF tool already expects)
-     POST /pdftools/local/api/stats/processed ← { files, pages, savedBytes }
+   Clean URLs, each tool still in its own folder:
+     /       → home/            /video → videotools/            /pdf → pdftools/local/
+   A tool's page is served at /video (no trailing slash) with <base href="/video/"> injected, so its relative
+   asset paths keep working both here and when the folder is opened straight from disk.
+   Counters keep only totals (files, seconds/pages, bytes saved) per tool — never file content:
+     GET  /api/stats                → { video: {...}, pdf: {...} }   (home page)
+     GET  /video/api/stats          → video totals
+     POST /video/api/stats/processed ← { files, seconds, savedBytes }
+     GET  /pdf/api/stats            → pdf totals   (the shape the PDF tool already expects)
+     POST /pdf/api/stats/processed  ← { files, pages, savedBytes }
    Env: PORT (default 8080), HOST (default 127.0.0.1), STATS_FILE (default server/data/stats.json). */
 'use strict';
 const http = require('http');
@@ -16,7 +20,21 @@ const ROOT = path.resolve(__dirname, '..');
 const PORT = +process.env.PORT || 8080;
 const HOST = process.env.HOST || '127.0.0.1';
 const STATS_FILE = process.env.STATS_FILE || path.join(__dirname, 'data', 'stats.json');
-const TOOLS = { '/videotools': 'video', '/pdftools/local': 'pdf' };
+
+// route → folder. The root mount must stay last.
+const MOUNTS = [
+  { route: '/video', dir: path.join(ROOT, 'videotools'), tool: 'video' },
+  { route: '/pdf', dir: path.join(ROOT, 'pdftools', 'local'), tool: 'pdf' },
+  { route: '', dir: path.join(ROOT, 'home') },
+];
+// Old addresses from before the clean URLs.
+const LEGACY = [
+  [/^\/home(\/(index\.html)?)?$/, '/'],
+  [/^\/index\.html$/, '/'],
+  [/^\/videotools(\/(index\.html)?)?$/, '/video'],
+  [/^\/pdftools(\/(local(\/(index\.html)?)?)?)?$/, '/pdf'],
+];
+
 const FIELDS = { video: ['files', 'seconds', 'savedBytes'], pdf: ['files', 'pages', 'savedBytes'] };
 // Upper bounds for one report, so a single bad request can't inflate the counters much.
 const LIMITS = { files: 50, seconds: 6 * 3600 * 50, pages: 5000, savedBytes: 200e9 };
@@ -24,7 +42,7 @@ const LIMITS = { files: 50, seconds: 6 * 3600 * 50, pages: 5000, savedBytes: 200
 const TYPES = {
   '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8',
   '.json': 'application/json; charset=utf-8', '.svg': 'image/svg+xml', '.png': 'image/png', '.jpg': 'image/jpeg',
-  '.txt': 'text/plain; charset=utf-8', '.md': 'text/plain; charset=utf-8', '.wasm': 'application/wasm', '.ico': 'image/x-icon',
+  '.txt': 'text/plain; charset=utf-8', '.wasm': 'application/wasm', '.ico': 'image/x-icon',
 };
 
 let stats = { video: {}, pdf: {} };
@@ -42,16 +60,19 @@ function save() {
   }, 500);
 }
 
+const HEADERS = { 'X-Content-Type-Options': 'nosniff', 'Referrer-Policy': 'same-origin' };
 function send(res, code, body, type = 'application/json; charset=utf-8') {
-  res.writeHead(code, { 'Content-Type': type, 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' });
+  res.writeHead(code, { ...HEADERS, 'Content-Type': type, 'Cache-Control': 'no-store' });
   res.end(typeof body === 'string' || Buffer.isBuffer(body) ? body : JSON.stringify(body));
 }
+function redirect(res, to) { res.writeHead(301, { ...HEADERS, Location: to }); res.end(); }
 
 function handleApi(req, res, url) {
   if (url === '/api/stats' && req.method === 'GET') return send(res, 200, stats), true;
-  for (const [prefix, tool] of Object.entries(TOOLS)) {
-    if (url === `${prefix}/api/stats` && req.method === 'GET') return send(res, 200, stats[tool]), true;
-    if (url === `${prefix}/api/stats/processed` && req.method === 'POST') {
+  for (const { route, tool } of MOUNTS) {
+    if (!tool) continue;
+    if (url === `${route}/api/stats` && req.method === 'GET') return send(res, 200, stats[tool]), true;
+    if (url === `${route}/api/stats/processed` && req.method === 'POST') {
       let body = '';
       req.on('data', (c) => { body += c; if (body.length > 2048) req.destroy(); });
       req.on('end', () => {
@@ -68,37 +89,54 @@ function handleApi(req, res, url) {
     }
   }
   // the PDF tool's ad counters: accepted and ignored here
-  if (/\/api\/ads\/event$/.test(url) && req.method === 'POST') return send(res, 204, ''), true;
+  if (url === '/pdf/api/ads/event' && req.method === 'POST') return send(res, 204, ''), true;
   return false;
 }
 
-function serveFile(req, res, url) {
-  let rel;
-  try { rel = decodeURIComponent(url); } catch { return send(res, 400, 'bad path', 'text/plain'); }
-  let file = path.normalize(path.join(ROOT, rel));
-  if (!file.startsWith(ROOT + path.sep) && file !== ROOT) return send(res, 403, 'forbidden', 'text/plain');
-  // never serve the counters file or dotfiles
-  if (file.startsWith(path.join(__dirname, 'data')) || /(^|[\\/])\./.test(path.relative(ROOT, file))) return send(res, 404, 'not found', 'text/plain');
+function serveFile(req, res, file, base) {
   fs.stat(file, (err, st) => {
-    if (!err && st.isDirectory()) {
-      if (!url.endsWith('/')) { res.writeHead(301, { Location: url + '/' }); return res.end(); }
-      file = path.join(file, 'index.html');
-    }
-    fs.stat(file, (err2, st2) => {
-      if (err2 || !st2.isFile()) return send(res, 404, 'not found', 'text/plain');
-      res.writeHead(200, {
-        'Content-Type': TYPES[path.extname(file).toLowerCase()] || 'application/octet-stream',
-        'Content-Length': st2.size, 'Cache-Control': 'no-cache', 'X-Content-Type-Options': 'nosniff',
+    if (err || !st.isFile()) return send(res, 404, 'not found', 'text/plain; charset=utf-8');
+    const type = TYPES[path.extname(file).toLowerCase()] || 'application/octet-stream';
+    const head = { ...HEADERS, 'Content-Type': type, 'Cache-Control': 'no-cache' };
+    if (base) {
+      // the tool's own index.html, served at /video: point its relative paths into /video/
+      return fs.readFile(file, 'utf8', (e, html) => {
+        if (e) return send(res, 500, 'error', 'text/plain');
+        const out = Buffer.from(html.replace(/<head>/i, `<head>\n<base href="${base}">`));
+        res.writeHead(200, { ...head, 'Content-Length': out.length });
+        res.end(req.method === 'HEAD' ? undefined : out);
       });
-      if (req.method === 'HEAD') return res.end();
-      fs.createReadStream(file).pipe(res);
-    });
+    }
+    res.writeHead(200, { ...head, 'Content-Length': st.size });
+    if (req.method === 'HEAD') return res.end();
+    fs.createReadStream(file).pipe(res);
   });
+}
+
+function route(req, res, url) {
+  let p;
+  try { p = decodeURIComponent(url); } catch { return send(res, 400, 'bad path', 'text/plain'); }
+  for (const [re, to] of LEGACY) if (re.test(p)) return redirect(res, to);
+  for (const { route: r, dir, tool } of MOUNTS) {
+    if (tool) {
+      if (p === r) return serveFile(req, res, path.join(dir, 'index.html'), `${r}/`);
+      if (p === `${r}/` || p === `${r}/index.html`) return redirect(res, r);
+      if (!p.startsWith(`${r}/`)) continue;
+    }
+    const rel = tool ? p.slice(r.length) : p;
+    if (rel === '/' || rel === '') return serveFile(req, res, path.join(dir, 'index.html'));
+    if (rel === '/index.html') return redirect(res, r || '/');
+    const file = path.normalize(path.join(dir, rel));
+    // stay inside the mount; no dotfiles
+    if (!file.startsWith(dir + path.sep) || /(^|[\\/])\./.test(path.relative(dir, file))) return send(res, 404, 'not found', 'text/plain');
+    return serveFile(req, res, file);
+  }
+  send(res, 404, 'not found', 'text/plain');
 }
 
 http.createServer((req, res) => {
   const url = (req.url || '/').split('?')[0];
   if (url.includes('/api/') && handleApi(req, res, url)) return;
   if (req.method !== 'GET' && req.method !== 'HEAD') return send(res, 405, 'method not allowed', 'text/plain');
-  serveFile(req, res, url);
+  route(req, res, url);
 }).listen(PORT, HOST, () => console.log(`ManyTools on http://${HOST}:${PORT}/`));
