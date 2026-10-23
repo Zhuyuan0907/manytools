@@ -6,6 +6,8 @@
   const $$ = (s, r = document) => [...r.querySelectorAll(s)];
   const libsOk = Core.ready && window.PDFLib && window.UPNG && window.pako && window.Engine;
   if (!libsOk) $('#libError').hidden = false;
+  // The logo goes back to the ManyTools home page; the offline copy (opened as a file) has no home page.
+  if (!/^https?:$/.test(location.protocol)) { $('#brand').removeAttribute('href'); $('#brand').removeAttribute('title'); }
 
   // Section colours: distinct at a glance on white, readable with white numerals.
   const COLORS = ['#2f7fe0', '#ef8a2a', '#0d9b6c', '#e2483b', '#8e57d6', '#d9468f', '#1499ad', '#b38600'];

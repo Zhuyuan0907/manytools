@@ -68,7 +68,7 @@ main { min-height: 0; display: flex; flex-direction: column; }
 
 /* header */
 .top { display: flex; align-items: center; justify-content: space-between; gap: 12px 20px; }
-.brand { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.brand { display: flex; align-items: center; gap: 12px; min-width: 0; color: inherit; text-decoration: none; }
 .logo { width: 44px; height: 44px; border-radius: 11px; display: block; flex: none; box-shadow: 0 4px 12px color-mix(in srgb, var(--accent) 30%, transparent); }
 .brand-text { min-width: 0; }
 .wordmark { font-family: var(--font-latin); font-size: 1.45rem; line-height: 1.15; font-weight: 800; letter-spacing: -.01em; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
