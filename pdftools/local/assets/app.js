@@ -6,7 +6,7 @@
   const $$ = (s, r = document) => [...r.querySelectorAll(s)];
   const libsOk = Core.ready && window.PDFLib && window.UPNG && window.pako && window.Engine;
   if (!libsOk) $('#libError').hidden = false;
-  // The logo goes back to the ManyTools home page; the offline copy (opened as a file) has no home page.
+  // The logo goes back to the ZhuyuanTools home page; the offline copy (opened as a file) has no home page.
   if (!/^https?:$/.test(location.protocol)) { $('#brand').removeAttribute('href'); $('#brand').removeAttribute('title'); }
 
   // Section colours: distinct at a glance on white, readable with white numerals.

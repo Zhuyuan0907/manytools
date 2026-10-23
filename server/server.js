@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-/* ManyTools static server + the public counters. No dependencies: `node server/server.js`.
+/* ZhuyuanTools static server + the public counters. No dependencies: `node server/server.js`.
    Clean URLs, each tool still in its own folder:
      /       → home/            /video → videotools/            /pdf → pdftools/local/     /fonts → fonts/     /shared → shared/
    A tool's page is served at /video (no trailing slash) with <base href="/video/"> injected, so its relative
@@ -141,4 +141,4 @@ http.createServer((req, res) => {
   if (url.includes('/api/') && handleApi(req, res, url)) return;
   if (req.method !== 'GET' && req.method !== 'HEAD') return send(res, 405, 'method not allowed', 'text/plain');
   route(req, res, url);
-}).listen(PORT, HOST, () => console.log(`ManyTools on http://${HOST}:${PORT}/`));
+}).listen(PORT, HOST, () => console.log(`ZhuyuanTools on http://${HOST}:${PORT}/`));
