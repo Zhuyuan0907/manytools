@@ -167,9 +167,29 @@
                 <label><span>解析度</span>
                   <select class="select" id="res">
                     <option value="0">維持原始</option>
-                    <option value="2160">4K</option>
-                    <option value="1080">1080p</option>
-                    <option value="720">720p</option>
+                    <optgroup label="橫式 16:9">
+                      <option value="3840x2160">3840×2160 4K</option>
+                      <option value="2560x1440">2560×1440 2K</option>
+                      <option value="1920x1080">1920×1080 Full HD</option>
+                      <option value="1600x900">1600×900</option>
+                      <option value="1280x720">1280×720 HD</option>
+                      <option value="960x540">960×540</option>
+                      <option value="854x480">854×480</option>
+                      <option value="640x360">640×360</option>
+                    </optgroup>
+                    <optgroup label="直式 9:16">
+                      <option value="2160x3840">2160×3840 4K</option>
+                      <option value="1440x2560">1440×2560 2K</option>
+                      <option value="1080x1920">1080×1920 Full HD</option>
+                      <option value="720x1280">720×1280 HD</option>
+                      <option value="540x960">540×960</option>
+                      <option value="480x854">480×854</option>
+                      <option value="360x640">360×640</option>
+                    </optgroup>
+                    <optgroup label="電影 DCI">
+                      <option value="4096x2160">4096×2160 DCI 4K</option>
+                      <option value="2048x1080">2048×1080 DCI 2K</option>
+                    </optgroup>
                   </select>
                 </label>
                 <label><span>關鍵影格</span>

@@ -110,7 +110,7 @@
       rate: Math.max(0.5, parseFloat($('#rate').value) || 12) * 1e6,
       mode: $('input[name=mode]:checked').value,
       codec: $('input[name=codec]:checked').value,
-      res: +$('#res').value,
+      res: $('#res').value === '0' ? null : $('#res').value.split('x').map(Number),
       gop: +$('#gop').value,
       audio: $('#audio').value,
       fmt: $('#fmt').value,
@@ -429,11 +429,14 @@
     const best = STD_FPS.reduce((a, b) => (Math.abs(b - f) < Math.abs(a - f) ? b : a));
     return Math.abs(best - f) / best < 0.003 ? best : f;
   }
+  // An exact output size. When the picture's shape differs (a landscape clip into 1080×1920, 16:9 into DCI),
+  // it's fitted whole with black bars rather than stretched or cropped.
   function outputDims(i, s) {
-    const short = Math.min(i.width, i.height);
-    if (!s.res || s.res >= short) return null;
-    const k = s.res / short;
-    return { width: Math.round((i.width * k) / 2) * 2, height: Math.round((i.height * k) / 2) * 2 };
+    if (!s.res) return null;
+    const [width, height] = s.res;
+    if (width === i.width && height === i.height) return null;
+    const same = Math.abs(width / height - i.width / i.height) < 0.01;
+    return { width, height, fit: same ? 'fill' : 'contain', bars: !same, bigger: width * height > i.width * i.height * 1.01 };
   }
   function audioRate(i, s) {
     if (s.audio === 'none') return 0;
@@ -449,6 +452,10 @@
     else if (s.rate < i.vRate * 0.2) notes.push(['warn', '不到原始的 2 成，畫面可能明顯變糊，建議先試一支']);
     if (i.hdr || i.codec.deep) notes.push(['warn', `${i.hdr ? 'HDR' : '10-bit / 4:2:2'} 素材會轉成 8-bit 4:2:0${i.hdr ? ' SDR' : ''}`]);
     if (!canPickFolder && it.file.size > 1.5e9) notes.push(['warn', '大檔案會佔用很多記憶體，建議改用 Chrome 或 Edge']);
+    const dims = outputDims(i, s);
+    if (dims && dims.bars) notes.push(['warn', (i.height > i.width) !== (dims.height > dims.width)
+      ? `原始是${i.height > i.width ? '直式' : '橫式'} ${i.width}×${i.height}，輸出會加上黑邊` : `原始比例是 ${i.width}×${i.height}，輸出會加上黑邊`]);
+    if (dims && dims.bigger) notes.push(['warn', `比原始的 ${i.width}×${i.height} 大，畫質不會變好`]);
     return { est: estimate(it, s), notes, skip };
   }
   const todoList = (s) => S.items.filter((it) => valid(it) && !plan(it, s).skip);
@@ -476,7 +483,7 @@
       const p = plan(it, s), dims = outputDims(it.info, s);
       return el('li', { class: `pitem${p.skip ? ' skip' : ''}` },
         el('span', { class: 'p-name', text: it.file.name, title: it.file.name }),
-        el('span', { class: 'p-rate' }, `${mbps(it.info.vRate)} → `, el('b', { text: `${mbps(s.rate)} Mbps` }), dims ? `・${dims.height}p` : ''),
+        el('span', { class: 'p-rate' }, `${mbps(it.info.vRate)} → `, el('b', { text: `${mbps(s.rate)} Mbps` }), dims ? `・${dims.width}×${dims.height}` : ''),
         el('span', { class: 'p-size' }, p.skip ? '跳過' : fmtBytes(p.est), p.skip ? null : el('small', { text: `-${pct(p.est, it.file.size)}%` })),
         ...p.notes.map(([cls, t]) => el('span', { class: `p-note ${cls}`, text: t, title: t })));
     }));
@@ -571,7 +578,7 @@
       const fps = snapFps(i.fps);
       if (fps) video.frameRate = fps;
       const dims = outputDims(i, s);
-      if (dims) Object.assign(video, dims, { fit: 'fill' });
+      if (dims) Object.assign(video, { width: dims.width, height: dims.height, fit: dims.fit });
       const audio = s.audio === 'none' ? { discard: true }
         : s.audio === 'aac' ? { codec: 'aac', quality: new MB.Quality({ bitrate: 320e3 }), forceTranscode: true }
         : {};
