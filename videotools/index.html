@@ -250,14 +250,13 @@
         </div>
       </div>
       <div class="panel-body step4-body">
-        <div class="overall" id="overall"></div>
+        <div class="overall-row"><div class="overall" id="overall"></div><button type="button" class="link-btn stop" id="stopRun">停止處理</button></div>
         <ol class="outputs" id="rlist" aria-label="處理進度"></ol>
         <button type="button" class="btn small restart" id="restart" hidden><span aria-hidden="true">↺</span> 換一批影片重新開始</button>
       </div>
       <div class="panel-foot">
         <button type="button" class="btn back" id="back4" data-goto="3" aria-label="回去修改設定"><span aria-hidden="true">←</span><span class="lbl">回去修改設定</span></button>
         <span class="foot-note" id="note4"></span>
-        <button type="button" class="btn" id="stopRun">停止</button>
       </div>
     </section>
   </main>
@@ -268,5 +267,6 @@
 <script src="lib/mediabunny.min.js"></script>
 <script src="assets/app.js"></script>
 <script src="/shared/handoff.js" data-tool="video" data-input="#fileInput"></script>
+<script src="/shared/mobile-nav.js"></script>
 </body>
 </html>

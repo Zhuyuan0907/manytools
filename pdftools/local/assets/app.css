@@ -697,3 +697,22 @@ input[type="range"]::-moz-range-thumb { width: 18px; height: 18px; border-radius
 .src-name, .out-name { display: flex; min-width: 0; max-width: 100%; }
 .nm-head { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
 .nm-tail { flex: none; white-space: nowrap; }
+
+/* ================= phone: one thing at a time ================= */
+/* The progress strip already says which step this is (and, with /shared/mobile-nav.js, holds "‹ 上一步"),
+   so the step badge and the "how it works" cards go; an empty drop area gets the room instead. */
+@media (max-width: 640px) {
+  .stepper { border-bottom: 0; padding-top: 4px; padding-bottom: 8px; }
+  .m-step { color: var(--muted); font-size: .82rem; }
+  .stepper button::before { height: 4px; border-radius: 2px; }
+  .stepper button.done::before { background: color-mix(in srgb, var(--accent) 45%, #fff); }
+  .step-no { display: none; }
+  .panel-head, #step4 .panel-head { grid-template-columns: minmax(0, 1fr) auto; gap: 8px 12px; }
+  .head-text h2 { font-size: 1.22rem; }
+  .head-text p { font-size: .86rem; color: var(--muted); }
+  .how { display: none; }
+  .step1-body:has(.sources:empty) .drop { min-height: clamp(200px, 44vh, 400px); }
+  .panel-foot { box-shadow: 0 -1px 0 var(--line); border-top: 0; padding-bottom: calc(12px + env(safe-area-inset-bottom)); }
+  .panel-foot .btn { height: 50px; border-radius: 14px; }
+  .panel-foot .btn.primary { box-shadow: none; }
+}

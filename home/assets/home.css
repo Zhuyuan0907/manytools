@@ -180,6 +180,18 @@ main { display: grid; align-content: center; gap: clamp(22px, 4.5vh, 44px); }
   .tool-top, .tool-name, .tool-desc { grid-column: 1; }
   .tool-name { font-size: 1.12rem; }
   .tool-desc { font-size: .84rem; }
-  .cta { grid-column: 2; grid-row: 1 / span 3; align-self: center; margin: 0; height: 40px; padding: 0 14px; }
-  .foot { font-size: .72rem; justify-content: center; text-align: center; }
+  /* the whole card is the link; the button shrinks to a round arrow so the description keeps one line */
+  .cta { grid-column: 2; grid-row: 1 / span 3; align-self: center; margin: 0; width: 40px; height: 40px; padding: 0; border-radius: 50%; justify-content: center; font-size: 0; box-shadow: none; }
+  .cta span { font-size: 1.1rem; }
+  .foot { font-size: .72rem; justify-content: center; text-align: center; gap: 0 10px; }
+}
+@media (max-width: 760px) and (max-height: 700px) {
+  .app { gap: 8px; padding-top: 10px; }
+  main { gap: 14px; }
+  .lead h1 { font-size: 1.65rem; }
+  .lead p { font-size: .86rem; }
+  .drop { padding: 12px; }
+  .stack { margin-bottom: 0; }
+  .stack img { width: 34px; height: 34px; border-radius: 9px; }
+  .tool-text { padding: 10px 14px; }
 }

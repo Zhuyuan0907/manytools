@@ -144,7 +144,7 @@
       b.disabled = !allowed(n);
       b.setAttribute('aria-current', n === S.step ? 'step' : 'false');
     }
-    $('#mStep').replaceChildren(`第 ${S.step} 步，共 4 步・`, el('b', { text: STEP_NAMES[S.step - 1] }));
+    $('#mStep').replaceChildren(`步驟 ${S.step}／4・`, el('b', { text: STEP_NAMES[S.step - 1] }));
   }
   function render() {
     renderStepper();

@@ -311,7 +311,10 @@ main { min-height: 0; display: flex; flex-direction: column; }
 .step4-body { display: flex; flex-direction: column; gap: 12px; overflow: hidden; }
 .step4-body > * { flex: none; }
 .step4-body > .outputs { flex: 0 1 auto; }
-.overall { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px 16px; align-items: center; }
+.overall-row { flex: none; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 16px; align-items: start; }
+.overall { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px 16px; align-items: center; min-width: 0; }
+.stop { color: var(--muted); padding: 4px 8px; }
+.stop:hover:not(:disabled) { color: var(--bad); background: #fff3f1; }
 .ov-text { font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .ov-text b { color: var(--accent-strong); font-size: 1.15em; }
 .ov-sub { color: var(--muted); font-size: .88rem; white-space: nowrap; }
@@ -421,92 +424,132 @@ main { min-height: 0; display: flex; flex-direction: column; }
 }
 
 /* ================= phone layout ================= */
+/* One thing at a time: a slim top bar, the progress strip (with "‹ 上一步" from /shared/mobile-nav.js),
+   the step's content, and a single full-width action at the bottom — or no bar when there's nothing to press. */
 @media (max-width: 640px) {
   body { background: var(--surface); }
   .app { padding: 0; gap: 0; max-width: none; }
-  .top { padding: calc(env(safe-area-inset-top) + 8px) max(16px, env(safe-area-inset-right)) 8px max(16px, env(safe-area-inset-left)); background: var(--surface); gap: 10px; }
-  .logo { width: 32px; height: 32px; border-radius: 8px; box-shadow: none; }
+  .top { padding: calc(env(safe-area-inset-top) + 10px) max(16px, env(safe-area-inset-right)) 6px max(16px, env(safe-area-inset-left)); background: var(--surface); gap: 10px; }
+  .logo { width: 30px; height: 30px; border-radius: 8px; box-shadow: none; }
   .brand { gap: 9px; }
-  .wordmark { font-size: 1.12rem; }
+  .wordmark { font-size: 1.08rem; }
   .tagline { display: none; }
-  .privacy { padding: 4px 10px; font-size: .76rem; gap: 5px; }
+  .privacy { padding: 3px 10px; font-size: .76rem; gap: 5px; }
   .privacy-long { display: none; }
   .privacy-short { display: inline; }
 
-  /* thin progress strip with the current step spelled out */
-  .stepper { border: 0; border-bottom: 1px solid var(--line); border-radius: 0; box-shadow: none; background: var(--surface); padding: 2px max(16px, env(safe-area-inset-right)) 10px max(16px, env(safe-area-inset-left)); }
-  .m-step { display: block; font-size: .8rem; color: var(--ink-2); margin-bottom: 6px; }
+  /* progress strip */
+  .stepper { border: 0; border-radius: 0; box-shadow: none; background: var(--surface); padding: 4px max(16px, env(safe-area-inset-right)) 8px max(16px, env(safe-area-inset-left)); }
+  .m-step { display: block; font-size: .82rem; color: var(--muted); margin-bottom: 6px; }
   .m-step b { color: var(--ink); }
-  .stepper ol { gap: 5px; }
-  .stepper button, .stepper button.current { padding: 6px 0; border-radius: 0; background: none; display: block; }
+  .stepper ol { gap: 4px; }
+  .stepper button, .stepper button.current { padding: 0; border-radius: 0; background: none; display: block; }
   .stepper .dot, .stepper .lbl { display: none; }
-  .stepper button::before { content: ""; display: block; height: 5px; border-radius: 3px; background: var(--line); }
-  .stepper button.done::before { background: color-mix(in srgb, var(--accent) 55%, #fff); }
+  .stepper button::before { content: ""; display: block; height: 4px; border-radius: 2px; background: var(--line); }
+  .stepper button.done::before { background: color-mix(in srgb, var(--accent) 45%, #fff); }
   .stepper button.current::before { background: var(--accent); }
 
   .banner { margin: 10px 16px 0; }
   .panel, .panel.fill { flex: 1 1 auto; max-height: none; border: 0; border-radius: 0; box-shadow: none; }
-  .panel-head { grid-template-columns: auto minmax(0, 1fr); gap: 10px 12px; padding: 14px max(16px, env(safe-area-inset-right)) 10px max(16px, env(safe-area-inset-left)); }
-  .step-no { width: 36px; height: 36px; border-radius: 10px; font-size: 1.15rem; }
-  .head-text h2 { font-size: 1.08rem; }
-  .head-text p { font-size: .83rem; }
-  .panel-body { padding: 2px max(16px, env(safe-area-inset-right)) 18px max(16px, env(safe-area-inset-left)); }
+  .panel-head { grid-template-columns: minmax(0, 1fr); gap: 2px; padding: 14px max(16px, env(safe-area-inset-right)) 10px max(16px, env(safe-area-inset-left)); }
+  .step-no { display: none; }
+  .head-text h2 { font-size: 1.22rem; }
+  .head-text p { font-size: .86rem; color: var(--muted); }
+  .panel-body { padding: 2px max(16px, env(safe-area-inset-right)) 20px max(16px, env(safe-area-inset-left)); overflow: auto; }
   .panel-foot {
-    gap: 10px; border-top: 1px solid var(--line); background: var(--surface); box-shadow: 0 -6px 18px rgba(23, 32, 44, .06);
-    padding: 10px max(16px, env(safe-area-inset-right)) calc(10px + env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
+    gap: 10px; border-top: 0; background: var(--surface); box-shadow: 0 -1px 0 var(--line);
+    padding: 10px max(16px, env(safe-area-inset-right)) calc(12px + env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
   }
   .panel-foot .foot-note { display: none; }
-  .panel-foot .btn { height: 48px; font-size: 1rem; border-radius: 12px; }
-  .panel-foot .btn.primary, #stopRun { flex: 1; }
-  .btn.back { width: 48px; padding: 0; flex: none; font-size: 1.15rem; }
+  .panel-foot .btn { height: 50px; font-size: 1.02rem; border-radius: 14px; }
+  .panel-foot .btn.primary { flex: 1; box-shadow: none; }
+  /* without the phone navigation script the back button stays down here, as a small square */
+  .btn.back { width: 50px; padding: 0; flex: none; font-size: 1.15rem; }
   .btn.back .lbl { display: none; }
 
-  /* step 1 */
-  .hero { grid-template-columns: 1fr; padding: 18px max(16px, env(safe-area-inset-right)) 8px max(16px, env(safe-area-inset-left)); gap: 8px; }
+  /* step 1: the drop area is the whole point */
+  .hero { grid-template-columns: 1fr; padding: 16px max(16px, env(safe-area-inset-right)) 6px max(16px, env(safe-area-inset-left)); gap: 6px; }
   .hero-art { display: none; }
-  .hero-title { font-size: 1.55rem; }
-  .hero-count { font-size: .92rem; }
+  .hero-title { font-size: 1.5rem; }
+  .hero-count { font-size: .88rem; }
   .hero-extra { display: none; }
-  #step1.has-files .hero { padding: 12px 16px 4px; }
+  #step1.has-files .hero { padding: 12px 16px 2px; }
   #step1.has-files .hero-title { font-size: 1.15rem; }
-  .step1-body, .step1-body:has(.sources:empty) { display: flex; flex-direction: column; gap: 14px; }
-  .drop { min-height: 0; padding: 18px 14px; border-radius: 14px; flex: none; }
-  .drop-inner { padding: 12px 20px; box-shadow: none; background: transparent; }
+  #step1.has-files .hero-count { display: none; }
+  .step1-body, .step1-body:has(.sources:empty) { display: flex; flex-direction: column; gap: 12px; }
+  .how { display: none; }
+  .drop { flex: 1 1 auto; min-height: clamp(200px, 44vh, 400px); padding: 18px 14px; border-radius: 18px; }
+  .drop-inner { padding: 0; box-shadow: none; background: transparent; gap: 6px; }
+  .drop-inner svg { width: 40px; height: 40px; }
+  .drop-title { font-size: 1.15rem; }
+  #step1.has-files .drop { flex: none; min-height: 0; padding: 14px; }
+  #step1.has-files .drop-inner { grid-auto-flow: column; align-items: center; gap: 10px; }
+  #step1.has-files .drop-inner svg { width: 26px; height: 26px; }
+  #step1.has-files .drop-title { font-size: 1rem; }
+  #step1.has-files .drop-hint { display: none; }
   .d-desk { display: none; }
   .d-mob { display: inline; }
-  .how { grid-template-columns: 1fr; gap: 8px; }
-  .how li { padding: 10px 12px; }
-  .sources { overflow: visible; max-height: none; }
+  .sources { overflow: visible; max-height: none; gap: 8px; }
   .src { padding: 10px 12px; }
+  .src-no { width: 26px; height: 26px; font-size: .8rem; }
 
-  /* step 2 */
-  .step2-body { display: flex; flex-direction: column; overflow: auto; }
+  /* step 2: the clips as a swipeable strip, the details as a plain list */
+  .step2-body { display: flex; flex-direction: column; gap: 14px; overflow: auto; }
   .step2-body > * { flex: none; }
-  .flist { overflow: visible; }
-  .detail { padding: 14px; overflow: visible; }
-  .d-top { --tw: 128px; grid-template-columns: var(--tw) minmax(0, 1fr); grid-template-areas: "thumb head" "audio audio"; gap: 10px 14px; }
-  .d-rate-label { margin-top: 4px; }
-  .d-rate { font-size: 2.1rem; }
+  .flist-wrap { flex-direction: row; align-items: center; gap: 8px; overflow-x: auto; margin: 0 -16px; padding: 2px 16px 4px; scrollbar-width: none; }
+  .flist-wrap::-webkit-scrollbar { display: none; }
+  .flist { display: flex; gap: 8px; overflow: visible; flex: none; }
+  .fitem { width: 250px; flex: none; grid-template-columns: 48px minmax(0, 1fr) auto; gap: 8px; padding: 7px 4px 7px 8px; }
+  .fitem canvas { width: 48px; height: 27px; border-radius: 4px; }
+  .add-more { flex: none; white-space: nowrap; align-self: center; padding: 8px 10px; }
+  .detail { padding: 0; border: 0; border-radius: 0; overflow: visible; gap: 14px; }
+  .d-top { --tw: 128px; grid-template-columns: var(--tw) minmax(0, 1fr); grid-template-areas: "thumb head" "audio audio"; gap: 12px 14px; }
+  .d-meta { display: none; }
+  .d-rate-label { margin-top: 0; }
+  .d-rate { font-size: 2.2rem; }
   .d-sub { font-size: .82rem; }
-  .audio-row { display: grid; }
-  .tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+  .audio-row { display: grid; gap: 0; max-height: none; }
+  .a-label { padding-bottom: 4px; }
+  .atrack { padding: 8px 0; border: 0; border-top: 1px solid var(--line); border-radius: 0; background: none; }
+  .tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 18px; }
+  .tiles div { padding: 9px 0; border: 0; border-top: 1px solid var(--line); border-radius: 0; background: none; }
+  .d-msg { font-size: .86rem; }
 
-  /* step 3 */
-  .settings { grid-template-columns: 1fr; }
-  .set { padding: 14px 0; }
-  .selects { grid-template-columns: 1fr 1fr; }
-  .select { height: 40px; font-size: 16px; }
-  .total dd { font-size: 1rem; }
+  /* step 3: the number first, what it saves right under it, then the rest */
+  .settings { display: flex; flex-direction: column; }
+  .set-col { display: contents; }
+  .set { padding: 16px 0; border-top: 1px solid var(--line); }
+  .set-col:first-child > .set:nth-child(1) { order: 1; border-top: 0; padding-top: 4px; }
+  .estimate { order: 2; }
+  .set-col:first-child > .set:nth-child(2) { order: 3; }
+  .set-col:first-child > .set:nth-child(3) { order: 4; }
+  .set-col:last-child > .set:nth-child(1) { order: 5; }
+  .settings .help { display: none; }
+  .rate-value input { font-size: 2.6rem; }
+  .nudge { width: 44px; height: 44px; border-radius: 12px; }
+  .seg { display: grid; grid-template-columns: 1fr 1fr; justify-self: stretch; }
+  .seg span { padding: 9px 6px; }
+  .selects { grid-template-columns: 1fr 1fr; gap: 12px; }
+  .select { height: 44px; font-size: 16px; }
+  .total { gap: 8px; }
+  .total div { padding: 8px 10px; }
+  .total dd { font-size: 1.05rem; }
   .plist { overflow: visible; max-height: none; }
-  .pitem { grid-template-columns: minmax(0, 1fr) auto; }
+  .pitem { grid-template-columns: minmax(0, 1fr) auto; padding: 8px 12px; }
   .p-rate { grid-row: 2; }
 
   /* step 4 */
-  .out { grid-template-columns: auto minmax(0, 1fr); padding: 12px 14px; gap: 6px 12px; }
-  .out-status { width: 34px; height: 34px; }
-  .out-actions { grid-column: 1 / -1; }
-  .out-actions .btn { flex: 1; height: 44px; }
+  .overall-row { gap: 10px; }
+  .outputs { overflow: visible; gap: 8px; }
+  .out { grid-template-columns: auto minmax(0, 1fr) auto; padding: 12px; gap: 4px 12px; border-radius: 14px; }
+  .out-status { width: 32px; height: 32px; font-size: .9rem; }
+  .out-title { flex-direction: column; align-items: flex-start; gap: 0; }
+  .out-name { max-width: 100%; }
+  .out-meta { font-size: .78rem; }
+  .out-size b { font-size: 1.05rem; }
   .out-size .out-rate { display: none; }
-  .outputs { overflow: visible; }
+  .out-actions .btn { height: 38px; padding: 0 14px; font-size: .9rem; box-shadow: none; }
+  .out .progress { max-width: none; }
+  .restart { justify-self: center; align-self: center; border: 0; background: none; color: var(--accent-strong); height: 44px; }
   .toast { top: calc(env(safe-area-inset-top) + 10px); }
 }
