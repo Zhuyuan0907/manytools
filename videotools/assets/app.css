@@ -478,11 +478,11 @@ main { min-height: 0; display: flex; flex-direction: column; }
   #step1.has-files .hero-count { display: none; }
   .step1-body, .step1-body:has(.sources:empty) { display: flex; flex-direction: column; gap: 12px; }
   .how { display: none; }
-  .drop { flex: 1 1 auto; min-height: clamp(200px, 44vh, 400px); padding: 18px 14px; border-radius: 18px; }
+  .drop { flex: none; height: 200px; min-height: 0; padding: 18px 14px; border-radius: 18px; }
   .drop-inner { padding: 0; box-shadow: none; background: transparent; gap: 6px; }
   .drop-inner svg { width: 40px; height: 40px; }
   .drop-title { font-size: 1.15rem; }
-  #step1.has-files .drop { flex: none; min-height: 0; padding: 14px; }
+  #step1.has-files .drop { flex: none; height: auto; min-height: 0; padding: 14px; }
   #step1.has-files .drop-inner { grid-auto-flow: column; align-items: center; gap: 10px; }
   #step1.has-files .drop-inner svg { width: 26px; height: 26px; }
   #step1.has-files .drop-title { font-size: 1rem; }

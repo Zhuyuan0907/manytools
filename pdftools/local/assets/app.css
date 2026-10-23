@@ -711,7 +711,7 @@ input[type="range"]::-moz-range-thumb { width: 18px; height: 18px; border-radius
   .head-text h2 { font-size: 1.22rem; }
   .head-text p { font-size: .86rem; color: var(--muted); }
   .how { display: none; }
-  .step1-body:has(.sources:empty) .drop { min-height: clamp(200px, 44vh, 400px); }
+  .step1-body:has(.sources:empty) .drop { height: 200px; min-height: 0; }
   .panel-foot { box-shadow: 0 -1px 0 var(--line); border-top: 0; padding-bottom: calc(12px + env(safe-area-inset-bottom)); }
   .panel-foot .btn { height: 50px; border-radius: 14px; }
   .panel-foot .btn.primary { box-shadow: none; }
