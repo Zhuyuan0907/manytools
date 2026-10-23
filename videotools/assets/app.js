@@ -95,9 +95,8 @@
     let ok = false;
     try { ok = await MB.canEncodeVideo('hevc', { width: 1920, height: 1080, quality: new MB.Quality({ bitrate: 12e6 }) }); } catch {}
     if (!ok) {
-      const opt = $('#hevcOpt');
-      opt.querySelector('input').disabled = true;
-      opt.querySelector('i').textContent = '這台電腦不支援';
+      $('#hevcOpt input').disabled = true;
+      $('#codecHelp').textContent = '這台電腦不支援 H.265 編碼，請用 H.264';
     }
   })();
 
@@ -119,6 +118,7 @@
   }
 
   // ---------- steps ----------
+  const STEP_NAMES = ['放入影片', '影片資訊', '壓縮設定', '處理與下載'];
   function allowed(n) {
     if (S.running) return n === 4;
     if (n === 1) return true;
@@ -144,6 +144,7 @@
       b.disabled = !allowed(n);
       b.setAttribute('aria-current', n === S.step ? 'step' : 'false');
     }
+    $('#mStep').replaceChildren(`第 ${S.step} 步，共 4 步・`, el('b', { text: STEP_NAMES[S.step - 1] }));
   }
   function render() {
     renderStepper();
@@ -177,7 +178,7 @@
     }
     if (!first) return;
     S.sel = first;
-    if (S.step === 1) goto(2); else render();
+    render();
   }
 
   function removeItem(it) {
@@ -190,11 +191,50 @@
     if (!S.items.length) goto(1); else render();
   }
 
+  function srcMeta(it) {
+    if (it.status === 'loading') return '讀取中…';
+    if (it.status === 'error') return it.short || '無法處理';
+    return `${fmtBytes(it.file.size)}・${it.info.format}・${fmtDur(it.info.duration)}・${fmtRate(it.info.vRate)}`;
+  }
   function renderStep1() {
     const n = S.items.length;
-    $('#note1').textContent = n ? `已加入 ${n} 支影片` : '還沒有加入影片';
+    $('#step1').classList.toggle('has-files', n > 0);
+    $('#sources').replaceChildren(...S.items.map((it, k) => el('li', { class: 'src' },
+      el('span', { class: 'src-no', text: k + 1 }),
+      el('span', { class: 'src-text' },
+        el('span', { class: 'src-name', text: it.file.name, title: it.file.name }),
+        el('span', { class: `src-meta${it.status === 'error' ? ' bad' : ''}`, text: srcMeta(it), title: it.error || srcMeta(it) })),
+      el('button', { type: 'button', class: 'icon-btn', 'aria-label': `移除 ${it.file.name}`, title: '移除', text: '×', onclick: () => removeItem(it) }))));
+    const size = S.items.reduce((a, it) => a + it.file.size, 0);
+    $('#note1').textContent = n ? `${n} 支影片・共 ${fmtBytes(size)}` : '還沒有加入影片。';
     $('#next1').disabled = !n;
   }
+
+  // the counter line in the hero, like the PDF tool's: only totals, never anything about a file
+  let shownFiles = 0;
+  async function loadStats() {
+    if (!onServer) return;
+    let st;
+    try { const r = await fetch('api/stats', { cache: 'no-store' }); if (!r.ok) return; st = await r.json(); } catch { return; }
+    if (!st || !(st.files > 0)) return;
+    const gb = st.savedBytes / 1e9;
+    const saved = gb >= 1 ? `${gb.toFixed(1)} GB` : `${Math.max(1, Math.round(st.savedBytes / 1e6))} MB`;
+    const num = el('b', { class: 'hero-num', text: shownFiles.toLocaleString('zh-TW') });
+    $('#heroCount').replaceChildren('已幫大家處理 ', num, ' 支影片', el('span', { class: 'hero-extra', text: `・省下 ${saved}` }));
+    countUp(num, shownFiles, st.files);
+    shownFiles = st.files;
+  }
+  function countUp(node, from, to) {
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches || to - from < 2) { node.textContent = to.toLocaleString('zh-TW'); return; }
+    const t0 = performance.now(), dur = 900;
+    const step = (t) => {
+      const k = Math.min(1, (t - t0) / dur), e = 1 - (1 - k) ** 3;
+      node.textContent = Math.round(from + (to - from) * e).toLocaleString('zh-TW');
+      if (k < 1) requestAnimationFrame(step);
+    };
+    requestAnimationFrame(step);
+  }
+  loadStats();
 
   // ---------- reading the file's details ----------
   async function probe(it) {
@@ -204,6 +244,7 @@
       const input = new MB.Input({ source: new MB.BlobSource(it.file), formats: MB.ALL_FORMATS });
       it.input = input;
       if (!(await input.canRead())) {
+        it.short = ext === 'mxf' ? 'MXF 格式目前不支援' : '看不懂這個檔案';
         throw new Error(ext === 'mxf'
           ? 'MXF 格式目前不支援。請在機器上改錄 MP4（XAVC S / HS），或先轉成 MOV / MP4。'
           : '看不懂這個檔案，可能不是影片，或是不支援的格式。');
@@ -212,7 +253,7 @@
       const isTs = format.name === 'MPEG Transport Stream';
       const duration = await input.computeDuration();
       const vt = await input.getPrimaryVideoTrack();
-      if (!vt) throw new Error('這個檔案裡沒有影像。');
+      if (!vt) { it.short = '沒有影像'; throw new Error('這個檔案裡沒有影像。'); }
       const aTracks = await input.getAudioTracks();
 
       // Transport streams have no sample table, so sample the first few thousand packets instead of the whole file.
@@ -242,7 +283,7 @@
         audio,
       };
       it.status = it.info.canDecode ? 'ready' : 'error';
-      if (!it.info.canDecode) it.error = `這台電腦的瀏覽器無法解碼這種影像（${it.info.codec.name} ${it.info.codec.detail}）。`;
+      if (!it.info.canDecode) { it.short = '這台電腦無法解碼'; it.error = `這台電腦的瀏覽器無法解碼這種影像（${it.info.codec.name} ${it.info.codec.detail}）。`; }
       render();
       if (it.info.canDecode) await thumbnail(it, vt, duration);
     } catch (e) {
@@ -287,7 +328,7 @@
             el('span', { class: 'fi-name', text: it.file.name, title: it.file.name }),
             sub ? el('span', { class: 'fi-sub', text: sub })
               : el('span', { class: 'fi-sub' }, el('b', { text: fmtRate(it.info.vRate) }), `・${it.info.height}p・${fmtDur(it.info.duration)}`)),
-          el('button', { type: 'button', class: 'x', 'aria-label': `移除 ${it.file.name}`, title: '移除', text: '×',
+          el('button', { type: 'button', class: 'icon-btn', 'aria-label': `移除 ${it.file.name}`, title: '移除', text: '×',
             onclick: (e) => { e.stopPropagation(); removeItem(it); } })));
     }));
     renderDetail(S.sel);
@@ -343,7 +384,7 @@
   // ---------- step 3: settings + estimate ----------
   // A big number with −/+, and a slider from 1 Mbps to a little above the highest source bitrate,
   // with a tick where the original sits.
-  const rateInput = $('#rate'), rateRange = $('#rateRange'), slider = $('.slider');
+  const rateInput = $('#rate'), rateRange = $('#rateRange'), slider = $('.rate-slider');
   let rateTouched = false;
   const clampRate = (v) => Math.min(400, Math.max(0.5, Math.round(v * 2) / 2));
   function paintSlider() {
@@ -561,7 +602,7 @@
       }
       it.run = 'done';
       it.result = { name, size, seconds, url };
-      reportRun(i.duration, Math.max(0, it.file.size - size));
+      reportRun(i.duration, Math.max(0, it.file.size - size)).then(loadStats);
     } catch (e) {
       const canceled = S.stop || (MB.ConversionCanceledError && e instanceof MB.ConversionCanceledError);
       if (writable) { try { await writable.abort(); } catch {} }
@@ -582,12 +623,13 @@
     return { p, left };
   }
 
-  function stateText(it) {
+  function statusText(it) {
     if (it.run === 'wait') return '等待中';
-    if (it.run === 'running') return `${Math.floor(it.progress * 100)}%` + (it.speed ? `・${it.speed.toFixed(it.speed < 10 ? 1 : 0)} 倍速` : '・準備中');
-    if (it.run === 'stopped') return '已停止';
-    if (it.run === 'fail') return it.err;
-    if (it.run === 'done') return null;
+    if (it.run === 'running') {
+      const left = it.speed > 0 ? (it.info.duration * (1 - it.progress)) / it.speed : 0;
+      return `${Math.floor(it.progress * 100)}%` + (it.speed ? `・${it.speed.toFixed(it.speed < 10 ? 1 : 0)} 倍速` : '・準備中') + (left > 1 ? `・剩下約 ${fmtDur(left)}` : '');
+    }
+    if (it.run === 'stopped') return '已停止，沒有輸出檔案';
     return '';
   }
 
@@ -595,41 +637,45 @@
     if (S.step !== 4) return;
     const q = S.queue, done = q.filter((it) => it.run === 'done');
     const finished = !S.running;
-    $('#h4t').textContent = !finished ? '正在壓縮' : done.length === q.length ? '全部完成' : S.stop ? '已停止' : '處理結束';
     $('#h4p').textContent = !finished ? '處理中請不要關閉這個分頁'
-      : S.dir ? `檔案存在「${S.dir.name}」資料夾` : '檔案已經下載，也可以按「下載」再存一次';
+      : !done.length ? (S.stop ? '已停止' : '沒有完成的影片')
+      : S.dir ? `${done.length === q.length ? '全部完成' : `完成 ${done.length} 支`}，檔案存在「${S.dir.name}」資料夾`
+      : `${done.length === q.length ? '全部完成' : `完成 ${done.length} 支`}，檔案已經下載`;
     $('#stopRun').hidden = finished;
     $('#restart').hidden = !finished;
     $('#back4').disabled = !finished;
 
     const ov = $('#overall');
-    ov.classList.toggle('done', finished && done.length > 0);
     if (finished) {
       const src = done.reduce((a, it) => a + it.file.size, 0), out = done.reduce((a, it) => a + it.result.size, 0);
       ov.replaceChildren(
-        el('span', { class: 'ov-big' }, done.length ? `${pct(out, src)}%` : '—', done.length ? el('small', { text: '省下' }) : null),
-        el('span', { class: 'ov-text', text: done.length ? `${fmtBytes(src)} → ${fmtBytes(out)}` : '沒有完成的影片' }),
-        el('span', { class: 'ov-sub', text: `完成 ${done.length} / ${q.length} 支` + (q.length - done.length ? `・${q.length - done.length} 支沒有完成` : '') }));
+        el('span', { class: 'ov-text' }, done.length ? `${fmtBytes(src)} → ${fmtBytes(out)}，省下 ` : '沒有完成的影片', done.length ? el('b', { text: `${pct(out, src)}%` }) : null),
+        el('span', { class: 'ov-sub', text: `完成 ${done.length} / ${q.length} 支` }));
     } else {
       const { p, left } = overall();
       const idx = q.findIndex((it) => it.run === 'running');
       ov.replaceChildren(
-        el('span', { class: 'ov-big', id: 'ovPct', text: `${Math.floor(p * 100)}%` }),
-        el('span', { class: 'ov-text', id: 'ovText', text: `第 ${Math.max(1, idx + 1)} / ${q.length} 支` + (left ? `・剩下約 ${fmtDur(left)}` : '') }),
-        el('div', { class: 'bar' }, el('i', { id: 'ovBar', style: `width:${(p * 100).toFixed(1)}%` })));
+        el('span', { class: 'ov-text', id: 'ovText' }, `正在處理第 ${Math.max(1, idx + 1)} / ${q.length} 支・`, el('b', { id: 'ovPct', text: `${Math.floor(p * 100)}%` })),
+        el('span', { class: 'ov-sub', id: 'ovLeft', text: left ? `全部剩下約 ${fmtDur(left)}` : '' }),
+        el('div', { class: 'progress' }, el('span', { id: 'ovBar', style: `width:${(p * 100).toFixed(1)}%` })));
     }
     $('#rlist').replaceChildren(...q.map((it) => {
-      const t = stateText(it), r = it.result;
-      const state = el('span', { class: 'r-state', title: t || '' });
-      if (r) state.append(`${fmtBytes(it.file.size)} → `, el('b', { text: fmtBytes(r.size) }), ' ', el('span', { class: 'saved', text: `小了 ${pct(r.size, it.file.size)}%` }), el('span', { class: 'r-rate', text: `・${fmtRate((r.size * 8) / it.info.duration)}` }));
-      else state.textContent = t;
-      const act = el('div', { class: 'r-act' });
-      if (r && r.url) act.append(el('a', { class: 'btn small', href: r.url, download: r.name, text: '下載' }));
-      else if (r) act.append(el('span', { class: 'tag', text: '✓ 已存檔' }));
-      return el('li', { class: `ritem ${it.run === 'running' ? 'running' : it.run === 'done' ? 'done' : it.run === 'fail' ? 'err' : it.run === 'wait' ? 'wait' : ''}`, 'data-id': it.id },
-        el('div', { class: 'r-main' }, el('span', { class: 'r-name', text: it.file.name, title: it.file.name }), state),
-        el('div', { class: 'bar' }, el('i', { style: `width:${it.run === 'done' ? 100 : it.run === 'running' ? (it.progress * 100).toFixed(1) : 0}%` })),
-        act);
+      const r = it.result, cls = it.run === 'done' ? 'ok' : it.run === 'fail' ? 'bad' : it.run === 'running' ? 'busy' : '';
+      const status = el('span', { class: 'out-status', 'aria-hidden': 'true' });
+      if (it.run === 'running') status.append(el('span', { class: 'spinner' }));
+      else if (it.run === 'done') status.textContent = '✓';
+      else if (it.run === 'fail') status.textContent = '!';
+      else status.append(el('span', { class: 'dot-wait' }));
+      const main = el('div', { class: 'out-main' },
+        el('div', { class: 'out-title' }, el('b', { class: 'out-name', text: it.file.name, title: it.file.name }), el('span', { class: 'out-meta', text: `原 ${fmtBytes(it.file.size)}・${fmtRate(it.info.vRate)}` })));
+      if (r) main.append(el('div', { class: 'out-size' }, el('b', { text: fmtBytes(r.size) }), el('span', { class: 'saved', text: `小了 ${pct(r.size, it.file.size)}%` }), el('span', { class: 'out-rate', text: `平均 ${fmtRate((r.size * 8) / it.info.duration)}・${r.name}` })));
+      else if (it.run === 'fail') main.append(el('span', { class: 'out-msg bad', text: it.err, title: it.err }));
+      else if (it.run === 'running') main.append(el('div', { class: 'progress' }, el('span', { style: `width:${(it.progress * 100).toFixed(1)}%` })), el('span', { class: 'status', text: statusText(it) }));
+      else main.append(el('span', { class: 'status', text: statusText(it) }));
+      const act = el('div', { class: 'out-actions' });
+      if (r && r.url) act.append(el('a', { class: 'btn primary', href: r.url, download: r.name, text: '下載' }));
+      else if (r) act.append(el('span', { class: 'tag', text: '已存檔' }));
+      return el('li', { class: `out ${cls}`, 'data-id': it.id }, status, main, act);
     }));
     renderStepper();
   }
@@ -642,14 +688,13 @@
     requestAnimationFrame(() => {
       tickPending = false;
       if (it.run !== 'running') return;
-      const row = $(`.ritem[data-id="${it.id}"]`);
-      if (row) { $('.bar i', row).style.width = `${(it.progress * 100).toFixed(1)}%`; $('.r-state', row).textContent = stateText(it); }
+      const row = $(`.out[data-id="${it.id}"]`);
+      if (row && $('.progress > span', row)) { $('.progress > span', row).style.width = `${(it.progress * 100).toFixed(1)}%`; $('.status', row).textContent = statusText(it); }
       const { p, left } = overall();
-      const idx = S.queue.indexOf(it);
       if ($('#ovPct')) {
         $('#ovPct').textContent = `${Math.floor(p * 100)}%`;
         $('#ovBar').style.width = `${(p * 100).toFixed(1)}%`;
-        $('#ovText').textContent = `第 ${idx + 1} / ${S.queue.length} 支` + (left ? `・剩下約 ${fmtDur(left)}` : '');
+        $('#ovLeft').textContent = left ? `全部剩下約 ${fmtDur(left)}` : '';
       }
     });
   }
@@ -657,8 +702,8 @@
   // ---------- the public counter on the home page ----------
   // Only numbers leave the browser (one file, its length in seconds, bytes saved), never any file content or name.
   function reportRun(seconds, savedBytes) {
-    if (!onServer) return;
-    fetch('api/stats/processed', {
+    if (!onServer) return Promise.resolve();
+    return fetch('api/stats/processed', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ files: 1, seconds: Math.round(seconds), savedBytes: Math.round(savedBytes) }), keepalive: true,
     }).catch(() => {});

@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="zh-Hant-TW">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>首頁方案 D・中央拖放</title>
+<link rel="icon" href="/assets/logo.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/fonts/noto-sans-tc.css">
+<style>
+/* 方案 D — the home page is the start of the work: one drop area that sends each file to the right tool */
+:root {
+  --ink: #17202c; --ink-2: #485365; --muted: #778193; --line: #dfe5ec; --bg: #f5f7fa;
+  --blue: #2468e0; --blue-soft: #e6effd; --green: #0d9b6c; --green-soft: #e3f6ee; --sun: #ffb21e;
+  --font: -apple-system, BlinkMacSystemFont, "PingFang TC", "Noto Sans TC Web", "Noto Sans TC", "Microsoft JhengHei", sans-serif;
+  color-scheme: light;
+}
+* { box-sizing: border-box; }
+html, body { background: var(--bg); }
+body { margin: 0; color: var(--ink); font-family: var(--font); font-size: 15px; line-height: 1.6; -webkit-font-smoothing: antialiased; word-break: keep-all; overflow-wrap: anywhere; }
+h1, h2, p { margin: 0; }
+.ph { display: inline-block; }
+.app { min-height: 100dvh; max-width: 1000px; margin: 0 auto; padding: 16px 24px 18px; display: grid; grid-template-rows: auto minmax(0, 1fr) auto; gap: 14px; }
+.top { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.brand { display: flex; align-items: center; gap: 10px; color: inherit; text-decoration: none; font-weight: 800; font-size: 1.2rem; }
+.brand img { width: 34px; height: 34px; border-radius: 9px; }
+.top p { color: var(--ink-2); font-size: .86rem; white-space: nowrap; }
+.top p b { color: var(--ink); }
+main { display: grid; align-content: center; justify-items: center; gap: clamp(16px, 3.4vh, 28px); text-align: center; }
+main h1 { font-size: clamp(1.7rem, 1.1rem + 2vw, 2.5rem); line-height: 1.25; font-weight: 800; letter-spacing: .02em; }
+main > p { color: var(--ink-2); font-size: 1rem; margin-top: -8px; }
+.drop {
+  position: relative; width: min(760px, 100%); min-height: clamp(180px, 30vh, 300px); display: grid; place-content: center; justify-items: center; gap: 8px;
+  border-radius: 24px; background: #fff; border: 2px dashed #c4cfdc; cursor: pointer; transition: border-color .15s, background .15s, transform .15s;
+  box-shadow: 0 1px 2px rgba(23, 32, 44, .04), 0 16px 40px rgba(23, 32, 44, .07);
+}
+.drop:hover, .drop.over { border-color: var(--ink); transform: scale(1.01); }
+.drop.over.video { border-color: var(--blue); background: var(--blue-soft); }
+.drop.over.pdf { border-color: var(--green); background: var(--green-soft); }
+.drop input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+.stack { display: flex; gap: 14px; padding: 4px 6px; margin-bottom: 2px; pointer-events: none; }
+.stack img { width: 58px; height: 58px; border-radius: 15px; box-shadow: 0 6px 16px rgba(23, 32, 44, .14); transition: transform .2s; }
+.stack img:first-child { transform: rotate(-8deg); }
+.stack img:last-child { transform: rotate(8deg); }
+.drop:hover .stack img:first-child { transform: rotate(-14deg) translateY(-4px); }
+.drop:hover .stack img:last-child { transform: rotate(14deg) translateY(-4px); }
+.drop b { font-size: 1.35rem; pointer-events: none; }
+.drop span { color: var(--ink-2); pointer-events: none; }
+.drop small { color: var(--muted); font-size: .82rem; pointer-events: none; }
+.or { color: var(--muted); font-size: .86rem; display: flex; align-items: center; gap: 14px; width: min(760px, 100%); }
+.or::before, .or::after { content: ""; flex: 1; height: 1px; background: var(--line); }
+.pick { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; width: min(760px, 100%); }
+.pick a { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 14px; align-items: center; padding: 14px 18px; border-radius: 16px; background: #fff; border: 1px solid var(--line); color: inherit; text-decoration: none; text-align: left; transition: border-color .15s, transform .15s; }
+.pick a:hover { border-color: var(--c); transform: translateY(-2px); }
+.pick img { width: 42px; height: 42px; border-radius: 11px; }
+.pick b { display: block; font-size: 1.05rem; white-space: nowrap; }
+.pick small { display: block; color: var(--muted); font-size: .82rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pick i { font-style: normal; color: var(--c); font-weight: 800; }
+.foot { color: var(--muted); font-size: .8rem; text-align: center; }
+.toast { position: fixed; left: 50%; top: 18px; transform: translateX(-50%); background: var(--ink); color: #fff; padding: 10px 18px; border-radius: 12px; font-size: .92rem; box-shadow: 0 8px 24px rgba(0,0,0,.2); }
+[hidden] { display: none !important; }
+@media (max-width: 600px) {
+  .app { padding: 12px 16px; }
+  .top p { display: none; }
+  main h1 { font-size: 1.55rem; }
+  .drop { min-height: 170px; border-radius: 18px; }
+  .stack img { width: 46px; height: 46px; }
+  .drop b { font-size: 1.15rem; }
+  .pick { grid-template-columns: 1fr; gap: 10px; }
+}
+</style>
+</head>
+<body>
+<div class="app">
+  <header class="top">
+    <a class="brand" href="/"><img src="/assets/logo.svg" alt="">ManyTools</a>
+    <p>已處理 <b data-stat="video.files">0</b> 部影片・<b data-stat="pdf.files">0</b> 份 PDF</p>
+  </header>
+  <main>
+    <h1><span class="ph">把檔案丟進來，</span><span class="ph">其他交給你的電腦</span></h1>
+    <p><span class="ph">壓縮、轉檔、重新輸出都在瀏覽器裡完成，</span><span class="ph">檔案不會上傳</span></p>
+    <label class="drop" id="drop">
+      <input type="file" id="file" accept="video/*,.mp4,.mov,.mts,.m2ts,.mkv,application/pdf,.pdf" aria-label="選擇影片或 PDF">
+      <span class="stack" aria-hidden="true"><img src="/assets/tool-video.svg" alt=""><img src="/assets/tool-pdf.svg" alt=""></span>
+      <b>把影片或 PDF 拖進這裡</b>
+      <span>會自動帶你到對的工具</span>
+      <small>MP4・MOV・MTS・PDF</small>
+    </label>
+    <div class="or">或直接選工具</div>
+    <nav class="pick" aria-label="工具">
+      <a href="/video" style="--c:var(--blue)"><img src="/assets/tool-video.svg" alt=""><span><b>影片碼率壓縮</b><small>業務機高碼率素材，壓到指定碼率</small></span><i aria-hidden="true">→</i></a>
+      <a href="/pdf" style="--c:var(--green)"><img src="/assets/tool-pdf.svg" alt=""><span><b>PDF 壓縮・拆分</b><small>備審資料壓到上限內，也能拆成多份</small></span><i aria-hidden="true">→</i></a>
+    </nav>
+  </main>
+  <footer class="foot">建議使用最新版 Chrome 或 Edge・網站只記錄處理的數量，不記錄檔名或內容</footer>
+</div>
+<div class="toast" id="toast" hidden></div>
+<script src="stats.js"></script>
+<script>
+/* Preview only: works out which tool a file belongs to and goes there. Carrying the file across
+   (kept in this browser via IndexedDB, never uploaded) gets built if this design is picked. */
+(() => {
+  const drop = document.getElementById('drop'), input = document.getElementById('file'), toast = document.getElementById('toast');
+  const kind = (f) => (/pdf$/i.test(f.type) || /\.pdf$/i.test(f.name) ? 'pdf' : /^video\//.test(f.type) || /\.(mp4|mov|m4v|mts|m2ts|ts|mkv|webm|mxf)$/i.test(f.name) ? 'video' : null);
+  function go(file) {
+    const k = file && kind(file);
+    toast.hidden = false;
+    if (!k) { toast.textContent = '這個檔案目前沒有對應的工具'; setTimeout(() => { toast.hidden = true; }, 2500); return; }
+    toast.textContent = k === 'video' ? '這是影片，帶你到「影片碼率壓縮」…' : '這是 PDF，帶你到「PDF 壓縮・拆分」…';
+    setTimeout(() => { location.href = k === 'video' ? '/video' : '/pdf'; }, 1200);
+  }
+  input.addEventListener('change', () => go(input.files[0]));
+  drop.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    const it = e.dataTransfer.items && e.dataTransfer.items[0];
+    drop.classList.add('over');
+    drop.classList.toggle('pdf', !!it && /pdf/.test(it.type));
+    drop.classList.toggle('video', !!it && /^video\//.test(it.type));
+  });
+  drop.addEventListener('dragleave', () => drop.classList.remove('over', 'pdf', 'video'));
+  drop.addEventListener('drop', (e) => { e.preventDefault(); drop.classList.remove('over', 'pdf', 'video'); go(e.dataTransfer.files[0]); });
+})();
+</script>
+</body>
+</html>
