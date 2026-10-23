@@ -1,14 +1,16 @@
-/* Home page: tool links and the counter line. The counter reads only totals from the server
-   (see server/server.js); opened as a local file the links point at the sibling folders instead. */
+/* Home page: the live numbers, and the drop area that sends files to the right tool.
+   Files never leave this browser: they're handed to the tool page through ManyHandoff (/shared/handoff.js).
+   The numbers are totals from the server (see server/server.js); opened as a local file, links point at the
+   sibling folders instead and the numbers stay at 0. */
 (() => {
   'use strict';
+  const $ = (s) => document.querySelector(s);
   const onServer = /^https?:$/.test(location.protocol);
-  if (!onServer) {
-    for (const a of document.querySelectorAll('a[data-local]')) a.href = a.dataset.local;
-    return;
-  }
-  const line = document.getElementById('count');
+  if (!onServer) for (const a of document.querySelectorAll('a[data-local]')) a.href = a.dataset.local;
+  const TOOL_URL = onServer ? { video: '/video', pdf: '/pdf' } : { video: '../videotools/index.html', pdf: '../pdftools/local/index.html' };
+  const TOOL_NAME = { video: '影片碼率壓縮', pdf: 'PDF 壓縮・拆分' };
 
+  // ---------- live numbers ----------
   function countUp(node, to) {
     if (window.matchMedia('(prefers-reduced-motion: reduce)').matches || to < 2) { node.textContent = to.toLocaleString('zh-TW'); return; }
     const t0 = performance.now(), dur = 900;
@@ -19,30 +21,91 @@
     };
     requestAnimationFrame(step);
   }
-  const span = (cls, ...kids) => { const s = document.createElement('span'); if (cls) s.className = cls; s.append(...kids); return s; };
+  // the header always shows the three numbers; 0 until the server has something
+  if (onServer) {
+    fetch('api/stats', { cache: 'no-store' })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((st) => {
+        const v = (st && st.video) || {}, p = (st && st.pdf) || {};
+        const saved = (v.savedBytes || 0) + (p.savedBytes || 0);
+        countUp($('[data-stat="video.files"]'), v.files || 0);
+        countUp($('[data-stat="pdf.files"]'), p.files || 0);
+        if (saved > 0) $('[data-stat="saved"]').textContent = saved >= 1e9 ? `${(saved / 1e9).toFixed(1)} GB` : `${Math.max(1, Math.round(saved / 1e6))} MB`;
+      })
+      .catch(() => {});
+  }
 
-  fetch('api/stats', { cache: 'no-store' })
-    .then((r) => (r.ok ? r.json() : null))
-    .then((st) => {
-      const v = (st && st.video) || {}, p = (st && st.pdf) || {};
-      // Before the first real file the line keeps its default instead of showing 0.
-      if (!(v.files > 0) && !(p.files > 0)) return;
-      const pill = span('', '已在大家的電腦上處理');
-      const nums = [];
-      if (v.files > 0) {
-        const b = document.createElement('b');
-        pill.append(span('', b, '部影片'));
-        nums.push([b, v.files]);
-      }
-      if (p.files > 0) {
-        const b = document.createElement('b');
-        pill.append(span('pdf', v.files > 0 ? '・' : '', b, '份 PDF'));
-        nums.push([b, p.files]);
-      }
-      const saved = (v.savedBytes || 0) + (p.savedBytes || 0);
-      if (saved >= 1e9) pill.append(span('saved', `・省下 ${(saved / 1e9).toFixed(1)} GB`));
-      line.replaceChildren(pill);
-      for (const [b, n] of nums) countUp(b, n);
-    })
-    .catch(() => {});
+  // ---------- drop area → the right tool ----------
+  const drop = $('#drop'), pick = $('#pick'), toast = $('#toast');
+  let toastTimer;
+  function say(text, ms = 3500) {
+    toast.textContent = text; toast.hidden = false;
+    clearTimeout(toastTimer); toastTimer = setTimeout(() => { toast.hidden = true; }, ms);
+  }
+  const kindOf = (name, type) => (/pdf$/i.test(type || '') || /\.pdf$/i.test(name) ? 'pdf'
+    : /^video\//.test(type || '') || /\.(mp4|mov|m4v|mts|m2ts|ts|mkv|webm|mxf)$/i.test(name) ? 'video' : null);
+  // Small files travel as themselves; a big video travels as a file handle when the browser has one (no copy).
+  const SMALL = 300e6, COPY_LIMIT = 2e9;
+
+  async function route(list) {
+    const items = list.filter((x) => x.file);
+    if (!items.length) return;
+    const kinds = new Set(items.map((x) => kindOf(x.file.name, x.file.type)));
+    if (kinds.has(null)) { say('目前只有影片和 PDF 的工具，這個檔案還沒辦法處理'); return; }
+    if (kinds.size > 1) { say('影片和 PDF 要分開處理，請一次放同一種檔案'); return; }
+    const tool = [...kinds][0];
+    drop.classList.add('busy');
+    const entries = [];
+    for (const x of items) {
+      const f = x.file;
+      if (f.size <= SMALL || (!x.handle && f.size <= COPY_LIMIT)) entries.push({ name: f.name, file: f });
+      else if (x.handle) entries.push({ name: f.name, handle: x.handle });
+      else entries.push({ name: f.name });
+    }
+    try { if (window.ManyHandoff && window.indexedDB) await ManyHandoff.send(tool, entries); } catch {}
+    say(`帶你到「${TOOL_NAME[tool]}」…`, 8000);
+    location.href = TOOL_URL[tool];
+  }
+
+  drop.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    const it = e.dataTransfer && e.dataTransfer.items && e.dataTransfer.items[0];
+    drop.classList.add('over');
+    drop.classList.toggle('pdf', !!it && /pdf/.test(it.type));
+    drop.classList.toggle('video', !!it && /^video\//.test(it.type));
+  });
+  drop.addEventListener('dragleave', (e) => { if (!drop.contains(e.relatedTarget)) drop.classList.remove('over', 'pdf', 'video'); });
+  // anywhere on the page counts as the drop area
+  window.addEventListener('dragover', (e) => e.preventDefault());
+  window.addEventListener('drop', (e) => {
+    e.preventDefault();
+    drop.classList.remove('over', 'pdf', 'video');
+    if (!e.dataTransfer) return;
+    // Items are only readable during the event, so ask for every handle right now.
+    const pending = [...e.dataTransfer.items].filter((it) => it.kind === 'file').map((it) => ({
+      file: it.getAsFile(),
+      handle: typeof it.getAsFileSystemHandle === 'function' ? it.getAsFileSystemHandle().catch(() => null) : null,
+    }));
+    Promise.all(pending.map(async (x) => ({ file: x.file, handle: x.handle ? await x.handle : null }))).then(route);
+  });
+
+  async function choose() {
+    // Chrome/Edge: the picker gives handles, so even a huge clip is handed over without copying it.
+    if (typeof window.showOpenFilePicker === 'function') {
+      let handles;
+      try {
+        handles = await window.showOpenFilePicker({ multiple: true, types: [
+          { description: '影片', accept: { 'video/*': ['.mp4', '.mov', '.m4v', '.mts', '.m2ts', '.ts', '.mkv', '.webm', '.mxf'] } },
+          { description: 'PDF', accept: { 'application/pdf': ['.pdf'] } },
+        ] });
+      } catch (e) { if (e && e.name === 'AbortError') return; handles = null; }
+      if (handles) { route(await Promise.all(handles.map(async (h) => ({ file: await h.getFile(), handle: h })))); return; }
+    }
+    pick.click();
+  }
+  drop.addEventListener('click', choose);
+  drop.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); choose(); } });
+  pick.addEventListener('change', () => { route([...pick.files].map((file) => ({ file, handle: null }))); pick.value = ''; });
+  // Coming back with the browser's back button shouldn't leave the area stuck on "busy".
+  window.addEventListener('pageshow', () => { drop.classList.remove('busy'); toast.hidden = true; });
 })();

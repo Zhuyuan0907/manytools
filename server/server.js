@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /* ManyTools static server + the public counters. No dependencies: `node server/server.js`.
    Clean URLs, each tool still in its own folder:
-     /       → home/            /video → videotools/            /pdf → pdftools/local/     /fonts → fonts/
+     /       → home/            /video → videotools/            /pdf → pdftools/local/     /fonts → fonts/     /shared → shared/
    A tool's page is served at /video (no trailing slash) with <base href="/video/"> injected, so its relative
    asset paths keep working both here and when the folder is opened straight from disk.
    Counters keep only totals (files, seconds/pages, bytes saved) per tool — never file content:
@@ -26,6 +26,7 @@ const MOUNTS = [
   { route: '/video', dir: path.join(ROOT, 'videotools'), tool: 'video' },
   { route: '/pdf', dir: path.join(ROOT, 'pdftools', 'local'), tool: 'pdf' },
   { route: '/fonts', dir: path.join(ROOT, 'fonts'), immutable: true },
+  { route: '/shared', dir: path.join(ROOT, 'shared') },
   { route: '', dir: path.join(ROOT, 'home') },
 ];
 // Old addresses from before the clean URLs.

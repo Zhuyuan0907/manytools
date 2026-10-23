@@ -13,53 +13,68 @@
 <body>
 <div class="app">
   <header class="top">
-    <a class="brand" href="./">
-      <img class="logo" src="assets/logo.svg" alt="" width="32" height="32">
-      <span class="wordmark">ManyTools</span>
-    </a>
-    <p class="privacy">
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="10" width="16" height="11" rx="2"></rect><path d="M8 10V7a4 4 0 0 1 8 0v3"></path></svg>
-      <span>檔案不上傳</span>
+    <a class="brand" href="./"><img src="assets/logo.svg" alt="" width="34" height="34"><span>ManyTools</span></a>
+    <p class="hstats" id="nums" aria-label="處理數量">
+      <span class="hs v">已處理 <b data-stat="video.files">0</b> 部影片</span>
+      <span class="hs p"><b data-stat="pdf.files">0</b> 份 PDF</span>
+      <span class="hs s">省下 <b data-stat="saved">0 MB</b></span>
     </p>
   </header>
 
   <main>
-    <section class="hero">
-      <h1><span>工具在這裡，</span><span>檔案留在你的電腦</span></h1>
-      <p class="lead"><span>壓縮、轉檔、重新輸出，</span><span>都在你自己的瀏覽器完成，</span><span>我們拿不到任何檔案</span></p>
-      <p class="count" id="count" aria-live="polite">免費・免註冊・檔案不上傳</p>
+    <section class="lead">
+      <div class="lead-text">
+        <h1><span>工具在這裡，</span><span class="soft">檔案留在你的電腦。</span></h1>
+        <p><span>壓縮、轉檔、重新輸出，</span><span>都在你自己的瀏覽器完成，</span><span>我們拿不到任何檔案。</span></p>
+      </div>
+
+      <div class="drop" id="drop" role="button" tabindex="0" aria-label="選擇影片或 PDF，會帶你到對的工具">
+        <input type="file" id="pick" multiple accept="video/*,.mp4,.mov,.m4v,.mts,.m2ts,.ts,.mkv,.webm,.mxf,application/pdf,.pdf" tabindex="-1" aria-hidden="true">
+        <span class="stack" aria-hidden="true"><img src="assets/tool-video.svg" alt=""><img src="assets/tool-pdf.svg" alt=""></span>
+        <b class="drop-title"><span class="d-desk">把影片或 PDF 拖進這裡</span><span class="d-mob">選擇影片或 PDF</span></b>
+        <span class="drop-hint">會自動帶你到對的工具，<span class="d-desk">也可以點一下選檔案</span><span class="d-mob">檔案不上傳</span></span>
+        <span class="drop-safe"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="10" width="16" height="11" rx="2"></rect><path d="M8 10V7a4 4 0 0 1 8 0v3"></path></svg>檔案只在你的電腦處理，不會上傳</span>
+      </div>
     </section>
 
     <section class="tools" aria-label="工具">
-      <a class="tool" href="/video" data-local="../videotools/index.html">
-        <img src="assets/tool-video.svg" alt="" width="52" height="52">
-        <h2>影片碼率壓縮</h2>
-        <p class="desc">業務機高碼率素材，壓到指定碼率</p>
-        <ul class="points">
-          <li>先看碼率、解析度、聲音軌</li>
-          <li>VBR / CBR・H.264 / H.265</li>
-          <li>聲音原樣保留，不重壓</li>
-        </ul>
-        <span class="cta">開始使用</span>
+      <a class="tool video" href="/video" data-local="../videotools/index.html">
+        <span class="tool-text">
+          <span class="tool-top"><span class="no">01</span><span class="word">Zhuyuan<i>Love</i><u>Video</u></span></span>
+          <b class="tool-name">影片碼率壓縮</b>
+          <span class="tool-desc">業務機高碼率素材，壓到指定碼率</span>
+          <span class="cta">開始壓縮 <span aria-hidden="true">→</span></span>
+        </span>
+        <span class="art" aria-hidden="true">
+          <svg viewBox="0 0 300 160">
+            <g><rect x="6" y="16" width="122" height="96" rx="12" class="page"/><path d="M18 21v8M34 21v8M50 21v8M66 21v8M82 21v8M98 21v8M114 21v8M18 99v8M34 99v8M50 99v8M66 99v8M82 99v8M98 99v8M114 99v8" class="holes"/><path d="M58 50v28l24-14z" class="play"/><rect x="27" y="122" width="80" height="30" rx="8" class="chip-bad"/><text x="67" y="142" class="chip-t">20 Mbps</text></g>
+            <g class="arrow"><path d="M140 66h36"/><path d="M168 56l10 10-10 10"/></g>
+            <g class="small"><rect x="194" y="32" width="96" height="74" rx="10" class="page"/><path d="M205 36v6M219 36v6M233 36v6M247 36v6M261 36v6M275 36v6M205 96v6M219 96v6M233 96v6M247 96v6M261 96v6M275 96v6" class="holes"/><path d="M235 58v20l17-10z" class="play"/><rect x="208" y="116" width="68" height="26" rx="7" class="chip-ok"/><text x="242" y="134" class="chip-t">12 Mbps</text><circle cx="286" cy="34" r="14" class="check-bg"/><path d="M279.5 34.5l4.5 4.5 8-9" class="check"/></g>
+          </svg>
+        </span>
       </a>
-      <a class="tool" href="/pdf" data-local="../pdftools/local/index.html">
-        <img src="assets/tool-pdf.svg" alt="" width="52" height="52">
-        <h2>PDF 壓縮・拆分</h2>
-        <p class="desc">備審資料壓到上限內，也能拆成多份</p>
-        <ul class="points">
-          <li>指定檔案大小上限</li>
-          <li>整份或拆成多份上傳</li>
-          <li>連結、目錄、書籤都保留</li>
-        </ul>
-        <span class="cta">開始使用</span>
+      <a class="tool pdf" href="/pdf" data-local="../pdftools/local/index.html">
+        <span class="tool-text">
+          <span class="tool-top"><span class="no">02</span><span class="word">Zhuyuan<i>Love</i><u>PDF</u></span></span>
+          <b class="tool-name">PDF 壓縮・拆分</b>
+          <span class="tool-desc">備審資料壓到上限內，也能拆成多份</span>
+          <span class="cta">開始處理 <span aria-hidden="true">→</span></span>
+        </span>
+        <span class="art" aria-hidden="true">
+          <svg viewBox="0 0 300 160">
+            <g><rect x="16" y="6" width="104" height="128" rx="10" class="page"/><path d="M34 40h56M34 54h68M34 68h68M34 82h48" class="lines"/><rect x="28" y="96" width="80" height="30" rx="8" class="chip-bad"/><text x="68" y="116" class="chip-t">50 MB</text></g>
+            <g class="arrow"><path d="M136 70h36"/><path d="M164 60l10 10-10 10"/></g>
+            <g class="small"><rect x="196" y="28" width="80" height="104" rx="9" class="page"/><path d="M210 58h42M210 69h52M210 80h36" class="lines"/><rect x="204" y="96" width="64" height="26" rx="7" class="chip-ok"/><text x="236" y="114" class="chip-t">5 MB</text><circle cx="272" cy="30" r="14" class="check-bg"/><path d="M265.5 30.5l4.5 4.5 8-9" class="check"/></g>
+          </svg>
+        </span>
       </a>
     </section>
   </main>
 
-  <footer class="foot">
-    <p><span>建議使用最新版 Chrome 或 Edge・</span><span>網站只記錄處理的數量，不記錄檔名或內容</span></p>
-  </footer>
+  <footer class="foot"><span>建議使用最新版 Chrome 或 Edge</span><span>網站只記錄處理的數量，不記錄檔名或內容</span></footer>
 </div>
+<div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+<script src="/shared/handoff.js"></script>
 <script src="assets/home.js"></script>
 </body>
 </html>
