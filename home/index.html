@@ -25,7 +25,7 @@
   <header class="top">
     <a class="brand" href="./"><img src="assets/logo.svg" alt="" width="40" height="40"><span class="brand-text"><span class="wordmark">ZhuyuanTools</span><span class="tagline">小小ㄉ工具箱</span></span></a>
     <div class="top-right">
-      <p class="hstats" id="nums" aria-label="處理數量">已處理 <span data-stat="video.files">0</span> 部影片・<span data-stat="pdf.files">0</span> 份 PDF・<span data-stat="avatar.files">0</span> 個頭貼・省下 <span data-stat="saved">0 MB</span></p>
+      <p class="hstats" id="nums" aria-label="處理數量"><span>已處理 <span data-stat="video.files">0</span> 部影片・</span><span><span data-stat="pdf.files">0</span> 份 PDF・</span><span><span data-stat="avatar.files">0</span> 個頭貼・</span><span><span data-stat="image.files">0</span> 張圖片・</span><span>省下 <span data-stat="saved">0 MB</span></span></p>
       <p class="privacy"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="10" width="16" height="11" rx="2"></rect><path d="M8 10V7a4 4 0 0 1 8 0v3"></path></svg><span class="privacy-long">檔案只在你的電腦處理，不會上傳</span><span class="privacy-short">不上傳</span></p>
     </div>
   </header>
@@ -37,12 +37,12 @@
         <p><span>壓縮、轉檔、重新輸出，</span><span>都在你自己的瀏覽器完成，</span><span>我們拿不到任何檔案。</span></p>
       </div>
 
-      <div class="drop" id="drop" role="button" tabindex="0" aria-label="選擇影片或 PDF，會帶你到對的工具">
-        <input type="file" id="pick" multiple accept="video/*,.mp4,.mov,.m4v,.mts,.m2ts,.ts,.mkv,.webm,.mxf,application/pdf,.pdf" tabindex="-1" aria-hidden="true">
-        <span class="stack" aria-hidden="true"><img src="assets/tool-video.svg" alt=""><img src="assets/tool-pdf.svg" alt=""></span>
-        <b class="drop-title"><span class="d-desk">把影片或 PDF 拖進這裡</span><span class="d-mob">選擇影片或 PDF</span></b>
+      <div class="drop" id="drop" role="button" tabindex="0" aria-label="選擇影片、圖片或 PDF，會帶你到對的工具">
+        <input type="file" id="pick" multiple accept="video/*,.mp4,.mov,.m4v,.mts,.m2ts,.ts,.mkv,.webm,.mxf,application/pdf,.pdf,image/*,.heic,.heif" tabindex="-1" aria-hidden="true">
+        <span class="stack" aria-hidden="true"><img src="assets/tool-video.svg" alt=""><img src="assets/tool-image.svg" alt=""><img src="assets/tool-pdf.svg" alt=""></span>
+        <b class="drop-title"><span class="d-desk">把影片、圖片或 PDF 拖進這裡</span><span class="d-mob">選擇影片、圖片或 PDF</span></b>
         <span class="drop-hint">會自動帶你到對的工具，<span class="d-desk">也可以點一下選檔案</span><span class="d-mob">檔案不上傳</span></span>
-        <span class="drop-formats">MP4・MOV・MTS・PDF</span>
+        <span class="drop-formats">MP4・MOV・JPG・PNG・HEIC・PDF</span>
       </div>
     </section>
 
@@ -89,6 +89,21 @@
             <g><rect x="12" y="34" width="112" height="78" rx="12" class="page"/><path d="M16 42l52 38 52-38" class="fold"/><rect x="28" y="120" width="80" height="28" rx="8" class="chip-ok"/><text x="68" y="139" class="chip-t mono">@email</text></g>
             <g class="arrow"><path d="M140 72h36"/><path d="M168 62l10 10-10 10"/></g>
             <g class="small"><circle cx="240" cy="74" r="48" class="ring"/><circle cx="240" cy="62" r="15" class="play"/><path d="M209 106c6-15 17-23 31-23s25 8 31 23a48 48 0 0 1-62 0z" class="play"/><circle cx="280" cy="34" r="14" class="check-bg"/><path d="M273.5 34.5l4.5 4.5 8-9" class="check"/></g>
+          </svg>
+        </span>
+      </a>
+      <a class="tool image" href="/image" data-local="../imagetools/index.html">
+        <span class="tool-text">
+          <span class="tool-top"><span class="no">04</span><span class="word">Zhuyuan<i>Love</i><u>Image</u></span></span>
+          <b class="tool-name">圖片壓縮</b>
+          <span class="tool-desc">照片太大傳不上去？壓到上限內</span>
+          <span class="cta">開始壓縮 <span aria-hidden="true">→</span></span>
+        </span>
+        <span class="art" aria-hidden="true">
+          <svg viewBox="0 0 300 160">
+            <g><rect x="8" y="14" width="124" height="96" rx="12" class="page"/><circle cx="38" cy="42" r="10" class="sun"/><path d="M18 102l34-38 22 22 16-16 34 32z" class="play"/><rect x="30" y="120" width="80" height="30" rx="8" class="chip-bad"/><text x="70" y="140" class="chip-t">13 MB</text></g>
+            <g class="arrow"><path d="M142 64h36"/><path d="M170 54l10 10-10 10"/></g>
+            <g class="small"><rect x="196" y="30" width="94" height="72" rx="10" class="page"/><circle cx="218" cy="50" r="7" class="sun"/><path d="M204 96l24-27 16 16 11-11 27 22z" class="play"/><rect x="207" y="114" width="72" height="26" rx="7" class="chip-ok"/><text x="243" y="132" class="chip-t">9.8 MB</text><circle cx="286" cy="32" r="14" class="check-bg"/><path d="M279.5 32.5l4.5 4.5 8-9" class="check"/></g>
           </svg>
         </span>
       </a>

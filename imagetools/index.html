@@ -1,0 +1,147 @@
+<!doctype html>
+<html lang="zh-Hant-TW">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#ffffff">
+<title>ZhuyuanLoveImage・圖片壓縮</title>
+<meta name="description" content="照片太大傳不上去？把圖片壓到指定大小以內，畫質盡量保留，也能縮小尺寸、裁成正方形頭貼。圖片只在你的電腦裡處理，不會上傳。">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="ZhuyuanTools">
+<meta property="og:locale" content="zh_TW">
+<meta property="og:title" content="ZhuyuanLoveImage・圖片壓縮">
+<meta property="og:description" content="照片太大傳不上去？把圖片壓到指定大小以內，畫質盡量保留，也能縮小尺寸、裁成正方形頭貼。圖片只在你的電腦裡處理，不會上傳。">
+<meta property="og:url" content="https://tools.zhuyuan.tw/image">
+<meta property="og:image" content="https://tools.zhuyuan.tw/image/assets/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" href="assets/logo.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/fonts/noto-sans-tc.css">
+<link rel="stylesheet" href="assets/app.css">
+</head>
+<body>
+<div class="app">
+  <header class="top">
+    <a class="brand" id="brand" href="../home/index.html" title="回到 ZhuyuanTools 首頁">
+      <img class="logo" src="assets/logo.svg" alt="" width="44" height="44">
+      <span class="brand-text">
+        <span class="wordmark">Zhuyuan<span class="w-love">Love</span><span class="w-tool">Image</span></span>
+        <span class="tagline">圖片壓縮工具</span>
+      </span>
+    </a>
+    <p class="privacy">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="10" width="16" height="11" rx="2"></rect><path d="M8 10V7a4 4 0 0 1 8 0v3"></path></svg>
+      <span class="privacy-long">圖片只在你的電腦裡處理，不會上傳到任何伺服器。</span><span class="privacy-short">不上傳</span>
+    </p>
+  </header>
+
+  <main>
+    <section class="panel fill" id="tool" aria-labelledby="h1t">
+      <div class="hero" id="hero">
+        <div class="hero-text">
+          <h2 class="hero-title" id="h1t">照片太大傳不上去？<span>壓到<em>剛剛好</em></span></h2>
+          <p class="hero-count" id="heroCount" aria-live="polite">免費・免註冊・圖片不上傳</p>
+        </div>
+        <div class="hero-art" aria-hidden="true">
+          <svg viewBox="0 0 300 160" width="300" height="160">
+            <g class="ha-big">
+              <rect x="6" y="12" width="124" height="96" rx="12" class="ha-page"/>
+              <circle cx="36" cy="40" r="10" class="ha-sun"/>
+              <path d="M16 100l34-38 22 22 16-16 34 32z" class="ha-hill"/>
+              <rect x="28" y="120" width="80" height="30" rx="8" class="ha-chip-bad"/>
+              <text x="68" y="140" class="ha-chip-text">13 MB</text>
+            </g>
+            <g class="ha-arrow"><path d="M142 62h36"/><path d="M170 52l10 10-10 10"/></g>
+            <g class="ha-small">
+              <rect x="196" y="28" width="94" height="72" rx="10" class="ha-page"/>
+              <circle cx="218" cy="48" r="7" class="ha-sun"/>
+              <path d="M204 94l24-27 16 16 11-11 27 22z" class="ha-hill"/>
+              <rect x="207" y="112" width="72" height="26" rx="7" class="ha-chip-ok"/>
+              <text x="243" y="130" class="ha-chip-text">9.8 MB</text>
+              <circle cx="286" cy="30" r="14" class="ha-check-bg"/>
+              <path d="M279.5 30.5l4.5 4.5 8-9" class="ha-check"/>
+            </g>
+          </svg>
+        </div>
+      </div>
+
+      <div class="panel-body tool-body">
+        <div class="inputs">
+          <label class="drop" id="drop" for="fileInput">
+            <input type="file" id="fileInput" accept="image/*,.jpg,.jpeg,.png,.webp,.gif,.avif,.bmp,.heic,.heif" multiple aria-label="選擇圖片">
+            <span class="drop-inner">
+              <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="3"></rect><circle cx="9" cy="10" r="2"></circle><path d="m21 16-4.5-4.5L8 20"></path></svg>
+              <span class="drop-title"><span class="d-desk">把圖片拖進這裡</span><span class="d-mob">選擇圖片</span></span>
+              <span class="drop-hint"><span class="d-desk">或點一下選擇・</span>可以一次放很多張</span>
+            </span>
+          </label>
+
+          <details class="opts" id="opts" open>
+            <summary><span>設定</span><span class="opts-sum" id="optsSum"></span></summary>
+            <div class="set">
+              <span class="set-label" id="lblLimit">大小上限</span>
+              <div class="chips" role="radiogroup" aria-labelledby="lblLimit">
+                <label class="chip"><input type="radio" name="limit" value="0"><span>不限</span></label>
+                <label class="chip"><input type="radio" name="limit" value="1"><span>1 MB</span></label>
+                <label class="chip"><input type="radio" name="limit" value="2"><span>2 MB</span></label>
+                <label class="chip"><input type="radio" name="limit" value="5"><span>5 MB</span></label>
+                <label class="chip"><input type="radio" name="limit" value="10" checked><span>10 MB</span></label>
+                <label class="chip"><input type="radio" name="limit" value="custom"><span>自訂</span></label>
+                <span class="custom" id="customBox" hidden><input type="number" id="customMB" min="0.05" max="200" step="0.1" value="3" inputmode="decimal" aria-label="自訂上限（MB）"><span>MB</span></span>
+              </div>
+            </div>
+            <div class="set">
+              <span class="set-label" id="lblFmt">輸出格式</span>
+              <div class="seg" role="radiogroup" aria-labelledby="lblFmt">
+                <label title="照片最適合，到處都能開"><input type="radio" name="fmt" value="image/jpeg" checked><span>JPEG</span></label>
+                <label title="同畫質更小，新的網站和 App 都支援"><input type="radio" name="fmt" value="image/webp"><span>WebP</span></label>
+                <label title="無損、保留透明背景，但檔案大"><input type="radio" name="fmt" value="image/png"><span>PNG</span></label>
+                <label title="跟原檔一樣的格式"><input type="radio" name="fmt" value="same"><span>同原檔</span></label>
+              </div>
+            </div>
+            <div class="set two">
+              <div>
+                <label class="set-label" for="maxSide">最長邊</label>
+                <select class="select" id="maxSide">
+                  <option value="0">維持原始</option>
+                  <option value="4096">4096 px</option>
+                  <option value="3840">3840 px</option>
+                  <option value="2560">2560 px</option>
+                  <option value="2048">2048 px</option>
+                  <option value="1920">1920 px</option>
+                  <option value="1280">1280 px</option>
+                  <option value="1080">1080 px</option>
+                  <option value="800">800 px</option>
+                  <option value="512">512 px</option>
+                </select>
+              </div>
+              <label class="switch">
+                <input type="checkbox" id="square">
+                <span class="track" aria-hidden="true"></span>
+                <span class="sw-text"><b>裁成正方形</b><span class="help">頭貼用，從中間裁</span></span>
+              </label>
+            </div>
+          </details>
+        </div>
+
+        <div class="results" id="results" aria-live="polite"></div>
+      </div>
+
+      <div class="panel-foot">
+        <span class="foot-note" id="note">還沒有加入圖片。</span>
+        <button type="button" class="btn ghost" id="clearAll" disabled>清除全部</button>
+        <button type="button" class="btn primary" id="zipAll" disabled>全部下載（ZIP）</button>
+      </div>
+    </section>
+  </main>
+</div>
+
+<div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+
+<script src="/shared/zip.js"></script>
+<script src="assets/compress.js"></script>
+<script src="assets/app.js"></script>
+<script src="/shared/handoff.js" data-tool="image" data-input="#fileInput"></script>
+</body>
+</html>

@@ -7,8 +7,9 @@
   const $ = (s) => document.querySelector(s);
   const onServer = /^https?:$/.test(location.protocol);
   if (!onServer) for (const a of document.querySelectorAll('a[data-local]')) a.href = a.dataset.local;
-  const TOOL_URL = onServer ? { video: '/video', pdf: '/pdf' } : { video: '../videotools/index.html', pdf: '../pdftools/local/index.html' };
-  const TOOL_NAME = { video: '影片碼率壓縮', pdf: 'PDF 壓縮・拆分' };
+  const TOOL_URL = onServer ? { video: '/video', pdf: '/pdf', image: '/image' }
+    : { video: '../videotools/index.html', pdf: '../pdftools/local/index.html', image: '../imagetools/index.html' };
+  const TOOL_NAME = { video: '影片碼率壓縮', pdf: 'PDF 壓縮・拆分', image: '圖片壓縮' };
 
   // ---------- live numbers ----------
   function countUp(node, to) {
@@ -27,10 +28,11 @@
       .then((r) => (r.ok ? r.json() : null))
       .then((st) => {
         const v = (st && st.video) || {}, p = (st && st.pdf) || {};
-        const saved = (v.savedBytes || 0) + (p.savedBytes || 0);
+        const saved = (v.savedBytes || 0) + (p.savedBytes || 0) + (((st && st.image) || {}).savedBytes || 0);
         countUp($('[data-stat="video.files"]'), v.files || 0);
         countUp($('[data-stat="pdf.files"]'), p.files || 0);
         countUp($('[data-stat="avatar.files"]'), ((st && st.avatar) || {}).files || 0);
+        countUp($('[data-stat="image.files"]'), ((st && st.image) || {}).files || 0);
         if (saved > 0) $('[data-stat="saved"]').textContent = saved >= 1e9 ? `${(saved / 1e9).toFixed(1)} GB` : `${Math.max(1, Math.round(saved / 1e6))} MB`;
       })
       .catch(() => {});
@@ -44,7 +46,8 @@
     clearTimeout(toastTimer); toastTimer = setTimeout(() => { toast.hidden = true; }, ms);
   }
   const kindOf = (name, type) => (/pdf$/i.test(type || '') || /\.pdf$/i.test(name) ? 'pdf'
-    : /^video\//.test(type || '') || /\.(mp4|mov|m4v|mts|m2ts|ts|mkv|webm|mxf)$/i.test(name) ? 'video' : null);
+    : /^video\//.test(type || '') || /\.(mp4|mov|m4v|mts|m2ts|ts|mkv|webm|mxf)$/i.test(name) ? 'video'
+    : /^image\//.test(type || '') || /\.(jpe?g|png|webp|gif|avif|bmp|heic|heif)$/i.test(name) ? 'image' : null);
   // Small files travel as themselves; a big video travels as a file handle when the browser has one (no copy).
   const SMALL = 300e6, COPY_LIMIT = 2e9;
 
@@ -52,8 +55,8 @@
     const items = list.filter((x) => x.file);
     if (!items.length) return;
     const kinds = new Set(items.map((x) => kindOf(x.file.name, x.file.type)));
-    if (kinds.has(null)) { say('目前只有影片和 PDF 的工具，這個檔案還沒辦法處理'); return; }
-    if (kinds.size > 1) { say('影片和 PDF 要分開處理，請一次放同一種檔案'); return; }
+    if (kinds.has(null)) { say('目前只有影片、圖片和 PDF 的工具，這個檔案還沒辦法處理'); return; }
+    if (kinds.size > 1) { say('影片、圖片和 PDF 要分開處理，請一次放同一種檔案'); return; }
     const tool = [...kinds][0];
     drop.classList.add('busy');
     const entries = [];
@@ -74,13 +77,14 @@
     drop.classList.add('over');
     drop.classList.toggle('pdf', !!it && /pdf/.test(it.type));
     drop.classList.toggle('video', !!it && /^video\//.test(it.type));
+    drop.classList.toggle('image', !!it && /^image\//.test(it.type));
   });
-  drop.addEventListener('dragleave', (e) => { if (!drop.contains(e.relatedTarget)) drop.classList.remove('over', 'pdf', 'video'); });
+  drop.addEventListener('dragleave', (e) => { if (!drop.contains(e.relatedTarget)) drop.classList.remove('over', 'pdf', 'video', 'image'); });
   // anywhere on the page counts as the drop area
   window.addEventListener('dragover', (e) => e.preventDefault());
   window.addEventListener('drop', (e) => {
     e.preventDefault();
-    drop.classList.remove('over', 'pdf', 'video');
+    drop.classList.remove('over', 'pdf', 'video', 'image');
     if (!e.dataTransfer) return;
     // Items are only readable during the event, so ask for every handle right now.
     const pending = [...e.dataTransfer.items].filter((it) => it.kind === 'file').map((it) => ({
@@ -98,6 +102,7 @@
         handles = await window.showOpenFilePicker({ multiple: true, types: [
           { description: '影片', accept: { 'video/*': ['.mp4', '.mov', '.m4v', '.mts', '.m2ts', '.ts', '.mkv', '.webm', '.mxf'] } },
           { description: 'PDF', accept: { 'application/pdf': ['.pdf'] } },
+          { description: '圖片', accept: { 'image/*': ['.jpg', '.jpeg', '.png', '.webp', '.gif', '.avif', '.bmp', '.heic', '.heif'] } },
         ] });
       } catch (e) { if (e && e.name === 'AbortError') return; handles = null; }
       if (handles) { route(await Promise.all(handles.map(async (h) => ({ file: await h.getFile(), handle: h })))); return; }

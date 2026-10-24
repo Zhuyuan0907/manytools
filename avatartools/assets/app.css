@@ -162,6 +162,8 @@ main { min-height: 0; display: flex; flex-direction: column; }
 .set.two { grid-template-columns: auto auto; justify-content: start; gap: 8px 28px; }
 .set.two > div { display: grid; gap: 8px; }
 .set-label { font-weight: 700; font-size: .92rem; }
+.xlink a { color: var(--accent-strong); font-weight: 600; text-decoration: none; }
+.xlink a:hover { text-decoration: underline; }
 .def-name { margin-left: 6px; color: var(--accent-strong); font-weight: 600; font-size: .86rem; }
 textarea {
   width: 100%; resize: vertical; min-height: 96px; max-height: 260px; padding: 10px 12px; border-radius: 12px; border: 1px solid var(--line-strong);

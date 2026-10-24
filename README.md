@@ -10,6 +10,7 @@
 | `videotools/` | `/video` | 影片碼率壓縮：放入影片 → 影片資訊 → 壓縮設定 → 處理與下載 |
 | `pdftools/` | `/pdf` | PDF 壓縮・拆分（ZhuyuanLovePDF），網站用的是 `pdftools/local/` |
 | `avatartools/` | `/avatar` | Gravatar 頭貼查詢（ZhuyuanLoveAvatar）：Email 在瀏覽器裡轉成 SHA-256／MD5，查頭貼、公開資料，複製網址或打包下載 |
+| `imagetools/` | `/image` | 圖片壓縮（ZhuyuanLoveImage）：壓到指定大小以內（找上限內畫質最高的設定），可換 JPEG／WebP／PNG、縮小尺寸、裁成正方形頭貼，打包下載 |
 | `fonts/` | `/fonts` | 共用字型：Noto Sans TC（思源黑體，SIL OFL），自己網站提供，不從 Google 載入；蘋果裝置會直接用蘋方 |
 | `shared/` | `/shared` | 共用程式：`handoff.js` 把首頁拖進來的檔案交給工具頁（只在使用者的瀏覽器裡，IndexedDB／檔案控制代碼，不上傳） |
 | `server/` | — | 小伺服器：網址對應＋處理數量計數（只存數字） |
@@ -30,7 +31,7 @@ PORT=8090 HOST=0.0.0.0 node server/server.js
 只記錄數量，不記錄檔名或內容，存在 `server/data/stats.json`（可用 `STATS_FILE` 改位置）。
 
 - `GET /api/stats` → `{ video: { files, seconds, savedBytes }, pdf: { files, pages, savedBytes } }`
-- `POST /video/api/stats/processed`、`POST /pdf/api/stats/processed`、`POST /avatar/api/stats/processed`
+- `POST /video/api/stats/processed`、`POST /pdf/api/stats/processed`、`POST /avatar/api/stats/processed`、`POST /image/api/stats/processed`
 
 ## 影片工具的技術重點
 
