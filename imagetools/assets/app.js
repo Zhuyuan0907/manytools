@@ -1,10 +1,12 @@
 /* ZhuyuanLoveImage — squeeze pictures under a size limit, all in this browser (compress.js does the work, in
-   worker.js when a worker can start). Pictures re-run by themselves when a setting changes. On a server only
-   the counts (pictures, bytes saved) are reported, never a picture or its name. */
+   worker.js when a worker can start). Three steps: 1 drop pictures → 2 settings → 3 preview and download.
+   Pictures are compressed when step 3 opens, and again only if a setting changed. On a server only the counts
+   (pictures, bytes saved) are reported, never a picture or its name. */
 (() => {
   'use strict';
   const $ = (s, r = document) => r.querySelector(s);
   const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+  const fill = (node, ...kids) => node.replaceChildren(...kids.filter((x) => x != null && x !== false));
   const el = (tag, attrs = {}, ...kids) => {
     const n = document.createElement(tag);
     for (const [k, v] of Object.entries(attrs)) {
@@ -18,9 +20,11 @@
   const onServer = /^https?:$/.test(location.protocol);
   if (onServer) $('#brand').href = '/';
   const fmtBytes = (b) => (b >= 1e9 ? `${(b / 1e9).toFixed(2)} GB` : b >= 1e6 ? `${(b / 1e6).toFixed(1)} MB` : `${Math.max(1, Math.round(b / 1e3))} KB`);
+  const fmtLimit = (b) => `${+(b / 1e6).toFixed(2)} MB`;
   const pct = (a, b) => Math.max(0, Math.round((1 - a / b) * 100));
-  const TYPE_NAME = { 'image/jpeg': 'JPEG', 'image/webp': 'WebP', 'image/png': 'PNG' };
+  const TYPE_NAME = { 'image/jpeg': 'JPEG', 'image/webp': 'WebP', 'image/png': 'PNG', 'image/gif': 'GIF', 'image/avif': 'AVIF', 'image/bmp': 'BMP', 'image/heic': 'HEIC', 'image/heif': 'HEIF' };
   const EXT = { 'image/jpeg': 'jpg', 'image/webp': 'webp', 'image/png': 'png' };
+  const KEEPABLE = ['image/jpeg', 'image/webp', 'image/png'];
 
   // ---------- settings ----------
   function settings() {
@@ -29,24 +33,10 @@
     return { limit: Math.round(mb * 1e6), fmt: $('input[name=fmt]:checked').value, maxSide: +$('#maxSide').value, square: $('#square').checked };
   }
   // "same as the file" keeps JPEG/PNG/WebP; anything else (GIF, BMP, AVIF, HEIC) becomes JPEG
-  const outType = (file, s) => (s.fmt !== 'same' ? s.fmt : TYPE_NAME[file.type] ? file.type : 'image/jpeg');
-  function summarize() {
-    const s = settings();
-    $('#optsSum').textContent = [s.limit ? `${+(s.limit / 1e6).toFixed(2)} MB 以內` : '不限大小', s.fmt === 'same' ? '同原檔' : TYPE_NAME[s.fmt],
-      s.maxSide ? `最長 ${s.maxSide}px` : '原尺寸', s.square ? '正方形' : null].filter(Boolean).join('・');
-  }
-  const optsBox = $('#opts');
-  if (matchMedia('(max-width: 640px)').matches) optsBox.open = false;
-  let settingsTimer;
-  function settingsChanged() {
-    $('#customBox').hidden = $('input[name=limit]:checked').value !== 'custom';
-    summarize();
-    clearTimeout(settingsTimer);
-    settingsTimer = setTimeout(() => { for (const it of items) if (it.status !== 'error' || it.code === 'limit') it.status = 'wait'; restart(); }, 350);
-  }
-  for (const n of $$('input[name=limit], input[name=fmt], #maxSide, #square')) n.addEventListener('change', settingsChanged);
-  $('#customMB').addEventListener('input', settingsChanged);
-  summarize();
+  const outType = (file, s) => (s.fmt !== 'same' ? s.fmt : KEEPABLE.includes(file.type) ? file.type : 'image/jpeg');
+  const keyOf = (s) => JSON.stringify(s);
+  for (const n of $$('input[name=limit], input[name=fmt], #maxSide, #square')) n.addEventListener('change', () => { $('#customBox').hidden = $('input[name=limit]:checked').value !== 'custom'; render(); });
+  $('#customMB').addEventListener('input', render);
 
   // ---------- the engine: a worker when possible, the page otherwise ----------
   let worker = null;
@@ -67,129 +57,184 @@
     catch (err) { return { ok: false, code: err.code || 'error' }; }
   }
 
-  // ---------- pictures ----------
+  // ---------- steps ----------
+  const S = { step: 1, ran: false };
+  const STEP_NAMES = ['放入圖片', '壓縮設定', '預覽與下載'];
   let items = [], nextId = 1;
+  const readable = () => items.filter((it) => !it.unreadable);
+  function allowed(n) {
+    if (n === 1) return true;
+    if (n === 2) return readable().length > 0 && items.every((it) => it.w || it.unreadable);
+    return allowed(2) && S.ran;
+  }
+  function goto(n) {
+    if (!allowed(n)) return;
+    S.step = n;
+    for (let i = 1; i <= 3; i++) $(`#step${i}`).hidden = i !== n;
+    if (n === 3) startRun();
+    render();
+  }
+  document.addEventListener('click', (e) => { const b = e.target.closest('[data-goto]'); if (b && !b.disabled) goto(+b.dataset.goto); });
+  $('#next1').addEventListener('click', () => goto(2));
+  $('#next2').addEventListener('click', () => { S.ran = true; goto(3); });
+  function renderStepper() {
+    for (const b of $$('.stepper button')) {
+      const n = +b.dataset.goto;
+      b.classList.toggle('current', n === S.step);
+      b.classList.toggle('done', n < S.step);
+      b.disabled = !allowed(n);
+      b.setAttribute('aria-current', n === S.step ? 'step' : 'false');
+    }
+    $('#mStep').replaceChildren(`步驟 ${S.step}／3・`, el('b', { text: STEP_NAMES[S.step - 1] }));
+  }
+  function render() {
+    renderStepper();
+    if (S.step === 1) renderStep1();
+    if (S.step === 2) renderStep2();
+    if (S.step === 3) renderStep3();
+  }
+
+  // ---------- step 1: pictures ----------
   const drop = $('#drop'), input = $('#fileInput');
   input.addEventListener('change', () => { add(input.files); input.value = ''; });
   for (const t of ['dragenter', 'dragover']) drop.addEventListener(t, (e) => { e.preventDefault(); drop.classList.add('is-over'); });
   for (const t of ['dragleave', 'drop']) drop.addEventListener(t, () => drop.classList.remove('is-over'));
   window.addEventListener('dragover', (e) => e.preventDefault());
-  window.addEventListener('drop', (e) => { e.preventDefault(); if (e.dataTransfer) add(e.dataTransfer.files); });
+  window.addEventListener('drop', (e) => { e.preventDefault(); if (S.step === 1 && e.dataTransfer) add(e.dataTransfer.files); });
 
   const isImage = (f) => /^image\//.test(f.type) || /\.(jpe?g|png|webp|gif|avif|bmp|heic|heif)$/i.test(f.name);
+  const isHeic = (f) => /\.(heic|heif)$/i.test(f.name) || /hei[cf]/i.test(f.type);
+  const typeName = (f) => TYPE_NAME[f.type] || (isHeic(f) ? 'HEIC' : (f.name.split('.').pop() || '').toUpperCase());
   function add(list) {
     const files = [...list].filter(isImage);
     if (!files.length) { if (list.length) toast('這不是圖片檔'); return; }
     for (const file of files) {
       if (items.some((it) => it.file.name === file.name && it.file.size === file.size)) continue;
-      const it = { id: nextId++, file, src: URL.createObjectURL(file), status: 'wait', open: false, w: 0, h: 0 };
+      const it = { id: nextId++, file, src: URL.createObjectURL(file), status: 'wait', open: false, w: 0, h: 0, unreadable: false, key: null };
       items.push(it);
       const probe = new Image();
       probe.onload = () => { it.w = probe.naturalWidth; it.h = probe.naturalHeight; render(); };
+      probe.onerror = () => { it.unreadable = true; render(); };
       probe.src = it.src;
     }
-    if (items.length === 1) items[0].open = true;
-    else for (const it of items) if (it.autoOpen) it.open = false;
-    if (items.length === 1) items[0].autoOpen = true;
-    restart();
+    render();
   }
   function remove(it) {
     items = items.filter((x) => x !== it);
     URL.revokeObjectURL(it.src);
-    if (it.result && it.result.url) URL.revokeObjectURL(it.result.url);
-    render();
+    if (it.result && !it.result.kept) URL.revokeObjectURL(it.result.url);
+    if (!readable().length && S.step !== 1) goto(1); else render();
   }
-  $('#clearAll').addEventListener('click', () => { for (const it of [...items]) remove(it); restart(); });
+  const unreadableText = (it) => (isHeic(it.file)
+    ? '這個瀏覽器看不懂 HEIC。iPhone 可到「設定 > 相機 > 格式」選「最相容」，或改用 Safari'
+    : '看不懂這張圖片，可能檔案壞了或格式不支援');
+  function renderStep1() {
+    $('#step1').classList.toggle('has-files', items.length > 0);
+    $('#sources').replaceChildren(...items.map((it) => {
+      const meta = it.unreadable ? unreadableText(it) : it.w ? `${fmtBytes(it.file.size)}・${it.w}×${it.h}・${typeName(it.file)}` : '讀取中…';
+      return el('li', { class: 'src' },
+        it.unreadable ? el('span', { class: 'src-th none', text: '?' }) : el('img', { class: 'src-th', src: it.src, alt: '' }),
+        el('span', { class: 'src-text' },
+          el('span', { class: 'src-name', text: it.file.name, title: it.file.name }),
+          el('span', { class: `src-meta${it.unreadable ? ' bad' : ''}`, text: meta, title: meta })),
+        el('button', { type: 'button', class: 'icon-btn', 'aria-label': `移除 ${it.file.name}`, title: '移除', text: '×', onclick: () => remove(it) }));
+    }));
+    const ok = readable(), size = ok.reduce((a, it) => a + it.file.size, 0);
+    $('#note1').textContent = !items.length ? '還沒有加入圖片。' : `${ok.length} 張圖片・共 ${fmtBytes(size)}${items.length > ok.length ? `・${items.length - ok.length} 張讀不了` : ''}`;
+    $('#next1').disabled = !allowed(2);
+  }
 
-  // one picture at a time; a settings change starts a new pass and the old one stops at its next step
+  // ---------- step 2: settings, and what will happen ----------
+  function renderStep2() {
+    const s = settings(), ok = readable();
+    const kept = ok.filter((it) => s.limit && it.file.size <= s.limit && !s.square && !(s.maxSide && Math.max(it.w, it.h) > s.maxSide) && outType(it.file, s) === it.file.type);
+    const lines = [];
+    lines.push(s.limit ? el('li', {}, '壓到 ', el('b', { text: `${fmtLimit(s.limit)} 以內` }), '，畫質盡量保留') : el('li', {}, '不限大小，用 ', el('b', { text: '85% 畫質' }), '重新存檔'));
+    if (kept.length) lines.push(el('li', {}, el('b', { text: `${kept.length} 張` }), '原本就符合，直接給原檔'));
+    lines.push(el('li', {}, '輸出成 ', el('b', { text: s.fmt === 'same' ? '原本的格式' : TYPE_NAME[s.fmt] }), s.fmt === 'same' && ok.some((it) => !KEEPABLE.includes(it.file.type)) ? '（GIF、HEIC 這類轉成 JPEG）' : ''));
+    if (s.maxSide) lines.push(el('li', {}, '最長邊縮到 ', el('b', { text: `${s.maxSide} px` })));
+    if (s.square) lines.push(el('li', {}, '從中間', el('b', { text: '裁成正方形' })));
+    if (s.fmt === 'image/jpeg' && ok.some((it) => /png|webp|gif/.test(it.file.type))) lines.push(el('li', { class: 'warn' }, '透明的地方會變成白色'));
+    if (items.length > ok.length) lines.push(el('li', { class: 'warn' }, `${items.length - ok.length} 張讀不了，會略過`));
+    $('#plan').replaceChildren(...lines);
+    $('#note2').textContent = `${ok.length} 張・共 ${fmtBytes(ok.reduce((a, it) => a + it.file.size, 0))}`;
+    $('#next2').textContent = ok.length > 1 ? `開始壓縮 ${ok.length} 張 →` : '開始壓縮 →';
+  }
+
+  // ---------- step 3: compress, preview, download ----------
   let pass = 0, running = false;
-  function restart() { pass++; render(); if (!running) loop(); }
+  function startRun() {
+    const key = keyOf(settings());
+    for (const it of readable()) if (it.key !== key) { it.status = 'wait'; it.key = key; }
+    pass++;
+    if (!running) loop();
+  }
   async function loop() {
     running = true;
     for (;;) {
-      const it = items.find((x) => x.status === 'wait');
+      const it = items.find((x) => x.status === 'wait' && !x.unreadable);
       if (!it) break;
-      const my = pass, s = settings();
+      const s = settings(), key = keyOf(s);
       it.status = 'busy';
       render();
       const type = outType(it.file, s);
       // already within the limit and nothing asked to change: hand back the original, untouched
       const resize = s.maxSide && Math.max(it.w, it.h) > s.maxSide;
-      if (s.limit && it.file.size <= s.limit && !s.square && !resize && type === it.file.type) {
-        setResult(it, { kept: true, blob: it.file, width: it.w, height: it.h, quality: null, type });
-        continue;
-      }
-      const r = await squeeze(it.file, { type, limit: s.limit, maxSide: s.maxSide, square: s.square });
-      if (my !== pass && it.status === 'wait') continue; // settings changed meanwhile; this one runs again
+      let r;
+      if (s.limit && it.file.size <= s.limit && !s.square && !resize && type === it.file.type) r = { ok: true, kept: true, blob: it.file, width: it.w, height: it.h, quality: null };
+      else r = await squeeze(it.file, { type, limit: s.limit, maxSide: s.maxSide, square: s.square });
       if (!items.includes(it)) continue;
-      if (r.ok) setResult(it, { kept: false, blob: r.blob, width: r.width, height: r.height, quality: r.quality, type });
-      else { it.status = 'error'; it.code = r.code; render(); }
+      if (it.key !== key) { it.status = 'wait'; continue; } // settings changed meanwhile; this one runs again
+      if (r.ok) setResult(it, { ...r, type });
+      else { it.status = 'error'; it.code = r.code; }
+      render();
     }
     running = false;
     render();
   }
   function setResult(it, r) {
-    if (it.result && it.result.url && !it.result.kept) URL.revokeObjectURL(it.result.url);
-    it.result = { ...r, url: r.kept ? it.src : URL.createObjectURL(r.blob), size: r.blob.size };
+    if (it.result && !it.result.kept) URL.revokeObjectURL(it.result.url);
+    it.result = { kept: !!r.kept, blob: r.blob, width: r.width, height: r.height, quality: r.quality, type: r.type, url: r.kept ? it.src : URL.createObjectURL(r.blob), size: r.blob.size };
     it.status = 'done';
     count(it);
-    render();
   }
 
-  // ---------- results ----------
-  function errText(it) {
-    if (it.code === 'limit') return '壓不到這麼小，請把上限調大或縮小尺寸';
-    if (/\.(heic|heif)$/i.test(it.file.name) || /hei[cf]/i.test(it.file.type)) return '這個瀏覽器看不懂 HEIC。iPhone 可到「設定 > 相機 > 格式」選「最相容」，或改用 Safari';
-    return '看不懂這張圖片，可能檔案壞了或格式不支援';
-  }
-  function render() {
-    const box = $('#results');
-    $('#tool').classList.toggle('has-results', items.length > 0);
-    if (!items.length) {
-      box.replaceChildren(el('div', { class: 'empty' },
-        el('span', { class: 'ring', html: '<svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="3"/><circle cx="9" cy="10" r="2"/><path d="m21 16-4.5-4.5L8 20"/></svg>' }),
-        el('b', { text: '壓好的圖片會出現在這裡' }),
-        el('span', { text: '放進來就會自動壓，改設定也會馬上重算' })));
-    } else {
-      const done = items.filter((it) => it.status === 'done');
-      const src = done.reduce((a, it) => a + it.file.size, 0), out = done.reduce((a, it) => a + it.result.size, 0);
-      const busy = items.filter((it) => it.status === 'busy' || it.status === 'wait').length;
-      box.replaceChildren(
-        el('p', { class: 'sum' }, el('span', {}, el('b', { text: items.length }), ' 張'),
-          done.length ? el('span', {}, `${fmtBytes(src)} → `, el('b', { text: fmtBytes(out) }), `，省下 ${pct(out, src)}%`) : null,
-          busy ? el('span', { text: `${busy} 張處理中…` }) : null),
-        el('ol', { class: 'list' }, ...items.map(row)));
-    }
-    const done = items.filter((it) => it.status === 'done');
-    $('#note').textContent = !items.length ? '還沒有加入圖片。' : `${items.length} 張・${done.length} 張完成`;
+  function renderStep3() {
+    const ok = readable(), done = ok.filter((it) => it.status === 'done');
+    const busy = ok.filter((it) => it.status === 'busy' || it.status === 'wait').length;
+    if (ok.length === 1 && !ok[0].touched) ok[0].open = true;
+    const src = done.reduce((a, it) => a + it.file.size, 0), out = done.reduce((a, it) => a + it.result.size, 0);
+    fill($('#sum'), 
+      el('span', {}, el('b', { text: ok.length }), ' 張'),
+      done.length ? el('span', {}, `${fmtBytes(src)} → `, el('b', { text: fmtBytes(out) }), `，省下 ${pct(out, src)}%`) : null,
+      busy ? el('span', { text: `${busy} 張壓縮中…` }) : null);
+    $('#h3p').textContent = busy ? '壓縮中，圖片只在你的電腦裡處理' : ok.length > 1 ? '點一張圖，左右拖動比較原圖和壓縮後' : '左右拖動比較原圖和壓縮後';
+    $('#results').replaceChildren(...ok.map(row));
+    $('#note3').textContent = busy ? `${done.length} / ${ok.length} 張完成` : `${done.length} 張完成`;
     // one picture comes as itself; only two or more are worth a ZIP
-    $('#zipAll').disabled = !done.length;
+    $('#zipAll').disabled = !done.length || busy > 0;
     $('#zipAll').textContent = done.length === 1 ? '下載圖片' : '全部下載（ZIP）';
-    $('#clearAll').disabled = !items.length;
-    $('.panel-foot').classList.toggle('solo', items.length <= 1);
   }
-
+  const errText = (it) => (it.code === 'limit' ? '壓不到這麼小，請把上限調大或縮小尺寸' : '這張沒辦法壓縮，可能檔案壞了');
   function row(it) {
     const r = it.result, busy = it.status === 'busy' || it.status === 'wait';
     const sub = el('span', { class: 'size' });
     if (busy) sub.textContent = it.status === 'busy' ? '壓縮中…' : '等待中…';
-    else if (it.status === 'error') { sub.className = 'bad'; sub.textContent = errText(it); sub.title = errText(it); }
+    else if (it.status === 'error') { sub.className = 'bad'; sub.textContent = errText(it); }
     else if (r.kept) sub.append(`${fmtBytes(it.file.size)}・原檔就在上限內，不用壓縮`);
     else sub.append(`${fmtBytes(it.file.size)} → `, el('b', { text: fmtBytes(r.size) }), ' ', el('span', { class: 'saved', text: `-${pct(r.size, it.file.size)}%` }), el('span', { class: 'dim', text: `・${r.width}×${r.height}` }));
-    const toggle = () => { if (it.status !== 'done') return; it.open = !it.open; it.autoOpen = false; render(); };
+    const toggle = () => { if (it.status !== 'done') return; it.open = !it.open; it.touched = true; render(); };
     const main = el('div', { class: 'row-main', role: 'button', tabindex: '0', 'aria-expanded': String(!!it.open), onclick: toggle,
       onkeydown: (e) => { if (e.target === e.currentTarget && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); toggle(); } } },
-      it.status === 'error' ? el('span', { class: 'th none', text: '?' }) : el('img', { class: 'th', src: r && !r.kept ? r.url : it.src, alt: '', width: 56, height: 56 }),
+      el('img', { class: 'th', src: r && !r.kept ? r.url : it.src, alt: '', width: 56, height: 56 }),
       el('span', { class: 'who' }, el('b', { text: it.file.name, title: it.file.name }), sub),
       el('span', { class: 'row-acts' },
         busy ? el('span', { class: 'spinner', 'aria-label': '處理中' }) : null,
-        it.status === 'done' ? el('button', { type: 'button', class: 'btn', text: '下載', onclick: (e) => { e.stopPropagation(); download(it); } }) : null,
-        !busy ? el('button', { type: 'button', class: 'icon-btn sm', title: '移除', 'aria-label': `移除 ${it.file.name}`, text: '×', onclick: (e) => { e.stopPropagation(); remove(it); } }) : null));
+        it.status === 'done' ? el('button', { type: 'button', class: 'btn', text: '下載', onclick: (e) => { e.stopPropagation(); download(it); } }) : null));
     const li = el('li', { class: `row${it.open && it.status === 'done' ? ' open' : ''}` }, main);
     if (it.open && it.status === 'done') li.append(detail(it));
     return li;
   }
-
   function detail(it) {
     const r = it.result;
     const cmp = el('div', { class: 'compare' },
@@ -222,7 +267,7 @@
   }
   const download = (it) => save(it.result.blob, outName(it));
   $('#zipAll').addEventListener('click', async () => {
-    const done = items.filter((it) => it.status === 'done');
+    const done = readable().filter((it) => it.status === 'done');
     if (done.length === 1) { download(done[0]); return; }
     const used = new Set(), files = [];
     for (const it of done) {
@@ -232,6 +277,11 @@
       files.push({ name, data: new Uint8Array(await it.result.blob.arrayBuffer()) });
     }
     save(ManyZip.make(files), `圖片壓縮-${files.length}張.zip`);
+  });
+  $('#restart').addEventListener('click', () => {
+    for (const it of items) { URL.revokeObjectURL(it.src); if (it.result && !it.result.kept) URL.revokeObjectURL(it.result.url); }
+    items = []; S.ran = false;
+    goto(1);
   });
 
   // ---------- the counter ----------
@@ -250,11 +300,12 @@
       const st = r.ok ? await r.json() : null;
       if (st && st.files > 0) {
         const gb = st.savedBytes / 1e9;
-        $('#heroCount').replaceChildren('已幫大家壓了 ', el('b', { class: 'hero-num', text: st.files.toLocaleString('zh-TW') }), ' 張圖片',
+        fill($('#heroCount'), '已幫大家壓了 ', el('b', { class: 'hero-num', text: st.files.toLocaleString('zh-TW') }), ' 張圖片',
           st.savedBytes > 0 ? el('span', { class: 'hero-extra', text: `・省下 ${gb >= 1 ? `${gb.toFixed(1)} GB` : `${Math.max(1, Math.round(st.savedBytes / 1e6))} MB`}` }) : null);
       }
     } catch {}
   }
+  window.addEventListener('beforeunload', (e) => { if (running) { e.preventDefault(); e.returnValue = ''; } });
   loadStats();
   render();
 })();

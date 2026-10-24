@@ -36,8 +36,18 @@
     </p>
   </header>
 
+  <nav class="stepper" aria-label="步驟">
+    <p class="m-step" id="mStep" aria-hidden="true"></p>
+    <ol>
+      <li><button type="button" data-goto="1"><span class="dot">1</span><span class="lbl">放入圖片</span></button></li>
+      <li><button type="button" data-goto="2"><span class="dot">2</span><span class="lbl">壓縮設定</span></button></li>
+      <li><button type="button" data-goto="3"><span class="dot">3</span><span class="lbl">預覽與下載</span></button></li>
+    </ol>
+  </nav>
+
   <main>
-    <section class="panel fill" id="tool" aria-labelledby="h1t">
+    <!-- ============ STEP 1 ============ -->
+    <section class="panel" id="step1" aria-labelledby="h1t">
       <div class="hero" id="hero">
         <div class="hero-text">
           <h2 class="hero-title" id="h1t">照片太大傳不上去？<span>壓到<em>剛剛好</em></span></h2>
@@ -65,20 +75,40 @@
           </svg>
         </div>
       </div>
+      <div class="panel-body step1-body">
+        <label class="drop" id="drop" for="fileInput">
+          <input type="file" id="fileInput" accept="image/*,.jpg,.jpeg,.png,.webp,.gif,.avif,.bmp,.heic,.heif" multiple aria-label="選擇圖片">
+          <span class="drop-inner">
+            <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="3"></rect><circle cx="9" cy="10" r="2"></circle><path d="m21 16-4.5-4.5L8 20"></path></svg>
+            <span class="drop-title"><span class="d-desk">把圖片拖進這裡</span><span class="d-mob">選擇圖片</span></span>
+            <span class="drop-hint"><span class="d-desk">或點一下選擇檔案・</span>可以一次放很多張</span>
+          </span>
+        </label>
+        <ol class="how" aria-label="怎麼用">
+          <li><span class="how-no">1</span><b>放入圖片</b><span>JPG・PNG・WebP 都可以</span></li>
+          <li><span class="how-no">2</span><b>選大小上限</b><span>例如 10 MB 以內</span></li>
+          <li><span class="how-no">3</span><b>預覽並下載</b><span>畫質盡量保留</span></li>
+        </ol>
+        <ol class="sources" id="sources" aria-label="已加入的圖片"></ol>
+      </div>
+      <div class="panel-foot">
+        <span class="foot-note" id="note1">還沒有加入圖片。</span>
+        <button type="button" class="btn primary" id="next1" disabled>下一步：壓縮設定 →</button>
+      </div>
+    </section>
 
-      <div class="panel-body tool-body">
-        <div class="inputs">
-          <label class="drop" id="drop" for="fileInput">
-            <input type="file" id="fileInput" accept="image/*,.jpg,.jpeg,.png,.webp,.gif,.avif,.bmp,.heic,.heif" multiple aria-label="選擇圖片">
-            <span class="drop-inner">
-              <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="3"></rect><circle cx="9" cy="10" r="2"></circle><path d="m21 16-4.5-4.5L8 20"></path></svg>
-              <span class="drop-title"><span class="d-desk">把圖片拖進這裡</span><span class="d-mob">選擇圖片</span></span>
-              <span class="drop-hint"><span class="d-desk">或點一下選擇・</span>可以一次放很多張</span>
-            </span>
-          </label>
-
-          <details class="opts" id="opts" open>
-            <summary><span>設定</span><span class="opts-sum" id="optsSum"></span></summary>
+    <!-- ============ STEP 2 ============ -->
+    <section class="panel" id="step2" aria-labelledby="h2t" hidden>
+      <div class="panel-head">
+        <span class="step-no" aria-hidden="true">2</span>
+        <div class="head-text">
+          <h2 id="h2t">要壓到多大？</h2>
+          <p>設定會套用到每一張圖片。</p>
+        </div>
+      </div>
+      <div class="panel-body">
+        <div class="settings">
+          <div class="set-col">
             <div class="set">
               <span class="set-label" id="lblLimit">大小上限</span>
               <div class="chips" role="radiogroup" aria-labelledby="lblLimit">
@@ -90,47 +120,72 @@
                 <label class="chip"><input type="radio" name="limit" value="custom"><span>自訂</span></label>
                 <span class="custom" id="customBox" hidden><input type="number" id="customMB" min="0.05" max="200" step="0.1" value="3" inputmode="decimal" aria-label="自訂上限（MB）"><span>MB</span></span>
               </div>
+              <p class="help">找出上限內畫質最高的設定；原本就符合的直接給原檔</p>
             </div>
             <div class="set">
               <span class="set-label" id="lblFmt">輸出格式</span>
               <div class="seg" role="radiogroup" aria-labelledby="lblFmt">
+                <label title="跟原檔一樣的格式（HEIC、GIF 這類會轉成 JPEG）"><input type="radio" name="fmt" value="same" checked><span>同原檔</span></label>
                 <label title="照片最適合，到處都能開"><input type="radio" name="fmt" value="image/jpeg"><span>JPEG</span></label>
                 <label title="同畫質更小，新的網站和 App 都支援"><input type="radio" name="fmt" value="image/webp"><span>WebP</span></label>
                 <label title="無損、保留透明背景，但檔案大"><input type="radio" name="fmt" value="image/png"><span>PNG</span></label>
-                <label title="跟原檔一樣的格式（HEIC、GIF 這類會轉成 JPEG）"><input type="radio" name="fmt" value="same" checked><span>同原檔</span></label>
               </div>
             </div>
-            <div class="set two">
-              <div>
-                <label class="set-label" for="maxSide">最長邊</label>
-                <select class="select" id="maxSide">
-                  <option value="0">維持原始</option>
-                  <option value="4096">4096 px</option>
-                  <option value="3840">3840 px</option>
-                  <option value="2560">2560 px</option>
-                  <option value="2048">2048 px</option>
-                  <option value="1920">1920 px</option>
-                  <option value="1280">1280 px</option>
-                  <option value="1080">1080 px</option>
-                  <option value="800">800 px</option>
-                  <option value="512">512 px</option>
-                </select>
-              </div>
+          </div>
+          <div class="set-col">
+            <div class="set">
+              <label class="set-label" for="maxSide">最長邊</label>
+              <select class="select" id="maxSide">
+                <option value="0">維持原始尺寸</option>
+                <option value="4096">4096 px</option>
+                <option value="3840">3840 px</option>
+                <option value="2560">2560 px</option>
+                <option value="2048">2048 px</option>
+                <option value="1920">1920 px</option>
+                <option value="1280">1280 px</option>
+                <option value="1080">1080 px</option>
+                <option value="800">800 px</option>
+                <option value="512">512 px</option>
+              </select>
+            </div>
+            <div class="set">
               <label class="switch">
                 <input type="checkbox" id="square">
                 <span class="track" aria-hidden="true"></span>
                 <span class="sw-text"><b>裁成正方形</b><span class="help">頭貼用，從中間裁</span></span>
               </label>
             </div>
-          </details>
+            <div class="set">
+              <span class="set-label">接下來會</span>
+              <ul class="plan" id="plan"></ul>
+            </div>
+          </div>
         </div>
-
-        <div class="results" id="results" aria-live="polite"></div>
       </div>
-
       <div class="panel-foot">
-        <span class="foot-note" id="note">還沒有加入圖片。</span>
-        <button type="button" class="btn ghost" id="clearAll" disabled>清除全部</button>
+        <button type="button" class="btn back" data-goto="1" aria-label="上一步"><span aria-hidden="true">←</span><span class="lbl">上一步</span></button>
+        <span class="foot-note" id="note2"></span>
+        <button type="button" class="btn primary" id="next2">開始壓縮 →</button>
+      </div>
+    </section>
+
+    <!-- ============ STEP 3 ============ -->
+    <section class="panel" id="step3" aria-labelledby="h3t" hidden>
+      <div class="panel-head">
+        <span class="step-no" aria-hidden="true">3</span>
+        <div class="head-text">
+          <h2 id="h3t">預覽與下載</h2>
+          <p id="h3p">點一張圖，左右拖動比較原圖和壓縮後</p>
+        </div>
+      </div>
+      <div class="panel-body step3-body">
+        <p class="sum" id="sum"></p>
+        <ol class="list" id="results" aria-label="壓縮結果"></ol>
+        <button type="button" class="btn small restart" id="restart"><span aria-hidden="true">↺</span> 換一批圖片重新開始</button>
+      </div>
+      <div class="panel-foot">
+        <button type="button" class="btn back" data-goto="2" aria-label="回去修改設定"><span aria-hidden="true">←</span><span class="lbl">回去修改設定</span></button>
+        <span class="foot-note" id="note3"></span>
         <button type="button" class="btn primary" id="zipAll" disabled>全部下載（ZIP）</button>
       </div>
     </section>
@@ -143,5 +198,6 @@
 <script src="assets/compress.js"></script>
 <script src="assets/app.js"></script>
 <script src="/shared/handoff.js" data-tool="image" data-input="#fileInput"></script>
+<script src="/shared/mobile-nav.js"></script>
 </body>
 </html>

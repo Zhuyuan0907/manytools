@@ -1,11 +1,13 @@
 /* ZhuyuanLoveAvatar — Gravatar avatars from email addresses, worked out in this browser.
    How Gravatar finds a picture: trim the address, lower-case it, hash it (SHA-256 now, MD5 on older systems),
    then ask https://gravatar.com/avatar/<hash>. Only that hash goes to Gravatar; the address never reaches us.
+   Three steps: 1 enter addresses → 2 pick the look (live preview) → 3 get the avatars.
    On a server only a count of looked-up addresses is reported, nothing else. */
 (() => {
   'use strict';
   const $ = (s, r = document) => r.querySelector(s);
   const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+  const fill = (node, ...kids) => node.replaceChildren(...kids.filter((x) => x != null && x !== false));
   const el = (tag, attrs = {}, ...kids) => {
     const n = document.createElement(tag);
     for (const [k, v] of Object.entries(attrs)) {
@@ -70,6 +72,7 @@
   });
   const hashOf = (e, o) => (o.hash === 'md5' ? e.md5 : e.sha);
   const urlOf = (e, o, size = o.size) => `${GRAVATAR}${hashOf(e, o)}?s=${size}&d=${encodeURIComponent(o.d)}&r=${o.r}`;
+  const defName = (d) => DEFAULTS.find(([v]) => v === d)[1];
 
   // the default-image picker shows the real images, drawn for a sample address
   (async () => {
@@ -78,26 +81,49 @@
       el('input', { type: 'radio', name: 'def', value: v, checked: i === 0 ? '' : null, 'aria-label': label }),
       el('span', {}, v === '404' ? el('b', { class: 'none', text: '不顯示' })
         : el('img', { src: `${GRAVATAR}${sample}?s=96&d=${v}&f=y`, alt: '', loading: 'lazy', width: 48, height: 48 })))));
-    for (const n of $$('input[name=def]')) n.addEventListener('change', () => { $('#defName').textContent = DEFAULTS.find(([v]) => v === n.value)[1]; render(); });
+    for (const n of $$('input[name=def]')) n.addEventListener('change', () => { $('#defName').textContent = defName(n.value); render(); });
   })();
   for (const n of $$('input[name=size], input[name=hash]')) n.addEventListener('change', render);
-  // phones: the options fold into one line under the results; a summary says what's chosen
-  const optsBox = $('#opts');
-  if (matchMedia('(max-width: 640px)').matches) optsBox.open = false;
-  function summarize() {
-    const o = opts();
-    $('#optsSum').textContent = `${o.size}px・${DEFAULTS.find(([v]) => v === o.d)[1]}・${o.r.toUpperCase()}・${o.hash === 'md5' ? 'MD5' : 'SHA-256'}`;
-  }
   for (const n of $$('input[name=rating]')) n.addEventListener('change', () => { for (const e of list) check(e); render(); });
 
-  // ---------- reading the addresses ----------
+  // ---------- steps ----------
+  const S = { step: 1 };
+  const STEP_NAMES = ['輸入 Email', '選擇樣式', '取得頭貼'];
+  const allowed = (n) => n === 1 || list.length > 0;
+  function goto(n) {
+    if (!allowed(n)) return;
+    S.step = n;
+    for (let i = 1; i <= 3; i++) $(`#step${i}`).hidden = i !== n;
+    if (n === 3) countNew();
+    render();
+  }
+  document.addEventListener('click', (e) => { const b = e.target.closest('[data-goto]'); if (b && !b.disabled) goto(+b.dataset.goto); });
+  $('#next1').addEventListener('click', () => goto(2));
+  $('#next2').addEventListener('click', () => goto(3));
+  function renderStepper() {
+    for (const b of $$('.stepper button')) {
+      const n = +b.dataset.goto;
+      b.classList.toggle('current', n === S.step);
+      b.classList.toggle('done', n < S.step);
+      b.disabled = !allowed(n);
+      b.setAttribute('aria-current', n === S.step ? 'step' : 'false');
+    }
+    $('#mStep').replaceChildren(`步驟 ${S.step}／3・`, el('b', { text: STEP_NAMES[S.step - 1] }));
+  }
+  function render() {
+    renderStepper();
+    if (S.step === 1) renderStep1();
+    if (S.step === 2) renderStep2();
+    if (S.step === 3) renderStep3();
+  }
+
+  // ---------- step 1: reading the addresses ----------
   const EMAIL = /[^\s@<>()[\],;:"'，；、]+@[^\s@<>()[\],;:"'，；、]+\.[^\s@<>()[\],;:"'，；、]+/g;
   let list = [];
   const known = new Map(); // normalized address → entry, so editing the text doesn't redo finished lookups
   const area = $('#emails');
   let parseTimer;
   area.addEventListener('input', () => { clearTimeout(parseTimer); parseTimer = setTimeout(parse, 250); });
-
   async function parse() {
     const found = [...new Set((area.value.match(EMAIL) || []).map((x) => x.trim().toLowerCase().replace(/\.+$/, '')))];
     const next = [];
@@ -110,16 +136,9 @@
       }
       next.push(e);
     }
-    // one address opens by itself; with several, only the ones you open stay open
-    for (const e of next) {
-      if (next.length === 1) { if (!e.open) { e.open = true; e.autoOpen = true; } }
-      else if (e.autoOpen) { e.open = false; e.autoOpen = false; }
-    }
     list = next;
     render();
-    scheduleCount();
   }
-
   // Does this address have its own picture? d=404 makes Gravatar answer 404 when it doesn't.
   function check(e) {
     const o = opts(), img = new Image(), token = {};
@@ -128,7 +147,6 @@
     img.onerror = () => { if (e.token !== token) return; e.status = 'no'; render(); };
     img.src = `${GRAVATAR}${e.sha}?s=80&d=404&r=${o.r}`;
   }
-
   // public profile (name, job, place) — Gravatar allows 100 of these an hour without a key, so only for real avatars
   let profilesLeft = 40;
   async function loadProfile(e) {
@@ -141,49 +159,63 @@
       if (r.ok) { e.profile = await r.json(); render(); }
     } catch {}
   }
+  function renderStep1() {
+    $('#step1').classList.toggle('has-files', list.length > 0);
+    const o = opts(), box = $('#found');
+    if (!list.length) {
+      box.replaceChildren(el('p', { class: 'found-empty', text: area.value.trim() ? '還沒看到完整的 Email，格式像 name@example.com 就可以' : '辨識到的 Email 會列在這裡' }));
+    } else {
+      const yes = list.filter((e) => e.status === 'yes').length;
+      box.replaceChildren(
+        el('p', { class: 'found-head' }, '辨識到 ', el('b', { text: list.length }), ' 個 Email', yes ? el('span', { class: 'help', text: `・${yes} 個有頭貼` }) : null),
+        el('ul', { class: 'found-list' }, ...list.map((e) => el('li', { title: e.email },
+          e.status === 'yes' ? el('img', { src: `${GRAVATAR}${e.sha}?s=48&d=404&r=${o.r}`, alt: '' }) : el('span', { class: 'dot' }),
+          el('span', { text: e.email })))));
+    }
+    $('#note1').textContent = list.length ? `${list.length} 個 Email` : '還沒有輸入 Email。';
+    $('#next1').disabled = !list.length;
+  }
 
-  // ---------- results ----------
+  // ---------- step 2: the look, previewed on the real addresses ----------
+  const PREVIEW_MAX = 11;
+  function renderStep2() {
+    const o = opts();
+    const shown = list.slice(0, PREVIEW_MAX);
+    fill($('#preview'), ...shown.map((e) => el('li', { title: e.email },
+      thumb(e, o, 168, 'ph'), el('span', { text: e.email.split('@')[0] }))),
+      list.length > shown.length ? el('li', { class: 'more', text: `還有 ${list.length - shown.length} 個` }) : null);
+    const yes = list.filter((e) => e.status === 'yes').length;
+    $('#note2').textContent = `${list.length} 個 Email・${yes} 個有自訂頭貼・沒有的顯示${defName(o.d)}`;
+  }
+  function thumb(e, o, size, cls) {
+    if (e.status === 'wait') return el('span', { class: `${cls} none`, text: '…' });
+    if (e.status === 'no' && o.d === '404') return el('span', { class: `${cls} none`, text: '沒有' });
+    return el('img', { class: cls === 'ph' ? null : cls, src: urlOf(e, o, size), alt: `${e.email} 的頭貼`, width: size / 2, height: size / 2 });
+  }
+
+  // ---------- step 3: results ----------
   const ICON = {
     copy: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg>',
     down: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11"/><path d="m7 10 5 5 5-5"/><path d="M5 20h14"/></svg>',
   };
   const downloadable = (e, o) => e.status === 'yes' || (e.status === 'no' && o.d !== '404');
-
-  function render() {
+  function renderStep3() {
     const o = opts();
-    summarize();
-    const box = $('#results');
-    $('#tool').classList.toggle('has-results', list.length > 0);
-    if (!list.length) {
-      box.replaceChildren(el('div', { class: 'empty' },
-        el('span', { class: 'ring', html: '<svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg>' }),
-        el('b', { text: area.value.trim() ? '還沒看到完整的 Email' : '頭貼會出現在這裡' }),
-        el('span', { text: area.value.trim() ? '格式像 name@example.com 就可以' : '輸入 Email 就會出現，一次可以放很多個' })));
-    } else {
-      const yes = list.filter((e) => e.status === 'yes').length, wait = list.filter((e) => e.status === 'wait').length;
-      const sum = el('p', { class: 'sum' }, el('span', {}, el('b', { text: list.length }), ' 個 Email'), el('span', {}, el('b', { text: yes }), ' 個有自訂頭貼'), wait ? el('span', { text: `${wait} 個查詢中…` }) : null);
-      box.replaceChildren(sum, el('ol', { class: 'list' }, ...list.map((e) => row(e, o))));
-    }
-    const yes = list.filter((e) => e.status === 'yes').length;
-    $('#note').textContent = !list.length ? '還沒有輸入 Email。' : `${list.length} 個 Email・${yes} 個有自訂頭貼`;
+    if (list.length === 1 && !list[0].touched) list[0].open = true;
+    const yes = list.filter((e) => e.status === 'yes').length, wait = list.filter((e) => e.status === 'wait').length;
+    fill($('#sum'), el('span', {}, el('b', { text: list.length }), ' 個 Email'), el('span', {}, el('b', { text: yes }), ' 個有自訂頭貼'), wait ? el('span', { text: `${wait} 個查詢中…` }) : null);
+    $('#results').replaceChildren(...list.map((e) => row(e, o)));
+    $('#note3').textContent = `${o.size}px・${defName(o.d)}・${o.r.toUpperCase()}・${o.hash === 'md5' ? 'MD5' : 'SHA-256'}`;
     $('#copyAll').disabled = !list.length;
     // one picture comes as itself; only two or more are worth a ZIP
     const canGet = list.filter((e) => downloadable(e, o)).length;
     $('#zipAll').disabled = !canGet;
     if (!$('#zipAll').dataset.busy) $('#zipAll').textContent = canGet === 1 ? '下載頭貼' : '全部下載（ZIP）';
-    $('.panel-foot').classList.toggle('solo', list.length <= 1);
   }
-
-  function thumb(e, o, size, cls) {
-    if (e.status === 'wait') return el('span', { class: `${cls} none`, text: '…' });
-    if (e.status === 'no' && o.d === '404') return el('span', { class: `${cls} none`, text: '沒有' });
-    return el('img', { class: cls, src: urlOf(e, o, size), alt: `${e.email} 的頭貼`, width: size / 2, height: size / 2 });
-  }
-
   function row(e, o) {
     const p = e.profile;
-    const sub = e.status === 'wait' ? '查詢中…' : e.status === 'yes' ? (p && p.display_name) || '有自訂頭貼' : o.d === '404' ? '沒有自訂頭貼' : `沒有自訂頭貼，顯示${DEFAULTS.find(([v]) => v === o.d)[1]}`;
-    const toggle = () => { e.open = !e.open; e.autoOpen = false; render(); };
+    const sub = e.status === 'wait' ? '查詢中…' : e.status === 'yes' ? (p && p.display_name) || '有自訂頭貼' : o.d === '404' ? '沒有自訂頭貼' : `沒有自訂頭貼，顯示${defName(o.d)}`;
+    const toggle = () => { e.open = !e.open; e.touched = true; render(); };
     const main = el('div', { class: 'row-main', role: 'button', tabindex: '0', 'aria-expanded': String(e.open), onclick: toggle,
       onkeydown: (ev) => { if (ev.target === ev.currentTarget && (ev.key === 'Enter' || ev.key === ' ')) { ev.preventDefault(); toggle(); } } },
       thumb(e, o, 104, 'av'),
@@ -198,7 +230,6 @@
     if (e.open) li.append(detail(e, o));
     return li;
   }
-
   function detail(e, o) {
     const p = e.profile, url = urlOf(e, o), h = hashOf(e, o);
     const facts = el('div', { class: 'facts' });
@@ -256,12 +287,10 @@
     try { const b = await fetchImage(e, o); save(b, `${safeName(e.email)}.${extOf(b.type)}`); }
     catch { toast('下載失敗，請稍後再試'); }
   }
-
   $('#copyAll').addEventListener('click', () => {
     const o = opts();
     copy(list.map((e) => `${e.email}\t${urlOf(e, o)}`).join('\n'), `已複製 ${list.length} 行，可以直接貼到試算表`);
   });
-
   $('#zipAll').addEventListener('click', async () => {
     const o = opts(), todo = list.filter((e) => downloadable(e, o));
     if (todo.length === 1) { downloadOne(todo[0]); return; }
@@ -279,28 +308,25 @@
     save(ManyZip.make(files), `gravatar-${files.length}.zip`);
     toast(failed ? `已打包 ${files.length} 張，${failed} 張沒抓到` : `已打包 ${files.length} 張頭貼`);
   });
+  $('#restart').addEventListener('click', () => { area.value = ''; list = []; goto(1); area.focus(); });
 
   // ---------- the counter ----------
-  // Only a number leaves the browser: how many new addresses were looked up, never the addresses or hashes.
+  // Only a number leaves the browser: how many new addresses reached step 3, never the addresses or hashes.
   const counted = new Set();
-  let countTimer;
-  function scheduleCount() {
-    clearTimeout(countTimer);
-    countTimer = setTimeout(() => {
-      const fresh = list.filter((e) => e.status !== 'wait' && !counted.has(e.email));
-      if (!fresh.length) { if (list.some((e) => e.status === 'wait')) scheduleCount(); return; }
-      for (const e of fresh) counted.add(e.email);
-      if (!onServer) return;
-      fetch('api/stats/processed', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ files: fresh.length }), keepalive: true })
-        .then(loadStats).catch(() => {});
-    }, 1800);
+  function countNew() {
+    const fresh = list.filter((e) => !counted.has(e.email));
+    if (!fresh.length) return;
+    for (const e of fresh) counted.add(e.email);
+    if (!onServer) return;
+    fetch('api/stats/processed', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ files: fresh.length }), keepalive: true })
+      .then(loadStats).catch(() => {});
   }
   async function loadStats() {
     if (!onServer) return;
     try {
       const r = await fetch('api/stats', { cache: 'no-store' });
       const st = r.ok ? await r.json() : null;
-      if (st && st.files > 0) $('#heroCount').replaceChildren('已幫大家查了 ', el('b', { class: 'hero-num', text: st.files.toLocaleString('zh-TW') }), ' 個頭貼');
+      if (st && st.files > 0) fill($('#heroCount'), '已幫大家查了 ', el('b', { class: 'hero-num', text: st.files.toLocaleString('zh-TW') }), ' 個頭貼');
     } catch {}
   }
   loadStats();

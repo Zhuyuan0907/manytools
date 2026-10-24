@@ -36,8 +36,18 @@
     </p>
   </header>
 
+  <nav class="stepper" aria-label="步驟">
+    <p class="m-step" id="mStep" aria-hidden="true"></p>
+    <ol>
+      <li><button type="button" data-goto="1"><span class="dot">1</span><span class="lbl">輸入 Email</span></button></li>
+      <li><button type="button" data-goto="2"><span class="dot">2</span><span class="lbl">選擇樣式</span></button></li>
+      <li><button type="button" data-goto="3"><span class="dot">3</span><span class="lbl">取得頭貼</span></button></li>
+    </ol>
+  </nav>
+
   <main>
-    <section class="panel fill" id="tool" aria-labelledby="h1t">
+    <!-- ============ STEP 1 ============ -->
+    <section class="panel" id="step1" aria-labelledby="h1t">
       <div class="hero" id="hero">
         <div class="hero-text">
           <h2 class="hero-title" id="h1t">輸入 Email，拿到<em>頭貼</em></h2>
@@ -62,16 +72,32 @@
           </svg>
         </div>
       </div>
-
-      <div class="panel-body tool-body">
-        <div class="inputs">
+      <div class="panel-body step1-body">
+        <div class="entry">
           <label class="set-label" for="emails">Email</label>
           <textarea id="emails" rows="5" spellcheck="false" autocomplete="off" autocapitalize="off" placeholder="name@example.com&#10;一行一個，也可以直接貼一整串名單"></textarea>
-          <p class="help" id="emailNote">名單直接貼上就好，會自動抓出 Email</p>
-          <p class="help xlink">想換自己的頭貼但圖片太大？<a href="/image">用圖片壓縮，也能裁成正方形 →</a></p>
+          <p class="help">名單直接貼上就好，例如「王小明 &lt;ming@example.com&gt;」，會自動抓出 Email</p>
+        </div>
+        <div class="found" id="found" aria-live="polite"></div>
+      </div>
+      <div class="panel-foot">
+        <span class="foot-note" id="note1">還沒有輸入 Email。</span>
+        <button type="button" class="btn primary" id="next1" disabled>下一步：選擇樣式 →</button>
+      </div>
+    </section>
 
-          <details class="opts" id="opts" open>
-            <summary><span>選項</span><span class="opts-sum" id="optsSum"></span></summary>
+    <!-- ============ STEP 2 ============ -->
+    <section class="panel" id="step2" aria-labelledby="h2t" hidden>
+      <div class="panel-head">
+        <span class="step-no" aria-hidden="true">2</span>
+        <div class="head-text">
+          <h2 id="h2t">頭貼要長怎樣？</h2>
+          <p>右邊會用你輸入的 Email 即時預覽。</p>
+        </div>
+      </div>
+      <div class="panel-body">
+        <div class="settings">
+          <div class="set-col">
             <div class="set">
               <span class="set-label" id="lblSize">尺寸</span>
               <div class="chips" role="radiogroup" aria-labelledby="lblSize">
@@ -83,12 +109,10 @@
                 <span class="unit">px</span>
               </div>
             </div>
-
             <div class="set">
               <span class="set-label" id="lblDef">沒有頭貼時 <span class="def-name" id="defName">預設人像</span></span>
               <div class="defaults" id="defaults" role="radiogroup" aria-labelledby="lblDef"></div>
             </div>
-
             <div class="set two">
               <div>
                 <span class="set-label" id="lblRating">分級</span>
@@ -107,14 +131,40 @@
                 </div>
               </div>
             </div>
-          </details>
+          </div>
+          <div class="set-col">
+            <div class="set">
+              <span class="set-label">預覽</span>
+              <ul class="preview" id="preview" aria-label="頭貼預覽"></ul>
+              <p class="help xlink">想換自己的頭貼但圖片太大？<a href="/image">用圖片壓縮，也能裁成正方形 →</a></p>
+            </div>
+          </div>
         </div>
-
-        <div class="results" id="results" aria-live="polite"></div>
       </div>
-
       <div class="panel-foot">
-        <span class="foot-note" id="note">還沒有輸入 Email。</span>
+        <button type="button" class="btn back" data-goto="1" aria-label="上一步"><span aria-hidden="true">←</span><span class="lbl">上一步</span></button>
+        <span class="foot-note" id="note2"></span>
+        <button type="button" class="btn primary" id="next2">下一步：取得頭貼 →</button>
+      </div>
+    </section>
+
+    <!-- ============ STEP 3 ============ -->
+    <section class="panel" id="step3" aria-labelledby="h3t" hidden>
+      <div class="panel-head">
+        <span class="step-no" aria-hidden="true">3</span>
+        <div class="head-text">
+          <h2 id="h3t">取得頭貼</h2>
+          <p>點一列可以看怎麼算出來的，並複製網址、HTML 或 Markdown。</p>
+        </div>
+      </div>
+      <div class="panel-body step3-body">
+        <p class="sum" id="sum"></p>
+        <ol class="list" id="results" aria-label="頭貼結果"></ol>
+        <button type="button" class="btn small restart" id="restart"><span aria-hidden="true">↺</span> 換一批 Email 重新開始</button>
+      </div>
+      <div class="panel-foot">
+        <button type="button" class="btn back" data-goto="2" aria-label="回去修改樣式"><span aria-hidden="true">←</span><span class="lbl">回去修改樣式</span></button>
+        <span class="foot-note" id="note3"></span>
         <button type="button" class="btn" id="copyAll" disabled>複製全部網址</button>
         <button type="button" class="btn primary" id="zipAll" disabled>全部下載（ZIP）</button>
       </div>
@@ -126,5 +176,6 @@
 
 <script src="/shared/zip.js"></script>
 <script src="assets/app.js"></script>
+<script src="/shared/mobile-nav.js"></script>
 </body>
 </html>
