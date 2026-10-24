@@ -1,15 +1,20 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="ZhuyuanLoveImage">
   <defs>
-    <linearGradient id="im-bg" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#f7883a"/>
-      <stop offset="1" stop-color="#e05f0c"/>
+    <linearGradient id="zli-bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#f88a3c"/>
+      <stop offset="1" stop-color="#e05c0b"/>
     </linearGradient>
+    <clipPath id="zli-photo"><rect x="10" y="13" width="44" height="38" rx="6"/></clipPath>
   </defs>
-  <rect width="64" height="64" rx="15" fill="url(#im-bg)"/>
-  <!-- a photo: frame, sun, mountains -->
-  <rect x="11" y="16" width="38" height="32" rx="6" fill="#fff"/>
-  <circle cx="22" cy="26" r="4" fill="#ffb21e"/>
-  <path d="M15 44l10-11 7 7 5-5 8 9z" fill="#f07a26"/>
-  <!-- squeeze marks -->
-  <path d="M53 22l-4 4 4 4M53 34l-4 4 4 4" fill="none" stroke="#fff" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
+  <rect width="64" height="64" rx="15" fill="url(#zli-bg)"/>
+  <!-- a photo: sun and hills -->
+  <rect x="10" y="13" width="44" height="38" rx="6" fill="#fff"/>
+  <g clip-path="url(#zli-photo)">
+    <path d="M6 52l12-11 7 6 9-9 24 18z" fill="#fdd8bd"/>
+  </g>
+  <circle cx="19" cy="21" r="3" fill="#ffc062"/>
+  <!-- squeeze arrows -->
+  <path d="M15.5 26l3.6 4-3.6 4M48.5 26l-3.6 4 3.6 4" fill="none" stroke="#e8630a" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
+  <!-- the heart -->
+  <path transform="translate(24.6 22.4) scale(.64)" d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" fill="#ff5a4e"/>
 </svg>

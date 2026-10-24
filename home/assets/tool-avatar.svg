@@ -1,14 +1,18 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="ZhuyuanLoveAvatar">
   <defs>
-    <linearGradient id="av-bg" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#8a63f0"/>
-      <stop offset="1" stop-color="#5b3fd0"/>
+    <linearGradient id="zla-bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#8b66f2"/>
+      <stop offset="1" stop-color="#5a3dd0"/>
     </linearGradient>
+    <clipPath id="zla-face"><circle cx="32" cy="32" r="21"/></clipPath>
   </defs>
-  <rect width="64" height="64" rx="15" fill="url(#av-bg)"/>
-  <!-- the avatar: a round photo with a person in it -->
-  <circle cx="30" cy="34" r="19" fill="#fff"/>
-  <circle cx="30" cy="29" r="7" fill="#8a63f0"/>
-  <path d="M17.5 47.5c2.4-6.4 7.2-9.5 12.5-9.5s10.1 3.1 12.5 9.5A18.9 18.9 0 0 1 30 53a18.9 18.9 0 0 1-12.5-5.5z" fill="#8a63f0"/>
-  <circle cx="49" cy="15" r="6" fill="#ffb21e"/>
+  <rect width="64" height="64" rx="15" fill="url(#zla-bg)"/>
+  <!-- a round profile picture -->
+  <circle cx="32" cy="32" r="21" fill="#fff"/>
+  <g clip-path="url(#zla-face)" fill="#c6b5f7">
+    <circle cx="32" cy="26" r="8"/>
+    <path d="M14 56c1.5-12 9-18.5 18-18.5S48.5 44 50 56z"/>
+  </g>
+  <!-- the heart, on its chest -->
+  <path transform="translate(26 39.2) scale(.5)" d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" fill="#ff5a4e"/>
 </svg>

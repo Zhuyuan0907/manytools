@@ -1,15 +1,17 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="影片碼率壓縮">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="ZhuyuanLoveVideo">
   <defs>
-    <linearGradient id="vt-bg" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#3b82f6"/>
-      <stop offset="1" stop-color="#1d5fd6"/>
+    <linearGradient id="zlv-bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#3d86f5"/>
+      <stop offset="1" stop-color="#1c5ed6"/>
     </linearGradient>
   </defs>
-  <rect width="64" height="64" rx="15" fill="url(#vt-bg)"/>
-  <!-- the camera body -->
-  <rect x="9" y="19" width="33" height="26" rx="6" fill="#fff"/>
-  <path d="M42 28.5l12-7v21l-12-7z" fill="#fff"/>
-  <!-- the bitrate bars, getting shorter -->
-  <path d="M17 38v-11M24.5 38v-8M32 38v-5" stroke="#3b82f6" stroke-width="3.4" stroke-linecap="round"/>
-  <circle cx="49" cy="15" r="6" fill="#ffb21e"/>
+  <rect width="64" height="64" rx="15" fill="url(#zlv-bg)"/>
+  <!-- a strip of film -->
+  <rect x="9" y="15" width="46" height="34" rx="6" fill="#fff"/>
+  <!-- sprocket holes -->
+  <path d="M14.5 20h3M22 20h3M29.5 20h3M37 20h3M44.5 20h3M14.5 44h3M22 44h3M29.5 44h3M37 44h3M44.5 44h3" stroke="#cfe0fc" stroke-width="3" stroke-linecap="round"/>
+  <!-- squeeze arrows -->
+  <path d="M15.5 28l3.6 4-3.6 4M48.5 28l-3.6 4 3.6 4" fill="none" stroke="#2468e0" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
+  <!-- the heart -->
+  <path transform="translate(24.6 24.4) scale(.64)" d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" fill="#ff5a4e"/>
 </svg>
