@@ -38,8 +38,7 @@ h1, p, dl, dd { margin: 0; }
 .brand-text { display: grid; line-height: 1.2; }
 .tagline { color: var(--ink-2); font-size: .8rem; font-weight: 500; letter-spacing: .02em; }
 .top-right { display: flex; align-items: center; gap: 18px; min-width: 0; }
-.hstats { margin: 0; color: var(--muted); font-size: .86rem; }
-.hstats > span { display: inline-block; white-space: nowrap; }
+.hstats { margin: 0; color: var(--muted); font-size: .86rem; white-space: nowrap; }
 .privacy {
   margin: 0; display: inline-flex; align-items: center; gap: 7px; padding: 6px 14px; border-radius: 999px; flex: none; white-space: nowrap;
   background: #fff; border: 1px solid color-mix(in srgb, var(--green) 30%, var(--line)); color: var(--green-strong); font-size: .84rem; font-weight: 500;
@@ -162,6 +161,8 @@ main { display: grid; align-content: center; gap: clamp(22px, 4.5vh, 44px); }
 /* narrower screens */
 /* four cards don't fit side by side here: two by two, without the art */
 @media (max-width: 1000px) and (min-width: 761px) {
+  .drop-title { font-size: 1rem; }
+  .drop-hint { font-size: .84rem; }
   .tools { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .art { display: none; }
   .tool { grid-template-rows: auto; }
@@ -193,6 +194,7 @@ main { display: grid; align-content: center; gap: clamp(22px, 4.5vh, 44px); }
   .privacy-long { display: none; }
   .privacy-short { display: inline; }
   .hstats { order: 3; flex-basis: 100%; font-size: .8rem; }
+  .hstats .l { display: none; } /* phones: "152 影片・9 PDF・63 頭貼・63 圖片" fits one line */
   .drop-formats { display: none; }
   .drop { padding: 16px; border-radius: 18px; gap: 4px; }
   .stack img { width: 40px; height: 40px; border-radius: 11px; }
@@ -219,8 +221,8 @@ main { display: grid; align-content: center; gap: clamp(22px, 4.5vh, 44px); }
   .word { display: none; }
   .cta { grid-column: 2; grid-row: 1; width: 32px; height: 32px; }
   .cta span { font-size: .95rem; }
-  .tool-name { grid-column: 1 / -1; font-size: 1rem; white-space: normal; margin-top: 4px; }
-  .tool-desc { grid-column: 1 / -1; font-size: .78rem; line-height: 1.45; }
+  .tool-name { grid-column: 1 / -1; font-size: .96rem; white-space: nowrap; margin-top: 4px; }
+  .tool-desc { grid-column: 1 / -1; font-size: .74rem; line-height: 1.45; white-space: nowrap; }
 }
 @media (max-width: 760px) and (max-height: 700px) {
   .app { gap: 8px; padding-top: 10px; }

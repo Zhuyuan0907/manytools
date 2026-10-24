@@ -32,7 +32,7 @@
   const outType = (file, s) => (s.fmt !== 'same' ? s.fmt : TYPE_NAME[file.type] ? file.type : 'image/jpeg');
   function summarize() {
     const s = settings();
-    $('#optsSum').textContent = [s.limit ? `${fmtBytes(s.limit)} 以內` : '不限大小', s.fmt === 'same' ? '同原檔' : TYPE_NAME[s.fmt],
+    $('#optsSum').textContent = [s.limit ? `${+(s.limit / 1e6).toFixed(2)} MB 以內` : '不限大小', s.fmt === 'same' ? '同原檔' : TYPE_NAME[s.fmt],
       s.maxSide ? `最長 ${s.maxSide}px` : '原尺寸', s.square ? '正方形' : null].filter(Boolean).join('・');
   }
   const optsBox = $('#opts');
