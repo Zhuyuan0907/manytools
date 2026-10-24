@@ -118,7 +118,7 @@
                 <label class="chip"><input type="radio" name="limit" value="5"><span>5 MB</span></label>
                 <label class="chip"><input type="radio" name="limit" value="10" checked><span>10 MB</span></label>
                 <label class="chip"><input type="radio" name="limit" value="custom"><span>自訂</span></label>
-                <span class="custom" id="customBox" hidden><input type="number" id="customMB" min="0.05" max="200" step="0.1" value="3" inputmode="decimal" aria-label="自訂上限（MB）"><span>MB</span></span>
+                <span class="custom" id="customBox" hidden><input type="number" id="customMB" min="0.1" max="200" step="0.1" value="3" inputmode="decimal" aria-label="自訂上限（MB）"><span>MB</span></span>
               </div>
               <p class="help">找出上限內畫質最高的設定；原本就符合的直接給原檔</p>
             </div>
@@ -195,6 +195,8 @@
 <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
 
 <script src="/shared/zip.js"></script>
+<script src="lib/pako.min.js"></script>
+<script src="lib/UPNG.min.js"></script>
 <script src="assets/compress.js"></script>
 <script src="assets/app.js"></script>
 <script src="/shared/handoff.js" data-tool="image" data-input="#fileInput"></script>

@@ -545,7 +545,7 @@
     keepOriginal: Core.store.get('keepOriginal') !== '0',
   };
   const targetMB = () => {
-    if (S.target === 'custom') return Number.isFinite(S.customMB) && S.customMB >= 0.2 ? Math.min(S.customMB, 500) : 5;
+    if (S.target === 'custom') return Number.isFinite(S.customMB) && S.customMB >= 0.2 ? Math.min(Math.round(S.customMB * 10) / 10, 500) : 5;
     return parseFloat(S.target);
   };
   const snapshot = () => ({ targetMB: targetMB(), mode: S.mode, format: S.format, dpi: S.dpi, quality: S.quality, colors: S.colors, gray: S.gray, keepOriginal: S.keepOriginal });
@@ -589,7 +589,7 @@
   document.addEventListener('change', (ev) => {
     const t = ev.target;
     if (t.name === 'target') { S.target = t.value; Core.store.set('target', t.value); if (t.value === 'custom') setTimeout(() => $('#customMB').focus(), 0); }
-    else if (t.id === 'customMB') { S.customMB = parseFloat(t.value); Core.store.set('customMB', t.value); }
+    else if (t.id === 'customMB') { S.customMB = targetMB(); Core.store.set('customMB', String(S.customMB)); }
     else if (t.name === 'mode') { S.mode = t.value; Core.store.set('mode', t.value); }
     else if (t.name === 'format') { S.format = t.value; Core.store.set('format', t.value); }
     else if (t.id === 'colors') { S.colors = parseInt(t.value, 10); Core.store.set('colors', t.value); }
@@ -810,7 +810,7 @@
         smart: '文字清晰，只壓縮圖片',
         compressed: r.setting && r.setting.dpi < 96 ? '已轉成圖片，請預覽看小字' : '已轉成圖片',
       }[r.method];
-      main.append(el('p', { class: 'out-msg', text: phrase }));
+      main.append(el('p', { class: 'out-msg', text: r.smaller ? '轉成圖片反而更大，保留原本的頁面' : phrase }));
     } else {
       main.append(el('p', { class: 'out-msg bad', text: `超過上限 ${fmtMB(r.size - limit)}` }));
       const fixes = el('div', { class: 'out-fixes' });

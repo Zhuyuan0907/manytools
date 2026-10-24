@@ -897,22 +897,27 @@
     // Stage 0: keep it as it is when that already fits.
     // Stage 1: shrink only the images (text and vector graphics untouched) and search for the best fit.
     // Stage 2: flatten every page to an image — always fits, text becomes part of the picture.
+    // The pages as they are (the original file, or a lossless copy of the pages) are also the yardstick for
+    // stage 2: a flattened file has to be smaller than them, or they are handed out instead.
     let rasterProgress = progress;
-    if (settings.keepOriginal) {
-      const whole = project.sources.length === 1 && N === project.sources[0].numPages && out.pages.every((g, i) => g === i);
-      const src0 = project.sources[0];
-      const locked = out.pages.some((g) => locate(project, g).src.password);
-      if (whole && !src0.password && src0.file.size <= targetBytes) {
-        progress(1, '原檔就符合上限');
-        return done({ blob: src0.file, size: src0.file.size, method: 'original' });
-      }
-      if (!locked) {
-        try {
-          progress(0.01, '整理頁面…');
-          const base = await buildLossless(project, out.pages, out.title, job);
-          if (base.bytes.length <= targetBytes) {
+    const whole = project.sources.length === 1 && N === project.sources[0].numPages && out.pages.every((g, i) => g === i);
+    const src0 = project.sources[0];
+    const locked = out.pages.some((g) => locate(project, g).src.password);
+    let asIs = whole && !src0.password ? { blob: src0.file, size: src0.file.size, method: 'original' } : null;
+    if (settings.keepOriginal && asIs && asIs.size <= targetBytes) {
+      progress(1, '原檔就符合上限');
+      return done(asIs);
+    }
+    if (!locked && (settings.keepOriginal || !asIs)) {
+      try {
+        progress(0.01, '整理頁面…');
+        const base = await buildLossless(project, out.pages, out.title, job);
+        const copy = { blob: new Blob([base.bytes], { type: 'application/pdf' }), size: base.bytes.length, method: 'lossless', linkCount: base.linkCount };
+        if (!asIs || copy.size < asIs.size) asIs = copy;
+        if (settings.keepOriginal) {
+          if (copy.size <= targetBytes) {
             progress(1, '不用壓縮就符合');
-            return done({ blob: new Blob([base.bytes], { type: 'application/pdf' }), size: base.bytes.length, method: 'lossless', linkCount: base.linkCount });
+            return done(copy);
           }
           if (settings.mode === 'auto') {
             const r = await imageOnly(base.doc, base.bytes.length, targetBytes, settings.gray, job, (f, t) => progress(0.03 + 0.42 * f, t));
@@ -923,16 +928,21 @@
             rasterProgress = (f, t) => progress(0.45 + 0.55 * f, t);
             progress(0.45, '改用整頁轉圖片…');
           }
-        } catch (e) {
-          if (e instanceof Cancelled) throw e;
-          console.warn('stage 0/1 unavailable, flattening pages', e);
         }
+      } catch (e) {
+        if (e instanceof Cancelled) throw e;
+        console.warn('stage 0/1 unavailable, flattening pages', e);
       }
     }
 
     // 2. flatten and compress
     check(job);
     let images, setting;
+    // Aim under the limit and at least 2% under the pages as they are. Whatever comes out, the version
+    // within the limit wins, and when both or neither are, the smaller one.
+    const goal = Math.min(targetBytes, asIs ? Math.floor(asIs.size * 0.98) : Infinity);
+    const fits = (r) => r.size <= targetBytes;
+    const finish = (flat) => done(asIs && (fits(asIs) !== fits(flat) ? fits(asIs) : asIs.size <= flat.size) ? { ...asIs, smaller: true } : flat);
     if (settings.mode === 'manual') {
       setting = settings.format === 'jpeg'
         ? { fmt: 'jpeg', dpi: settings.dpi, q: settings.quality / 100 }
@@ -947,7 +957,7 @@
       }
       rasterProgress(0.95, '組合 PDF…');
       const a = await assembleFlat(project, out.pages, images, out.title, job);
-      return done({ blob: new Blob([a.bytes], { type: 'application/pdf' }), size: a.bytes.length, method: 'compressed', setting, linkCount: a.linkCount });
+      return finish({ blob: new Blob([a.bytes], { type: 'application/pdf' }), size: a.bytes.length, method: 'compressed', setting, linkCount: a.linkCount });
     }
 
     // Auto: render each page once at the top rung (cached across outputs and re-runs),
@@ -994,19 +1004,21 @@
     let lo = 0, hi = ladder.length - 1, best = null;
     while (lo <= hi) {
       const mid = (lo + hi) >> 1;
-      const imgs = await encodeAll(mid, targetBytes);
+      const imgs = await encodeAll(mid, goal);
       if (imgs) { best = { idx: mid, imgs }; hi = mid - 1; } else lo = mid + 1;
     }
+    // not even the lowest rung beats the pages as they are, and those fit: no need to assemble anything
+    if (!best && asIs && fits(asIs)) return done({ ...asIs, smaller: true });
     let idx = best ? best.idx : ladder.length - 1;
     images = best ? best.imgs : await encodeAll(idx, null);
     for (;;) {
       rasterProgress(0.95, '組合 PDF…');
       let a = await assembleFlat(project, out.pages, images, out.title, job);
-      if (a.bytes.length <= targetBytes || idx >= ladder.length - 1) {
+      if (a.bytes.length <= goal || idx >= ladder.length - 1) {
         setting = ladder[idx];
         // Below ~120 DPI, shrinking the cached copy makes thin strokes lighter than a direct render.
         // Re-render straight at the chosen resolution and keep that version if it still fits.
-        if (setting.dpi < 120 && a.bytes.length <= targetBytes) {
+        if (setting.dpi < 120 && a.bytes.length <= goal) {
           const sharp = [];
           for (let k = 0; k < N; k++) {
             check(job);
@@ -1016,9 +1028,9 @@
             finally { r.canvas.width = 0; r.canvas.height = 0; }
           }
           const alt = await assembleFlat(project, out.pages, sharp, out.title, job);
-          if (alt.bytes.length <= targetBytes) a = alt;
+          if (alt.bytes.length <= goal) a = alt;
         }
-        return done({ blob: new Blob([a.bytes], { type: 'application/pdf' }), size: a.bytes.length, method: 'compressed', setting, linkCount: a.linkCount });
+        return finish({ blob: new Blob([a.bytes], { type: 'application/pdf' }), size: a.bytes.length, method: 'compressed', setting, linkCount: a.linkCount });
       }
       idx++;
       images = await encodeAll(idx, null);

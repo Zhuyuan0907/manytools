@@ -20,7 +20,7 @@
   const onServer = /^https?:$/.test(location.protocol);
   if (onServer) $('#brand').href = '/';
   const fmtBytes = (b) => (b >= 1e9 ? `${(b / 1e9).toFixed(2)} GB` : b >= 1e6 ? `${(b / 1e6).toFixed(1)} MB` : `${Math.max(1, Math.round(b / 1e3))} KB`);
-  const fmtLimit = (b) => `${+(b / 1e6).toFixed(2)} MB`;
+  const fmtLimit = (b) => `${+(b / 1e6).toFixed(1)} MB`;
   const pct = (a, b) => Math.max(0, Math.round((1 - a / b) * 100));
   const TYPE_NAME = { 'image/jpeg': 'JPEG', 'image/webp': 'WebP', 'image/png': 'PNG', 'image/gif': 'GIF', 'image/avif': 'AVIF', 'image/bmp': 'BMP', 'image/heic': 'HEIC', 'image/heif': 'HEIF' };
   const EXT = { 'image/jpeg': 'jpg', 'image/webp': 'webp', 'image/png': 'png' };
@@ -29,14 +29,18 @@
   // ---------- settings ----------
   function settings() {
     const lv = $('input[name=limit]:checked').value;
-    const mb = lv === 'custom' ? Math.max(0.05, parseFloat($('#customMB').value) || 3) : +lv;
+    const mb = lv === 'custom' ? customMB() : +lv;
     return { limit: Math.round(mb * 1e6), fmt: $('input[name=fmt]:checked').value, maxSide: +$('#maxSide').value, square: $('#square').checked };
   }
+  // the custom limit counts in tenths of a MB: 0.1 to 200
+  const customMB = () => Math.min(200, Math.max(0.1, Math.round((parseFloat($('#customMB').value) || 3) * 10) / 10));
   // "same as the file" keeps JPEG/PNG/WebP; anything else (GIF, BMP, AVIF, HEIC) becomes JPEG
   const outType = (file, s) => (s.fmt !== 'same' ? s.fmt : KEEPABLE.includes(file.type) ? file.type : 'image/jpeg');
   const keyOf = (s) => JSON.stringify(s);
+  const untouched = (it, s) => outType(it.file, s) === it.file.type && !(s.square && it.w !== it.h) && !(s.maxSide && Math.max(it.w, it.h) > s.maxSide);
   for (const n of $$('input[name=limit], input[name=fmt], #maxSide, #square')) n.addEventListener('change', () => { $('#customBox').hidden = $('input[name=limit]:checked').value !== 'custom'; render(); });
   $('#customMB').addEventListener('input', render);
+  $('#customMB').addEventListener('change', () => { $('#customMB').value = customMB(); render(); });
 
   // ---------- the engine: a worker when possible, the page otherwise ----------
   let worker = null;
@@ -147,9 +151,9 @@
   // ---------- step 2: settings, and what will happen ----------
   function renderStep2() {
     const s = settings(), ok = readable();
-    const kept = ok.filter((it) => s.limit && it.file.size <= s.limit && !s.square && !(s.maxSide && Math.max(it.w, it.h) > s.maxSide) && outType(it.file, s) === it.file.type);
+    const kept = ok.filter((it) => s.limit && it.file.size <= s.limit && untouched(it, s));
     const lines = [];
-    lines.push(s.limit ? el('li', {}, '壓到 ', el('b', { text: `${fmtLimit(s.limit)} 以內` }), '，畫質盡量保留') : el('li', {}, '不限大小，用 ', el('b', { text: '85% 畫質' }), '重新存檔'));
+    lines.push(s.limit ? el('li', {}, '壓到 ', el('b', { text: `${fmtLimit(s.limit)} 以內` }), '，畫質盡量保留') : el('li', {}, '不限大小，重新存檔，', el('b', { text: '不會比原檔大' })));
     if (kept.length) lines.push(el('li', {}, el('b', { text: `${kept.length} 張` }), '原本就符合，直接給原檔'));
     lines.push(el('li', {}, '輸出成 ', el('b', { text: s.fmt === 'same' ? '原本的格式' : TYPE_NAME[s.fmt] }), s.fmt === 'same' && ok.some((it) => !KEEPABLE.includes(it.file.type)) ? '（GIF、HEIC 這類轉成 JPEG）' : ''));
     if (s.maxSide) lines.push(el('li', {}, '最長邊縮到 ', el('b', { text: `${s.maxSide} px` })));
@@ -179,9 +183,8 @@
       render();
       const type = outType(it.file, s);
       // already within the limit and nothing asked to change: hand back the original, untouched
-      const resize = s.maxSide && Math.max(it.w, it.h) > s.maxSide;
       let r;
-      if (s.limit && it.file.size <= s.limit && !s.square && !resize && type === it.file.type) r = { ok: true, kept: true, blob: it.file, width: it.w, height: it.h, quality: null };
+      if (s.limit && it.file.size <= s.limit && untouched(it, s)) r = { ok: true, kept: 'fits', blob: it.file, width: it.w, height: it.h, quality: null };
       else r = await squeeze(it.file, { type, limit: s.limit, maxSide: s.maxSide, square: s.square });
       if (!items.includes(it)) continue;
       if (it.key !== key) { it.status = 'wait'; continue; } // settings changed meanwhile; this one runs again
@@ -194,7 +197,7 @@
   }
   function setResult(it, r) {
     if (it.result && !it.result.kept) URL.revokeObjectURL(it.result.url);
-    it.result = { kept: !!r.kept, blob: r.blob, width: r.width, height: r.height, quality: r.quality, type: r.type, url: r.kept ? it.src : URL.createObjectURL(r.blob), size: r.blob.size };
+    it.result = { kept: r.kept || false, blob: r.blob, width: r.width, height: r.height, quality: r.quality, colors: r.colors, type: r.type, url: r.kept ? it.src : URL.createObjectURL(r.blob), size: r.blob.size };
     it.status = 'done';
     count(it);
   }
@@ -215,14 +218,16 @@
     $('#zipAll').disabled = !done.length || busy > 0;
     $('#zipAll').textContent = done.length === 1 ? '下載圖片' : '全部下載（ZIP）';
   }
+  // only a switch to PNG (lossless) can come out bigger
+  const change = (out, src) => (out > src ? el('span', { class: 'grew', text: `+${Math.round((out / src - 1) * 100)}%` }) : el('span', { class: 'saved', text: `-${pct(out, src)}%` }));
   const errText = (it) => (it.code === 'limit' ? '壓不到這麼小，請把上限調大或縮小尺寸' : '這張沒辦法壓縮，可能檔案壞了');
   function row(it) {
     const r = it.result, busy = it.status === 'busy' || it.status === 'wait';
     const sub = el('span', { class: 'size' });
     if (busy) sub.textContent = it.status === 'busy' ? '壓縮中…' : '等待中…';
     else if (it.status === 'error') { sub.className = 'bad'; sub.textContent = errText(it); }
-    else if (r.kept) sub.append(`${fmtBytes(it.file.size)}・原檔就在上限內，不用壓縮`);
-    else sub.append(`${fmtBytes(it.file.size)} → `, el('b', { text: fmtBytes(r.size) }), ' ', el('span', { class: 'saved', text: `-${pct(r.size, it.file.size)}%` }), el('span', { class: 'dim', text: `・${r.width}×${r.height}` }));
+    else if (r.kept) sub.append(`${fmtBytes(it.file.size)}・`, r.kept === 'smaller' ? '原檔已經是最小，直接給原檔' : '原檔就在上限內，不用壓縮');
+    else sub.append(`${fmtBytes(it.file.size)} → `, el('b', { text: fmtBytes(r.size) }), ' ', change(r.size, it.file.size), el('span', { class: 'dim', text: `・${r.width}×${r.height}` }));
     const toggle = () => { if (it.status !== 'done') return; it.open = !it.open; it.touched = true; render(); };
     const main = el('div', { class: 'row-main', role: 'button', tabindex: '0', 'aria-expanded': String(!!it.open), onclick: toggle,
       onkeydown: (e) => { if (e.target === e.currentTarget && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); toggle(); } } },
@@ -247,7 +252,7 @@
     return el('div', { class: 'row-detail' }, cmp, el('p', { class: 'facts' },
       el('span', {}, '原圖 ', el('b', { text: it.w ? `${it.w}×${it.h}` : '—' }), `・${fmtBytes(it.file.size)}`),
       el('span', {}, '壓縮後 ', el('b', { text: `${r.width}×${r.height}` }), `・${fmtBytes(r.size)}`),
-      el('span', { text: `${TYPE_NAME[r.type] || r.type}${r.quality ? `・畫質 ${Math.round(r.quality * 100)}%` : ''}` }),
+      el('span', { text: `${TYPE_NAME[r.type] || r.type}${r.quality ? `・畫質 ${Math.round(r.quality * 100)}%` : r.colors ? `・${r.colors} 色` : r.type === 'image/png' && !r.kept ? '・無損' : ''}` }),
       r.kept ? null : el('span', { text: '拍攝地點等資料已移除' }),
       !r.kept && r.type === 'image/jpeg' && /png|webp|gif|avif/.test(it.file.type) ? el('span', { text: '透明的地方會變成白色' }) : null));
   }

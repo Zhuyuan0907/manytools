@@ -163,14 +163,15 @@
     $('#step1').classList.toggle('has-files', list.length > 0);
     const o = opts(), box = $('#found');
     if (!list.length) {
-      box.replaceChildren(el('p', { class: 'found-empty', text: area.value.trim() ? '還沒看到完整的 Email，格式像 name@example.com 就可以' : '辨識到的 Email 會列在這裡' }));
+      box.replaceChildren(el('p', { class: 'found-head', text: '辨識到的 Email' }),
+        el('p', { class: 'found-box found-empty', text: area.value.trim() ? '還沒看到完整的 Email，格式像 name@example.com 就可以' : '貼上後會列在這裡' }));
     } else {
       const yes = list.filter((e) => e.status === 'yes').length;
       box.replaceChildren(
         el('p', { class: 'found-head' }, '辨識到 ', el('b', { text: list.length }), ' 個 Email', yes ? el('span', { class: 'help', text: `・${yes} 個有頭貼` }) : null),
-        el('ul', { class: 'found-list' }, ...list.map((e) => el('li', { title: e.email },
+        el('div', { class: 'found-box' }, el('ul', { class: 'found-list' }, ...list.map((e) => el('li', { title: e.email },
           e.status === 'yes' ? el('img', { src: `${GRAVATAR}${e.sha}?s=48&d=404&r=${o.r}`, alt: '' }) : el('span', { class: 'dot' }),
-          el('span', { text: e.email })))));
+          el('span', { text: e.email }))))));
     }
     $('#note1').textContent = list.length ? `${list.length} 個 Email` : '還沒有輸入 Email。';
     $('#next1').disabled = !list.length;

@@ -265,14 +265,23 @@ textarea {
 }
 textarea:focus { outline: 0; border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent); }
 textarea::placeholder { color: var(--muted); }
-.found { display: grid; gap: 8px; min-width: 0; align-content: start; }
+.found { display: grid; gap: 8px; width: 100%; min-width: 0; align-content: start; }
 .found-head { font-weight: 700; display: flex; align-items: baseline; gap: 8px; }
-.found-head b { color: var(--accent-strong); font-size: 1.2rem; }
-.found-list { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px; max-height: 190px; overflow: auto; }
+.found-head b { color: var(--accent-strong); font-size: 1.2rem; line-height: 1; }
+.found-box { border-radius: 14px; border: 1.5px solid var(--line); background: var(--surface-3); padding: 10px; max-height: 190px; overflow: auto; }
+.found-list { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; align-content: flex-start; gap: 6px; }
 .found-list li { display: inline-flex; align-items: center; gap: 6px; max-width: 100%; padding: 4px 12px 4px 4px; border-radius: 999px; background: var(--surface-2); border: 1px solid var(--line); font-size: .86rem; }
 .found-list li span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .found-list img, .found-list .dot { width: 24px; height: 24px; border-radius: 50%; flex: none; background: var(--accent-soft); display: block; object-fit: cover; }
-.found-empty { padding: 14px 16px; border-radius: 14px; border: 2px dashed color-mix(in srgb, var(--accent) 25%, var(--line)); background: var(--surface-3); color: var(--muted); font-size: .9rem; }
+.found-empty { display: grid; place-items: center; padding: 14px 16px; border: 2px dashed color-mix(in srgb, var(--accent) 25%, var(--line)); color: var(--muted); font-size: .9rem; text-align: center; }
+/* side by side, the two columns share their rows: the headers line up, and the box on the right is exactly
+   as tall as the text box (also when that one is dragged taller), scrolling inside when the list is long */
+@media (min-width: 861px) {
+  #step1 .step1-body { grid-template-rows: auto auto auto; align-items: stretch; gap: 6px 20px; }
+  .entry, .found { grid-row: span 3; grid-template-rows: subgrid; row-gap: 6px; }
+  .entry > .set-label, .found-head { align-self: end; }
+  .found-box { contain: size; max-height: none; }
+}
 
 /* step 2 */
 .set.two { grid-template-columns: auto auto; justify-content: start; gap: 8px 28px; }
@@ -435,7 +444,7 @@ textarea::placeholder { color: var(--muted); }
 
   #step1 .step1-body { display: flex; flex-direction: column; gap: 16px; }
   textarea { font-size: 16px; min-height: 120px; }
-  .found-list { max-height: none; }
+  .found-box { max-height: none; }
   .set.two { grid-template-columns: 1fr; }
   .defaults { gap: 5px; max-width: none; }
   .def span { border-radius: 8px; }
