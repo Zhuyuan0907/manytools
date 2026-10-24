@@ -382,15 +382,225 @@
     doc.setProducer('ZhuyuanLovePDF（pdf.js + pdf-lib，於瀏覽器內處理）');
   }
 
+  // ---------- lossless slimming ----------
+  // Things that change no pixel, letter or line. storeOnce (every output, cheap): identical images, fonts and
+  // drawings kept once. slimDoc (only when the copy is still too big): streams deflated again, raw images given
+  // PNG row filters or a palette, thumbnails and editing apps' private data dropped.
+  const REDEFLATE = new Set(['FlateDecode', 'LZWDecode', 'ASCIIHexDecode', 'ASCII85Decode', 'RunLengthDecode']);
+  const nativeDeflate = typeof CompressionStream === 'function'
+    ? async (data) => new Uint8Array(await new Response(new Blob([data]).stream().pipeThrough(new CompressionStream('deflate'))).arrayBuffer())
+    : null;
+  // the strongest setting for small streams; the browser's own zlib (several times faster) for big ones
+  const deflate = (data) => (data.length > 256 * 1024 && nativeDeflate ? nativeDeflate(data) : pako.deflate(data, { level: 9 }));
+
+  // Samples per pixel of an image, whatever its colour space, or null when unknown.
+  function samplesOf(dict) {
+    if (dict.get(N_('ImageMask')) === PDFLib.PDFBool.True) return 1;
+    let cs = dict.lookup(N_('ColorSpace'));
+    if (cs instanceof PDFLib.PDFArray && cs.size()) {
+      const kind = cs.get(0);
+      if (kind === N_('ICCBased')) { const icc = cs.lookup(1); return icc instanceof PDFLib.PDFRawStream ? num(icc.dict.get(N_('N'))) : null; }
+      if (kind === N_('Indexed') || kind === N_('Separation') || kind === N_('CalGray')) return 1;
+      if (kind === N_('CalRGB') || kind === N_('Lab')) return 3;
+      if (kind === N_('DeviceN')) { const names = cs.lookup(1); return names instanceof PDFLib.PDFArray ? names.size() : null; }
+      cs = kind;
+    }
+    return { DeviceGray: 1, CalGray: 1, DeviceRGB: 3, CalRGB: 3, DeviceCMYK: 4 }[cs instanceof PDFLib.PDFName ? cs.decodeText() : ''] || null;
+  }
+
+  // PNG row filters: for each row, the one of the five whose output has the smallest sum of absolute values.
+  function filterRows(raw, rowLen, rows, bpp) {
+    const out = new Uint8Array((rowLen + 1) * rows);
+    // filters one row into dst (or only measures it); gives up once the cost passes limit
+    const run = (f, y, dst, limit) => {
+      const cur = y * rowLen, up = cur - rowLen;
+      let sum = 0;
+      for (let x = 0; x < rowLen; x++) {
+        const v0 = raw[cur + x], a = x >= bpp ? raw[cur + x - bpp] : 0, b = y ? raw[up + x] : 0;
+        let v;
+        if (f === 0) v = v0;
+        else if (f === 1) v = v0 - a;
+        else if (f === 2) v = v0 - b;
+        else if (f === 3) v = v0 - ((a + b) >> 1);
+        else {
+          const c = y && x >= bpp ? raw[up + x - bpp] : 0, p = a + b - c, pa = Math.abs(p - a), pb = Math.abs(p - b), pc = Math.abs(p - c);
+          v = v0 - (pa <= pb && pa <= pc ? a : pb <= pc ? b : c);
+        }
+        v &= 255;
+        if (dst) dst[x] = v;
+        sum += v < 128 ? v : 256 - v;
+        if (sum >= limit) break;
+      }
+      return sum;
+    };
+    for (let y = 0; y < rows; y++) {
+      let best = 0, bestSum = Infinity;
+      for (let f = 0; f < 5; f++) { const sum = run(f, y, null, bestSum); if (sum < bestSum) { bestSum = sum; best = f; } }
+      const at = y * (rowLen + 1);
+      out[at] = best;
+      run(best, y, out.subarray(at + 1, at + 1 + rowLen), Infinity);
+    }
+    return out;
+  }
+
+  // An RGB image with 256 colours or fewer, as the exact same picture with a palette: one index per pixel,
+  // packed to 1, 2 or 4 bits when there are that few colours. The palette is built on the image's own colour space.
+  function toPalette(raw, W, H, base, ctx) {
+    const px = W * H, idx = new Uint8Array(px), map = new Map(), plte = [];
+    for (let i = 0, j = 0; i < px; i++, j += 3) {
+      const c = (raw[j] << 16) | (raw[j + 1] << 8) | raw[j + 2];
+      let k = map.get(c);
+      if (k === undefined) {
+        if (plte.length === 256) return null;
+        k = plte.length; map.set(c, k); plte.push(c);
+      }
+      idx[i] = k;
+    }
+    const n = plte.length, depth = n <= 2 ? 1 : n <= 4 ? 2 : n <= 16 ? 4 : 8;
+    let data = idx;
+    if (depth < 8) {   // rows start on a byte, as PDF wants
+      const per = 8 / depth, rowLen = Math.ceil(W / per);
+      data = new Uint8Array(rowLen * H);
+      for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) data[y * rowLen + ((x / per) | 0)] |= idx[y * W + x] << (8 - depth * ((x % per) + 1));
+    }
+    let hex = '';
+    for (const c of plte) hex += c.toString(16).padStart(6, '0');
+    return { data, bpc: depth, colorSpace: ctx.obj([N_('Indexed'), base, n - 1, PDFLib.PDFHexString.of(hex)]) };
+  }
+
+  // pdf-lib writes every object it holds, referenced or not: drop what nothing points to any more.
+  function dropUnreachable(doc) {
+    const ctx = doc.context, seen = new Set(), todo = [];
+    const visit = (o) => {
+      if (o instanceof PDFLib.PDFRef) { if (!seen.has(o)) { seen.add(o); todo.push(o); } }
+      else if (o instanceof PDFLib.PDFDict) for (const [, v] of o.entries()) visit(v);
+      else if (o instanceof PDFLib.PDFArray) for (let i = 0; i < o.size(); i++) visit(o.get(i));
+      else if (o instanceof PDFLib.PDFStream) visit(o.dict);
+    };
+    visit(ctx.trailerInfo.Root); visit(ctx.trailerInfo.Info);
+    while (todo.length) visit(ctx.lookup(todo.pop()));
+    for (const [ref] of ctx.enumerateIndirectObjects()) if (!seen.has(ref)) ctx.delete(ref);
+  }
+
+  // Returns whether anything changed.
+  async function slimDoc(doc, job, progress) {
+    const ctx = doc.context, all = ctx.enumerateIndirectObjects();
+    let changed = false;
+    for (let k = 0; k < all.length; k++) {
+      const [ref, obj] = all[k];
+      if (k % 8 === 0) { check(job); progress(k / all.length); await Core.nextFrame(); }
+      const dict = obj instanceof PDFLib.PDFRawStream ? obj.dict : obj instanceof PDFLib.PDFDict ? obj : null;
+      if (!dict) continue;
+      // display never uses these: editing apps' private data, page thumbnails, per-object XMP metadata
+      for (const key of ['PieceInfo', 'Thumb', 'Metadata']) {
+        if (!dict.has(N_(key)) || (key === 'Metadata' && dict === doc.catalog) || (key === 'Thumb' && dict.get(N_('Type')) !== N_('Page'))) continue;
+        dict.delete(N_(key));
+        changed = true;
+      }
+      if (!(obj instanceof PDFLib.PDFRawStream)) continue;
+      const type = dict.get(N_('Type'));
+      if (type === N_('XRef') || type === N_('ObjStm') || type === N_('Metadata')) continue;
+      let f = dict.lookup(N_('Filter'));
+      f = f === undefined ? [] : f instanceof PDFLib.PDFArray ? f.asArray() : [f];
+      const names = f.map((x) => (x instanceof PDFLib.PDFName ? x.decodeText() : '?'));
+      if (!names.every((n) => REDEFLATE.has(n))) continue;          // JPEG, JPEG 2000, fax, JBIG2 stay as they are
+      const parms = dict.lookup(N_('DecodeParms'));
+      if (parms && (names.length !== 1 || !(parms instanceof PDFLib.PDFDict))) continue;
+      const before = obj.contents.length;
+      if (before < 200) continue;
+      let data;
+      try { data = names.length ? PDFLib.decodePDFRawStream(obj).decode() : obj.contents; } catch { continue; }
+      // the decoded bytes keep any PNG/TIFF predictor, so its parameters carry over (minus LZW's own)
+      const predictor = parms ? num(parms.get(N_('Predictor'))) || 1 : 1;
+      const keep = {};
+      if (parms) for (const [key, v] of parms.entries()) if (key !== N_('EarlyChange')) keep[key.decodeText()] = v;
+      const tries = [{ bytes: await deflate(data), parms: parms ? keep : null }];
+      // raw images: PNG row filters, and a palette when there are few colours
+      const W = num(dict.get(N_('Width'))), H = num(dict.get(N_('Height')));
+      const bpc = dict.get(N_('ImageMask')) === PDFLib.PDFBool.True ? 1 : num(dict.get(N_('BitsPerComponent')));
+      const spp = dict.get(N_('Subtype')) === N_('Image') && predictor === 1 ? samplesOf(dict) : null;
+      if (spp && W && H && [1, 2, 4, 8, 16].includes(bpc)) {
+        const rowLen = Math.ceil((W * spp * bpc) / 8);
+        if (data.length >= rowLen * H) {
+          const raw = data.subarray(0, rowLen * H);
+          tries.push({ bytes: await deflate(filterRows(raw, rowLen, H, Math.max(1, (spp * bpc) >> 3))), parms: { Predictor: 15, Colors: spp, BitsPerComponent: bpc, Columns: W } });
+          // a colour-key /Mask or a /Decode array would mean something else on palette indexes
+          if (spp === 3 && bpc === 8 && !dict.has(N_('Decode')) && !(dict.lookup(N_('Mask')) instanceof PDFLib.PDFArray)) {
+            const pal = toPalette(raw, W, H, dict.get(N_('ColorSpace')), ctx);
+            if (pal) tries.push({ bytes: await deflate(pal.data), parms: null, colorSpace: pal.colorSpace, bpc: pal.bpc });
+          }
+        }
+      }
+      const best = tries.reduce((a, b) => (b.bytes.length < a.bytes.length ? b : a));
+      if (best.bytes.length > before * 0.97) continue;               // not worth touching
+      dict.set(N_('Filter'), N_('FlateDecode'));
+      if (best.parms) dict.set(N_('DecodeParms'), ctx.obj(best.parms)); else dict.delete(N_('DecodeParms'));
+      if (best.colorSpace) { dict.set(N_('ColorSpace'), best.colorSpace); dict.set(N_('BitsPerComponent'), PDFLib.PDFNumber.of(best.bpc)); }
+      ctx.assign(ref, PDFLib.PDFRawStream.of(dict, best.bytes));
+      changed = true;
+    }
+    if (changed) dropUnreachable(doc);
+    return changed;
+  }
+
+  // Identical streams (images, fonts, drawings), fonts and indirect arrays are kept once and shared; repeated
+  // passes catch fonts whose parts only became identical in the previous pass. Typical of merged files and of
+  // apps that embed the same logo or font again on every page.
+  const SHARE_TYPES = new Set(['Font', 'FontDescriptor', 'ExtGState', 'Encoding']);
+  function storeOnce(doc) {
+    const ctx = doc.context;
+    const hash = (b) => { let h = 0x811c9dc5; for (let i = 0; i < b.length; i++) h = Math.imul(h ^ b[i], 16777619); return h >>> 0; };
+    const fix = (o, map) => {
+      if (o instanceof PDFLib.PDFDict) {
+        for (const [k, v] of o.entries()) { if (v instanceof PDFLib.PDFRef) { if (map.has(v)) o.set(k, map.get(v)); } else fix(v, map); }
+      } else if (o instanceof PDFLib.PDFArray) {
+        for (let i = 0; i < o.size(); i++) { const v = o.get(i); if (v instanceof PDFLib.PDFRef) { if (map.has(v)) o.set(i, map.get(v)); } else fix(v, map); }
+      } else if (o instanceof PDFLib.PDFStream) fix(o.dict, map);
+    };
+    let shared = 0;
+    for (let pass = 0; pass < 4; pass++) {
+      const seen = new Map(), map = new Map();
+      for (const [ref, obj] of ctx.enumerateIndirectObjects()) {
+        let key;
+        if (obj instanceof PDFLib.PDFRawStream) {
+          if (obj.dict.get(N_('Type')) === N_('Metadata')) continue;
+          key = `s${obj.contents.length}:${hash(obj.contents)}:${obj.dict.toString().replace(/\/Length \d+/, '')}`;
+        } else if (obj instanceof PDFLib.PDFDict) {
+          const t = obj.get(N_('Type'));
+          if (!(t instanceof PDFLib.PDFName) || !SHARE_TYPES.has(t.decodeText())) continue;
+          key = `d${obj.toString()}`;
+        } else if (obj instanceof PDFLib.PDFArray) key = `a${obj.toString()}`;
+        else continue;
+        const first = seen.get(key);
+        if (!first) { seen.set(key, { ref, obj }); continue; }
+        if (obj instanceof PDFLib.PDFRawStream) {
+          const a = first.obj.contents, b = obj.contents;
+          let same = a.length === b.length;
+          for (let i = 0; same && i < a.length; i++) same = a[i] === b[i];
+          if (!same) continue;
+        }
+        map.set(ref, first.ref);
+      }
+      if (!map.size) break;
+      for (const [, obj] of ctx.enumerateIndirectObjects()) fix(obj, map);
+      for (const k of ['Root', 'Info']) if (map.has(ctx.trailerInfo[k])) ctx.trailerInfo[k] = map.get(ctx.trailerInfo[k]);
+      for (const ref of map.keys()) ctx.delete(ref);
+      shared += map.size;
+    }
+    return shared;
+  }
+
   // ---------- lossless page copies ----------
   // pdf-lib copy of a source with internal-link annotations and page back-references removed,
   // so copying a few pages never drags other pages along. Internal links are re-added afterwards.
+  // Protected sources are decrypted first (pdfcrypt.js), with the password typed for them, if any.
   async function libDoc(src) {
     if (!src.libDocPromise) {
       src.libDocPromise = (async () => {
-        if (src.password) throw new Error('encrypted');
         const bytes = new Uint8Array(await src.file.arrayBuffer());
-        const doc = await PDFLib.PDFDocument.load(bytes, { updateMetadata: false });
+        const doc = window.PdfCrypt
+          ? await PdfCrypt.load(bytes, src.password)
+          : await PDFLib.PDFDocument.load(bytes, { updateMetadata: false });
         const { PDFName, PDFArray, PDFDict } = PDFLib;
         const N = (s) => PDFName.of(s);
         for (const page of doc.getPages()) {
@@ -422,6 +632,7 @@
     const { PDFDocument } = PDFLib;
     const doc = await PDFDocument.create();
     const pages = [];
+    let unlocked = false;
     // copy consecutive runs from the same source in one call
     let i = 0;
     while (i < pagesG.length) {
@@ -430,6 +641,7 @@
       const run = [];
       while (i < pagesG.length && locate(project, pagesG[i]).src === src) { run.push(pagesG[i] - src.offset); i++; }
       const from = await libDoc(src);
+      unlocked = unlocked || !!from.wasEncrypted;
       const copied = await doc.copyPages(from, run);
       for (const p of copied) pages.push(doc.addPage(p));
     }
@@ -444,8 +656,9 @@
     }
     writeOutline(doc, filterOutline(await outlineTree(project), localOf), pages);
     finishMeta(doc, title);
+    try { storeOnce(doc); } catch (e) { console.warn('sharing identical objects skipped', e); }
     const bytes = await doc.save({ useObjectStreams: true });
-    return { bytes, linkCount, doc };
+    return { bytes, linkCount, doc, unlocked };
   }
 
   // ---------- stage 1: shrink the images, keep text and vector graphics as they are ----------
@@ -454,7 +667,7 @@
   // re-encoded. Text, lines, links and bookmarks are untouched, so they stay crisp and selectable.
   const SMART_LADDER = [
     [220, .85], [200, .82], [180, .80], [160, .78], [150, .75], [135, .72], [120, .70],
-    [110, .66], [100, .62], [90, .58], [80, .52], [72, .46],
+    [110, .66], [100, .62], [90, .58], [80, .52], [72, .46], [66, .40], [60, .32],
   ].map(([dpi, q]) => ({ dpi, q }));
   const SMART_TOP = SMART_LADDER[0].dpi;
 
@@ -902,28 +1115,43 @@
     let rasterProgress = progress;
     const whole = project.sources.length === 1 && N === project.sources[0].numPages && out.pages.every((g, i) => g === i);
     const src0 = project.sources[0];
-    const locked = out.pages.some((g) => locate(project, g).src.password);
     let asIs = whole && !src0.password ? { blob: src0.file, size: src0.file.size, method: 'original' } : null;
     if (settings.keepOriginal && asIs && asIs.size <= targetBytes) {
       progress(1, '原檔就符合上限');
       return done(asIs);
     }
-    if (!locked && (settings.keepOriginal || !asIs)) {
+    if (settings.keepOriginal || !asIs) {
       try {
         progress(0.01, '整理頁面…');
         const base = await buildLossless(project, out.pages, out.title, job);
-        const copy = { blob: new Blob([base.bytes], { type: 'application/pdf' }), size: base.bytes.length, method: 'lossless', linkCount: base.linkCount };
+        const copy = { blob: new Blob([base.bytes], { type: 'application/pdf' }), size: base.bytes.length, method: 'lossless', linkCount: base.linkCount, unlocked: base.unlocked };
         if (!asIs || copy.size < asIs.size) asIs = copy;
         if (settings.keepOriginal) {
           if (copy.size <= targetBytes) {
             progress(1, '不用壓縮就符合');
             return done(copy);
           }
+          // still too big: slim it without changing anything visible, and check again
+          // (a failure here only skips the slimming: every change it makes is complete on its own)
+          const slim = await slimDoc(base.doc, job, (f) => progress(0.01 + 0.07 * f, '無損瘦身…'))
+            .catch((e) => { if (e instanceof Cancelled) throw e; console.warn('lossless slimming skipped', e); return false; });
+          if (slim) {
+            const bytes = await base.doc.save({ useObjectStreams: true });
+            if (bytes.length < copy.size) {
+              base.bytes = bytes;
+              Object.assign(copy, { blob: new Blob([bytes], { type: 'application/pdf' }), size: bytes.length });
+              if (copy.size < asIs.size) asIs = copy;
+            }
+            if (copy.size <= targetBytes) {
+              progress(1, '無損瘦身就符合');
+              return done(copy);
+            }
+          }
           if (settings.mode === 'auto') {
-            const r = await imageOnly(base.doc, base.bytes.length, targetBytes, settings.gray, job, (f, t) => progress(0.03 + 0.42 * f, t));
+            const r = await imageOnly(base.doc, base.bytes.length, targetBytes, settings.gray, job, (f, t) => progress(0.08 + 0.37 * f, t));
             if (r) {
               progress(1, '完成');
-              return done({ blob: new Blob([r.bytes], { type: 'application/pdf' }), size: r.bytes.length, method: 'smart', setting: r.setting, images: r.images, linkCount: base.linkCount });
+              return done({ blob: new Blob([r.bytes], { type: 'application/pdf' }), size: r.bytes.length, method: 'smart', setting: r.setting, images: r.images, linkCount: base.linkCount, unlocked: base.unlocked });
             }
             rasterProgress = (f, t) => progress(0.45 + 0.55 * f, t);
             progress(0.45, '改用整頁轉圖片…');

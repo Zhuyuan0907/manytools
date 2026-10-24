@@ -825,6 +825,7 @@
     if (r.method === 'smart') bits.push(`${r.images} 張圖片・${r.setting.dpi} DPI・品質 ${Math.round(r.setting.q * 100)}`);
     if (r.method === 'compressed') bits.push(describeSetting(r.setting));
     if (st.gray && (r.method === 'compressed' || r.method === 'smart')) bits.push('灰階');
+    if (r.unlocked) bits.push('已移除原檔的編輯限制');
     if (r.method !== 'original') bits.push(r.linkCount ? `保留 ${r.linkCount} 個連結` : '沒有連結');
     bits.push(`原始 ${fmtMB(state.project.sources.reduce((a, s) => a + s.file.size, 0))}`);
     bits.push(`花了 ${r.seconds < 60 ? Math.max(1, Math.round(r.seconds)) + ' 秒' : (r.seconds / 60).toFixed(1) + ' 分鐘'}`);
