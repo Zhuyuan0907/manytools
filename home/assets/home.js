@@ -30,6 +30,7 @@
         const saved = (v.savedBytes || 0) + (p.savedBytes || 0);
         countUp($('[data-stat="video.files"]'), v.files || 0);
         countUp($('[data-stat="pdf.files"]'), p.files || 0);
+        countUp($('[data-stat="avatar.files"]'), ((st && st.avatar) || {}).files || 0);
         if (saved > 0) $('[data-stat="saved"]').textContent = saved >= 1e9 ? `${(saved / 1e9).toFixed(1)} GB` : `${Math.max(1, Math.round(saved / 1e6))} MB`;
       })
       .catch(() => {});
