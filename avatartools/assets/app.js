@@ -167,7 +167,10 @@
     const yes = list.filter((e) => e.status === 'yes').length;
     $('#note').textContent = !list.length ? '還沒有輸入 Email。' : `${list.length} 個 Email・${yes} 個有自訂頭貼`;
     $('#copyAll').disabled = !list.length;
-    $('#zipAll').disabled = !list.some((e) => downloadable(e, o));
+    // one picture comes as itself; only two or more are worth a ZIP
+    const canGet = list.filter((e) => downloadable(e, o)).length;
+    $('#zipAll').disabled = !canGet;
+    if (!$('#zipAll').dataset.busy) $('#zipAll').textContent = canGet === 1 ? '下載頭貼' : '全部下載（ZIP）';
     $('.panel-foot').classList.toggle('solo', list.length <= 1);
   }
 
@@ -261,8 +264,9 @@
 
   $('#zipAll').addEventListener('click', async () => {
     const o = opts(), todo = list.filter((e) => downloadable(e, o));
+    if (todo.length === 1) { downloadOne(todo[0]); return; }
     const btn = $('#zipAll'), label = btn.textContent;
-    btn.disabled = true;
+    btn.disabled = true; btn.dataset.busy = '1';
     const files = [];
     let failed = 0;
     for (let i = 0; i < todo.length; i++) {
@@ -270,7 +274,7 @@
       try { const b = await fetchImage(todo[i], o); files.push({ name: `${safeName(todo[i].email)}.${extOf(b.type)}`, data: new Uint8Array(await b.arrayBuffer()) }); }
       catch { failed++; }
     }
-    btn.textContent = label; btn.disabled = false;
+    btn.textContent = label; btn.disabled = false; delete btn.dataset.busy;
     if (!files.length) { toast('下載失敗，請稍後再試'); return; }
     save(ManyZip.make(files), `gravatar-${files.length}.zip`);
     toast(failed ? `已打包 ${files.length} 張，${failed} 張沒抓到` : `已打包 ${files.length} 張頭貼`);

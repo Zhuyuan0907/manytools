@@ -53,7 +53,8 @@
   const pending = new Map();
   let seq = 0;
   try {
-    worker = new Worker('assets/worker.js');
+    const ver = ((document.querySelector('script[src*="compress.js"]') || {}).src || '').split('?')[1];
+    worker = new Worker(`assets/worker.js${ver ? `?${ver}` : ''}`);
     worker.onmessage = (e) => { const p = pending.get(e.data.id); if (p) { pending.delete(e.data.id); p(e.data); } };
     worker.onerror = () => { worker = null; for (const [, p] of pending) p({ ok: false, code: 'retry' }); pending.clear(); };
   } catch { worker = null; }
@@ -161,7 +162,9 @@
     }
     const done = items.filter((it) => it.status === 'done');
     $('#note').textContent = !items.length ? '還沒有加入圖片。' : `${items.length} 張・${done.length} 張完成`;
+    // one picture comes as itself; only two or more are worth a ZIP
     $('#zipAll').disabled = !done.length;
+    $('#zipAll').textContent = done.length === 1 ? '下載圖片' : '全部下載（ZIP）';
     $('#clearAll').disabled = !items.length;
     $('.panel-foot').classList.toggle('solo', items.length <= 1);
   }
@@ -220,6 +223,7 @@
   const download = (it) => save(it.result.blob, outName(it));
   $('#zipAll').addEventListener('click', async () => {
     const done = items.filter((it) => it.status === 'done');
+    if (done.length === 1) { download(done[0]); return; }
     const used = new Set(), files = [];
     for (const it of done) {
       let name = outName(it), n = 2;

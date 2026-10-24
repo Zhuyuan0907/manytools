@@ -102,16 +102,36 @@ function handleApi(req, res, url) {
   return false;
 }
 
+// Cloudflare tells browsers to keep CSS and JS for hours whatever we send, which pairs a fresh page with an old
+// stylesheet. So each page names its stylesheets, scripts and images with ?v=<file time>: a changed file gets a
+// new address and is fetched right away, an unchanged one stays cached.
+function fileFor(urlPath, pageDir) {
+  if (!urlPath.startsWith('/')) return path.join(pageDir, urlPath);
+  for (const { route: r, dir } of MOUNTS) {
+    if (r && !urlPath.startsWith(`${r}/`)) continue;
+    return path.join(dir, urlPath.slice(r.length));
+  }
+  return null;
+}
+function versioned(html, pageDir) {
+  return html.replace(/(<(?:script|link|img)\b[^>]*?\s(?:src|href)=")([^"?#:]+\.(?:css|js|svg|png|jpg|webp))(")/gi, (m, a, u, b) => {
+    let st;
+    try { const f = fileFor(u, pageDir); st = f && fs.statSync(f); } catch { return m; }
+    return st ? `${a}${u}?v=${Math.round(st.mtimeMs).toString(36)}${b}` : m;
+  });
+}
+
 function serveFile(req, res, file, base, immutable) {
   fs.stat(file, (err, st) => {
     if (err || !st.isFile()) return send(res, 404, 'not found', 'text/plain; charset=utf-8');
     const type = TYPES[path.extname(file).toLowerCase()] || 'application/octet-stream';
     const head = { ...HEADERS, 'Content-Type': type, 'Cache-Control': immutable ? 'public, max-age=31536000, immutable' : 'no-cache' };
-    if (base) {
-      // the tool's own index.html, served at /video: point its relative paths into /video/
+    if (path.extname(file).toLowerCase() === '.html') {
       return fs.readFile(file, 'utf8', (e, html) => {
         if (e) return send(res, 500, 'error', 'text/plain');
-        const out = Buffer.from(html.replace(/<head>/i, `<head>\n<base href="${base}">`));
+        // a tool's own index.html, served at /video: point its relative paths into /video/
+        if (base) html = html.replace(/<head>/i, `<head>\n<base href="${base}">`);
+        const out = Buffer.from(versioned(html, path.dirname(file)));
         res.writeHead(200, { ...head, 'Content-Length': out.length });
         res.end(req.method === 'HEAD' ? undefined : out);
       });
