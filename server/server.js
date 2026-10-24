@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /* ZhuyuanTools static server + the public counters. No dependencies: `node server/server.js`.
    Clean URLs, each tool still in its own folder:
-     /       → home/            /video → videotools/            /pdf → pdftools/local/     /avatar → avatartools/     /image → imagetools/     /fonts → fonts/     /shared → shared/
+     /       → home/            /video → videotools/            /pdf → pdftools/local/     /avatar → avatartools/     /image → imagetools/     /crop → croptools/     /fonts → fonts/     /shared → shared/
    A tool's page is served at /video (no trailing slash) with <base href="/video/"> injected, so its relative
    asset paths keep working both here and when the folder is opened straight from disk.
    Counters keep only totals (files, seconds/pages, bytes saved) per tool — never file content:
@@ -13,6 +13,7 @@
      GET  /avatar/api/stats         → avatar totals
      POST /avatar/api/stats/processed ← { files }   (emails looked up)
      POST /image/api/stats/processed  ← { files, savedBytes }
+     POST /crop/api/stats/processed   ← { files }   (avatars cropped)
    Env: PORT (default 8080), HOST (default 127.0.0.1), STATS_FILE (default server/data/stats.json). */
 'use strict';
 const http = require('http');
@@ -30,6 +31,7 @@ const MOUNTS = [
   { route: '/pdf', dir: path.join(ROOT, 'pdftools', 'local'), tool: 'pdf' },
   { route: '/avatar', dir: path.join(ROOT, 'avatartools'), tool: 'avatar' },
   { route: '/image', dir: path.join(ROOT, 'imagetools'), tool: 'image' },
+  { route: '/crop', dir: path.join(ROOT, 'croptools'), tool: 'crop' },
   { route: '/fonts', dir: path.join(ROOT, 'fonts'), immutable: true },
   { route: '/shared', dir: path.join(ROOT, 'shared') },
   { route: '', dir: path.join(ROOT, 'home') },
@@ -42,9 +44,10 @@ const LEGACY = [
   [/^\/pdftools(\/(local(\/(index\.html)?)?)?)?$/, '/pdf'],
   [/^\/avatartools(\/(index\.html)?)?$/, '/avatar'],
   [/^\/imagetools(\/(index\.html)?)?$/, '/image'],
+  [/^\/croptools(\/(index\.html)?)?$/, '/crop'],
 ];
 
-const FIELDS = { video: ['files', 'seconds', 'savedBytes'], pdf: ['files', 'pages', 'savedBytes'], avatar: ['files'], image: ['files', 'savedBytes'] };
+const FIELDS = { video: ['files', 'seconds', 'savedBytes'], pdf: ['files', 'pages', 'savedBytes'], avatar: ['files'], image: ['files', 'savedBytes'], crop: ['files'] };
 // Upper bounds for one report, so a single bad request can't inflate the counters much.
 const LIMITS = { files: 50, seconds: 6 * 3600 * 50, pages: 5000, savedBytes: 200e9 };
 
@@ -54,7 +57,7 @@ const TYPES = {
   '.txt': 'text/plain; charset=utf-8', '.woff2': 'font/woff2', '.wasm': 'application/wasm', '.ico': 'image/x-icon',
 };
 
-let stats = { video: {}, pdf: {}, avatar: {}, image: {} };
+let stats = { video: {}, pdf: {}, avatar: {}, image: {}, crop: {} };
 try { stats = { ...stats, ...JSON.parse(fs.readFileSync(STATS_FILE, 'utf8')) }; } catch {}
 for (const [k, fields] of Object.entries(FIELDS)) for (const f of fields) stats[k][f] = +stats[k][f] || 0;
 

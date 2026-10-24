@@ -31,11 +31,21 @@
         const saved = (v.savedBytes || 0) + (p.savedBytes || 0) + (((st && st.image) || {}).savedBytes || 0);
         countUp($('[data-stat="video.files"]'), v.files || 0);
         countUp($('[data-stat="pdf.files"]'), p.files || 0);
-        countUp($('[data-stat="avatar.files"]'), ((st && st.avatar) || {}).files || 0);
+        countUp($('[data-stat="avatar.files"]'), (((st && st.avatar) || {}).files || 0) + (((st && st.crop) || {}).files || 0));   // looked up + cropped
         countUp($('[data-stat="image.files"]'), ((st && st.image) || {}).files || 0);
         if (saved > 0) $('[data-stat="saved"]').textContent = saved >= 1e9 ? `${(saved / 1e9).toFixed(1)} GB` : `${Math.max(1, Math.round(saved / 1e6))} MB`;
       })
       .catch(() => {});
+  }
+
+  // ---------- the tool hiding behind the avatar card ----------
+  // Hover and keyboard focus show it by CSS alone; touch screens use the "+1" button, and a tap elsewhere hides it.
+  const stack = $('#avatarStack'), peekBtn = $('#peekToggle');
+  if (stack && peekBtn) {
+    const show = (open) => { stack.classList.toggle('open', open); peekBtn.setAttribute('aria-expanded', String(open)); };
+    peekBtn.addEventListener('click', () => show(!stack.classList.contains('open')));
+    document.addEventListener('click', (e) => { if (!stack.contains(e.target)) show(false); });
+    document.addEventListener('keydown', (e) => { if (e.key === 'Escape') show(false); });
   }
 
   // ---------- drop area → the right tool ----------

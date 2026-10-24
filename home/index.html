@@ -25,7 +25,7 @@
   <header class="top">
     <a class="brand" href="./"><img src="assets/logo.svg" alt="" width="40" height="40"><span class="brand-text"><span class="wordmark">ZhuyuanTools</span><span class="tagline">小小ㄉ工具箱</span></span></a>
     <div class="top-right">
-      <p class="hstats" id="nums" aria-label="處理數量"><span class="l">已處理 </span><span data-stat="video.files">0</span> <span class="l">部</span>影片・<span data-stat="pdf.files">0</span> <span class="l">份 </span>PDF・<span data-stat="avatar.files">0</span> <span class="l">個</span>頭貼・<span data-stat="image.files">0</span> <span class="l">張</span>圖片<span class="l">・省下 <span data-stat="saved">0 MB</span></span></p>
+      <p class="hstats" id="nums" aria-label="處理數量"><span class="l">已處理 </span><span data-stat="video.files">0</span> <span class="l">部</span>影片・<span data-stat="pdf.files">0</span> <span class="l">份 </span>PDF・<span data-stat="image.files">0</span> <span class="l">張</span>圖片・<span data-stat="avatar.files">0</span> <span class="l">個</span>頭貼<span class="l">・省下 <span data-stat="saved">0 MB</span></span></p>
       <p class="privacy"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="10" width="16" height="11" rx="2"></rect><path d="M8 10V7a4 4 0 0 1 8 0v3"></path></svg><span class="privacy-long">檔案只在你的電腦處理，不會上傳</span><span class="privacy-short">不上傳</span></p>
     </div>
   </header>
@@ -77,24 +77,9 @@
           </svg>
         </span>
       </a>
-      <a class="tool avatar" href="/avatar" data-local="../avatartools/index.html">
-        <span class="tool-text">
-          <span class="tool-top"><span class="no">03</span><span class="word">Zhuyuan<i>Love</i><u>Avatar</u></span></span>
-          <b class="tool-name">Gravatar 頭貼查詢</b>
-          <span class="tool-desc">輸入 Email 拿到頭貼</span>
-          <span class="cta">開始查詢 <span aria-hidden="true">→</span></span>
-        </span>
-        <span class="art" aria-hidden="true">
-          <svg viewBox="0 0 300 160">
-            <g><rect x="12" y="34" width="112" height="78" rx="12" class="page"/><path d="M16 42l52 38 52-38" class="fold"/><rect x="28" y="120" width="80" height="28" rx="8" class="chip-ok"/><text x="68" y="139" class="chip-t mono">@email</text></g>
-            <g class="arrow"><path d="M140 72h36"/><path d="M168 62l10 10-10 10"/></g>
-            <g class="small"><circle cx="240" cy="74" r="48" class="ring"/><circle cx="240" cy="62" r="15" class="play"/><path d="M209 106c6-15 17-23 31-23s25 8 31 23a48 48 0 0 1-62 0z" class="play"/><circle cx="280" cy="34" r="14" class="check-bg"/><path d="M273.5 34.5l4.5 4.5 8-9" class="check"/></g>
-          </svg>
-        </span>
-      </a>
       <a class="tool image" href="/image" data-local="../imagetools/index.html">
         <span class="tool-text">
-          <span class="tool-top"><span class="no">04</span><span class="word">Zhuyuan<i>Love</i><u>Image</u></span></span>
+          <span class="tool-top"><span class="no">03</span><span class="word">Zhuyuan<i>Love</i><u>Image</u></span></span>
           <b class="tool-name">圖片壓縮</b>
           <span class="tool-desc">照片太大？壓到上限內</span>
           <span class="cta">開始壓縮 <span aria-hidden="true">→</span></span>
@@ -107,6 +92,33 @@
           </svg>
         </span>
       </a>
+      <!-- 04 hides a second avatar tool behind it: it slides out on hover or focus, or with the "+1" button on touch screens -->
+      <div class="tool-stack" id="avatarStack">
+        <a class="tool avatar" href="/avatar" data-local="../avatartools/index.html">
+          <span class="tool-text">
+            <span class="tool-top"><span class="no">04</span><span class="word">Zhuyuan<i>Love</i><u>Avatar</u></span></span>
+            <b class="tool-name">Gravatar 頭貼查詢</b>
+            <span class="tool-desc">輸入 Email 拿到頭貼</span>
+            <span class="cta">開始查詢 <span aria-hidden="true">→</span></span>
+          </span>
+          <span class="art" aria-hidden="true">
+            <svg viewBox="0 0 300 160">
+              <g><rect x="12" y="34" width="112" height="78" rx="12" class="page"/><path d="M16 42l52 38 52-38" class="fold"/><rect x="28" y="120" width="80" height="28" rx="8" class="chip-ok"/><text x="68" y="139" class="chip-t mono">@email</text></g>
+              <g class="arrow"><path d="M140 72h36"/><path d="M168 62l10 10-10 10"/></g>
+              <g class="small"><circle cx="240" cy="74" r="48" class="ring"/><circle cx="240" cy="62" r="15" class="play"/><path d="M209 106c6-15 17-23 31-23s25 8 31 23a48 48 0 0 1-62 0z" class="play"/><circle cx="280" cy="34" r="14" class="check-bg"/><path d="M273.5 34.5l4.5 4.5 8-9" class="check"/></g>
+            </svg>
+          </span>
+        </a>
+        <a class="tool crop peek" id="cropCard" href="/crop" data-local="../croptools/index.html">
+          <span class="tool-text">
+            <span class="tool-top"><span class="no">05</span><span class="word">Zhuyuan<i>Love</i><u>Crop</u></span></span>
+            <b class="tool-name">頭貼裁切</b>
+            <span class="tool-desc">裁成圓形、方形頭貼</span>
+            <span class="cta"><span aria-hidden="true">→</span></span>
+          </span>
+        </a>
+        <button type="button" class="peek-toggle" id="peekToggle" aria-expanded="false" aria-controls="cropCard" title="同一類還有：頭貼裁切"><span aria-hidden="true">+1</span><span class="sr">顯示頭貼裁切</span></button>
+      </div>
     </section>
   </main>
 

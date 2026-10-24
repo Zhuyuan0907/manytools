@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="ZhuyuanLoveCrop">
+  <defs>
+    <linearGradient id="zlc-bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ef64a9"/>
+      <stop offset="1" stop-color="#c82a7b"/>
+    </linearGradient>
+    <clipPath id="zlc-face"><circle cx="32" cy="32" r="12.5"/></clipPath>
+  </defs>
+  <rect width="64" height="64" rx="15" fill="url(#zlc-bg)"/>
+  <!-- crop marks around the picture -->
+  <path d="M18 10.5v33.5a2 2 0 0 0 2 2h33.5M10.5 18h33.5a2 2 0 0 1 2 2v33.5" fill="none" stroke="#fff" stroke-width="3.8" stroke-linecap="round" stroke-linejoin="round"/>
+  <!-- a round profile picture -->
+  <circle cx="32" cy="32" r="12.5" fill="#fff"/>
+  <g clip-path="url(#zlc-face)" fill="#f7c3dc">
+    <circle cx="32" cy="28.2" r="4.6"/>
+    <path d="M21 46c1-7.5 5.5-11.5 11-11.5S42 38.5 43 46z"/>
+  </g>
+  <!-- the heart, on its chest -->
+  <path transform="translate(28.6 35.8) scale(.29)" d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" fill="#ff5a4e"/>
+</svg>

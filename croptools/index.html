@@ -1,0 +1,230 @@
+<!doctype html>
+<html lang="zh-Hant-TW">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#ffffff">
+<title>ZhuyuanLoveCrop・頭貼裁切</title>
+<meta name="description" content="把照片裁成頭貼：拖曳、縮放、旋轉對準臉，輸出圓形或正方形，一次可以處理很多張。圖片只在你的電腦裡處理，不會上傳。">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="ZhuyuanTools">
+<meta property="og:locale" content="zh_TW">
+<meta property="og:title" content="ZhuyuanLoveCrop・頭貼裁切">
+<meta property="og:description" content="把照片裁成頭貼：拖曳、縮放、旋轉對準臉，輸出圓形或正方形，一次可以處理很多張。圖片只在你的電腦裡處理，不會上傳。">
+<meta property="og:url" content="https://tools.zhuyuan.tw/crop">
+<meta property="og:image" content="https://tools.zhuyuan.tw/crop/assets/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" href="assets/logo.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/fonts/noto-sans-tc.css">
+<link rel="stylesheet" href="assets/app.css">
+</head>
+<body>
+<div class="app">
+  <header class="top">
+    <a class="brand" id="brand" href="../home/index.html" title="回到 ZhuyuanTools 首頁">
+      <img class="logo" src="assets/logo.svg" alt="" width="44" height="44">
+      <span class="brand-text">
+        <span class="wordmark">Zhuyuan<span class="w-love">Love</span><span class="w-tool">Crop</span></span>
+        <span class="tagline">頭貼裁切工具</span>
+      </span>
+    </a>
+    <p class="privacy">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="10" width="16" height="11" rx="2"></rect><path d="M8 10V7a4 4 0 0 1 8 0v3"></path></svg>
+      <span class="privacy-long">圖片只在你的電腦裡處理，不會上傳到任何伺服器。</span><span class="privacy-short">不上傳</span>
+    </p>
+  </header>
+
+  <nav class="stepper" aria-label="步驟">
+    <p class="m-step" id="mStep" aria-hidden="true"></p>
+    <ol>
+      <li><button type="button" data-goto="1"><span class="dot">1</span><span class="lbl">放入圖片</span></button></li>
+      <li><button type="button" data-goto="2"><span class="dot">2</span><span class="lbl">裁切</span></button></li>
+      <li><button type="button" data-goto="3"><span class="dot">3</span><span class="lbl">輸出與下載</span></button></li>
+    </ol>
+  </nav>
+
+  <main>
+    <!-- ============ STEP 1 ============ -->
+    <section class="panel" id="step1" aria-labelledby="h1t">
+      <div class="hero" id="hero">
+        <div class="hero-text">
+          <h2 class="hero-title" id="h1t">選一張照片，<span>裁成<em>好看的頭貼</em></span></h2>
+          <p class="hero-count" id="heroCount" aria-live="polite">免費・免註冊・圖片不上傳</p>
+        </div>
+        <div class="hero-art" aria-hidden="true">
+          <svg viewBox="0 0 300 160" width="300" height="160">
+            <g class="ha-big">
+              <rect x="6" y="12" width="124" height="96" rx="12" class="ha-page"/>
+              <circle cx="36" cy="38" r="9" class="ha-sun"/>
+              <circle cx="80" cy="50" r="15" class="ha-hill"/>
+              <path d="M52 108c3-20 14-30 28-30s25 10 28 30z" class="ha-hill"/>
+              <path d="M54 24v58h58M48 30h58v58" class="ha-marks"/>
+            </g>
+            <g class="ha-arrow"><path d="M142 62h36"/><path d="M170 52l10 10-10 10"/></g>
+            <g class="ha-small">
+              <circle cx="240" cy="62" r="46" class="ha-ring"/>
+              <circle cx="240" cy="50" r="15" class="ha-hill"/>
+              <path d="M210 93c6-15 17-23 30-23s24 8 30 23a46 46 0 0 1-60 0z" class="ha-hill"/>
+              <rect x="204" y="118" width="72" height="26" rx="7" class="ha-chip-ok"/>
+              <text x="240" y="136" class="ha-chip-text">1024 px</text>
+              <circle cx="280" cy="24" r="14" class="ha-check-bg"/>
+              <path d="M273.5 24.5l4.5 4.5 8-9" class="ha-check"/>
+            </g>
+          </svg>
+        </div>
+      </div>
+      <div class="panel-body step1-body">
+        <label class="drop" id="drop" for="fileInput">
+          <input type="file" id="fileInput" accept="image/*,.jpg,.jpeg,.png,.webp,.gif,.avif,.bmp,.heic,.heif" multiple aria-label="選擇圖片">
+          <span class="drop-inner">
+            <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6.13 1 6 16a2 2 0 0 0 2 2h15"></path><path d="M1 6.13 16 6a2 2 0 0 1 2 2v15"></path></svg>
+            <span class="drop-title"><span class="d-desk">把照片拖進這裡</span><span class="d-mob">選擇照片</span></span>
+            <span class="drop-hint"><span class="d-desk">或點一下選擇檔案・</span>可以一次放很多張</span>
+          </span>
+        </label>
+        <ol class="how" aria-label="怎麼用">
+          <li><span class="how-no">1</span><b>放入照片</b><span>JPG・PNG・WebP 都可以</span></li>
+          <li><span class="how-no">2</span><b>對準臉</b><span>拖曳、縮放、旋轉</span></li>
+          <li><span class="how-no">3</span><b>下載頭貼</b><span>圓形或正方形</span></li>
+        </ol>
+        <ol class="sources" id="sources" aria-label="已加入的圖片"></ol>
+      </div>
+      <div class="panel-foot">
+        <span class="foot-note" id="note1">還沒有加入圖片。</span>
+        <button type="button" class="btn primary" id="next1" disabled>下一步：裁切 →</button>
+      </div>
+    </section>
+
+    <!-- ============ STEP 2 ============ -->
+    <section class="panel fill" id="step2" aria-labelledby="h2t" hidden>
+      <div class="panel-head">
+        <span class="step-no" aria-hidden="true">2</span>
+        <div class="head-text">
+          <h2 id="h2t">把臉放進框裡</h2>
+          <p>拖曳移動，用滾輪或下面的滑桿縮放；虛線圓是圓形頭貼看得到的範圍。</p>
+        </div>
+      </div>
+      <div class="panel-body step2-body">
+        <div class="editor">
+          <div class="stage" id="stage">
+            <canvas id="stageCanvas" tabindex="0" aria-label="裁切範圍：拖曳移動，滾輪縮放，方向鍵也可以移動，加減鍵縮放"></canvas>
+          </div>
+          <div class="side">
+           <div class="side-in">
+            <div class="set set-zoom">
+              <span class="set-label" id="lblZoom">縮放</span>
+              <div class="zoom">
+                <button type="button" class="icon-btn" id="zoomOut" aria-label="縮小" title="縮小"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M5 12h14"/></svg></button>
+                <input type="range" id="zoom" min="0" max="1000" value="0" aria-labelledby="lblZoom">
+                <button type="button" class="icon-btn" id="zoomIn" aria-label="放大" title="放大"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></button>
+              </div>
+            </div>
+            <div class="set set-adjust">
+              <span class="set-label">調整</span>
+              <div class="tools-row">
+                <button type="button" class="btn small" id="rotL" title="向左轉 90°"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 4v6h6"/><path d="M3.5 10A9 9 0 1 1 6 17.5"/></svg>左轉</button>
+                <button type="button" class="btn small" id="rotR" title="向右轉 90°"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 4v6h-6"/><path d="M20.5 10A9 9 0 1 0 18 17.5"/></svg>右轉</button>
+                <button type="button" class="btn small" id="flip" title="左右翻轉"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v18"/><path d="M8 7 3 12l5 5V7z"/><path d="M16 7l5 5-5 5V7z"/></svg>翻轉</button>
+                <button type="button" class="btn small ghost" id="reset" title="回到一開始的位置">重設</button>
+              </div>
+            </div>
+            <div class="set set-looks">
+              <span class="set-label">實際看起來</span>
+              <div class="looks" id="looks" aria-label="頭貼在不同大小的樣子">
+                <figure><canvas width="96" height="96" data-size="96"></canvas><figcaption>個人頁</figcaption></figure>
+                <figure><canvas width="48" height="48" data-size="48"></canvas><figcaption>留言</figcaption></figure>
+                <figure><canvas width="28" height="28" data-size="28"></canvas><figcaption>清單</figcaption></figure>
+                <figure class="sq"><canvas width="96" height="96" data-size="96"></canvas><figcaption>正方形</figcaption></figure>
+              </div>
+            </div>
+            <div class="set pics" id="picsSet">
+              <span class="set-label">全部照片 <span class="pic-count" id="picCount"></span></span>
+              <ol class="thumbs" id="thumbs" aria-label="切換要裁切的照片"></ol>
+            </div>
+           </div>
+          </div>
+        </div>
+      </div>
+      <div class="panel-foot">
+        <button type="button" class="btn back" data-goto="1" aria-label="上一步"><span aria-hidden="true">←</span><span class="lbl">上一步</span></button>
+        <span class="foot-note" id="note2"></span>
+        <button type="button" class="btn" id="nextPic" hidden>下一張 →</button>
+        <button type="button" class="btn primary" id="next2">下一步：輸出 →</button>
+      </div>
+    </section>
+
+    <!-- ============ STEP 3 ============ -->
+    <section class="panel" id="step3" aria-labelledby="h3t" hidden>
+      <div class="panel-head">
+        <span class="step-no" aria-hidden="true">3</span>
+        <div class="head-text">
+          <h2 id="h3t">輸出與下載</h2>
+          <p>選好形狀和大小，結果馬上更新。</p>
+        </div>
+      </div>
+      <div class="panel-body step3-body">
+        <div class="out-grid">
+          <div class="set-col out-settings">
+            <div class="set">
+              <span class="set-label" id="lblShape">形狀</span>
+              <div class="seg" role="radiogroup" aria-labelledby="lblShape">
+                <label title="各平台都能用，網站會自己裁成圓形"><input type="radio" name="shape" value="square" checked><span>正方形</span></label>
+                <label title="圓形以外是透明的（PNG／WebP）"><input type="radio" name="shape" value="circle"><span>圓形</span></label>
+              </div>
+            </div>
+            <div class="set">
+              <span class="set-label" id="lblSize">尺寸</span>
+              <div class="chips" role="radiogroup" aria-labelledby="lblSize">
+                <label class="chip"><input type="radio" name="size" value="256"><span>256</span></label>
+                <label class="chip"><input type="radio" name="size" value="512"><span>512</span></label>
+                <label class="chip"><input type="radio" name="size" value="1024" checked><span>1024</span></label>
+                <label class="chip"><input type="radio" name="size" value="2048"><span>2048</span></label>
+                <span class="unit">px</span>
+              </div>
+            </div>
+            <div class="set">
+              <span class="set-label" id="lblFmt">格式</span>
+              <div class="seg" role="radiogroup" aria-labelledby="lblFmt">
+                <label title="清楚、可以透明，到處都能用"><input type="radio" name="fmt" value="image/png" checked><span>PNG</span></label>
+                <label title="檔案最小，不能透明"><input type="radio" name="fmt" value="image/jpeg" id="fmtJpeg"><span>JPEG</span></label>
+                <label title="小又可以透明，新的網站和 App 都支援"><input type="radio" name="fmt" value="image/webp"><span>WebP</span></label>
+              </div>
+              <p class="help" id="fmtHelp"></p>
+            </div>
+            <div class="set" id="bgSet" hidden>
+              <span class="set-label" id="lblBg">空白的地方</span>
+              <div class="seg" role="radiogroup" aria-labelledby="lblBg">
+                <label><input type="radio" name="bg" value="none" checked><span>透明</span></label>
+                <label><input type="radio" name="bg" value="#ffffff"><span>白色</span></label>
+                <label><input type="radio" name="bg" value="#000000"><span>黑色</span></label>
+              </div>
+              <p class="help">照片縮得比框小時，旁邊空出來的地方</p>
+            </div>
+          </div>
+          <div class="out-results">
+            <p class="sum" id="sum"></p>
+            <ol class="list" id="results" aria-label="裁好的頭貼"></ol>
+            <p class="help xlink">要換到 Gravatar？<a href="/avatar">先查查你的 Email 現在用什麼頭貼 →</a></p>
+            <button type="button" class="btn small restart" id="restart"><span aria-hidden="true">↺</span> 換一批照片重新開始</button>
+          </div>
+        </div>
+      </div>
+      <div class="panel-foot">
+        <button type="button" class="btn back" data-goto="2" aria-label="回去調整裁切"><span aria-hidden="true">←</span><span class="lbl">回去調整裁切</span></button>
+        <span class="foot-note" id="note3"></span>
+        <button type="button" class="btn primary" id="zipAll" disabled>全部下載（ZIP）</button>
+      </div>
+    </section>
+  </main>
+</div>
+
+<div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+
+<script src="/shared/zip.js"></script>
+<script src="assets/app.js"></script>
+<script src="/shared/handoff.js" data-tool="crop" data-input="#fileInput"></script>
+<script src="/shared/mobile-nav.js"></script>
+</body>
+</html>
