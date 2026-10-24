@@ -758,6 +758,29 @@
     if (st && text) st.textContent = text;
   }
 
+  // The text itself (drawn as outlines, as Figma exports do) was over the limit, so the pages became pictures.
+  // Say so, and offer the split that would keep the text as text: the most pages per file such that any run of
+  // that many pages keeps its text within 60% of the limit (the rest is for the photos).
+  function textAdvice(o, r, main) {
+    const limit = o.settings.targetMB * MB, w = r.textHeavy.pageText || [], room = limit * 0.6;
+    const perPage = r.textHeavy.bytes / r.textHeavy.pages;
+    const fitsEvery = (n) => { for (let i = 0; i + n <= w.length || (i === 0 && n > w.length); i++) if (w.slice(i, i + n).reduce((a, b) => a + b, 0) > room) return false; return true; };
+    let pages = 0;
+    while (pages < w.length && fitsEvery(pages + 1)) pages++;
+    main.append(el('p', { class: 'out-hint', text: `文字是外框（像 Figma 匯出的），光文字就有 ${fmtMB(r.textHeavy.bytes)}，所以整頁轉成了圖片` }));
+    if (pages >= 1 && pages < r.textHeavy.pages && state.project.sources.length) {
+      main.append(el('div', { class: 'out-fixes' }, el('button', { class: 'btn small', type: 'button', text: `改成每 ${pages} 頁一份，文字保持清晰`, onclick: () => splitEvery(pages) })));
+    } else if (pages < 1) {
+      main.append(el('p', { class: 'out-hint', text: `上限至少要 ${fmtMB(Math.ceil((perPage / 0.7) / 1e5) * 1e5)}，一頁的文字才放得下` }));
+    }
+  }
+  function splitEvery(n) {
+    go(2);
+    if (state.splitMode !== 'split') $('#chooseSplit').click();
+    $('#everyN').value = n;
+    $('#applyEvery').click();
+  }
+
   function describeSetting(s) {
     return s.fmt === 'jpeg' ? `${s.dpi} DPI・JPEG 品質 ${Math.round(s.q * 100)}` : `${s.dpi} DPI・PNG ${s.colors ? s.colors + ' 色' : '無損'}`;
   }
@@ -811,6 +834,14 @@
         compressed: r.setting && r.setting.dpi < 96 ? '已轉成圖片，請預覽看小字' : '已轉成圖片',
       }[r.method];
       main.append(el('p', { class: 'out-msg', text: r.smaller ? '轉成圖片反而更大，保留原本的頁面' : phrase }));
+      if (r.textHeavy && r.method === 'compressed') textAdvice(o, r, main);
+      // text kept sharp at the photos' expense, or the other way round: one click to see the other balance
+      if (r.method === 'smart' && r.setting.dpi < 100) {
+        main.append(el('p', { class: 'out-hint', text: `為了讓文字保持清晰，照片壓到 ${r.setting.dpi} DPI，可能有點糊` }),
+          el('div', { class: 'out-fixes' }, el('button', { class: 'btn small', type: 'button', text: '改成照片優先（文字也轉成圖片）', onclick: () => rerunOne(o, { keepOriginal: false }) })));
+      } else if (r.method === 'compressed' && !st.keepOriginal && !r.textHeavy) {
+        main.append(el('div', { class: 'out-fixes' }, el('button', { class: 'btn small', type: 'button', text: '改回文字優先', onclick: () => rerunOne(o, { keepOriginal: true }) })));
+      }
     } else {
       main.append(el('p', { class: 'out-msg bad', text: `超過上限 ${fmtMB(r.size - limit)}` }));
       const fixes = el('div', { class: 'out-fixes' });
@@ -818,6 +849,7 @@
       fixes.append(el('button', { class: 'btn small', type: 'button', text: '回去拆小一點', onclick: () => go(2) }));
       main.append(fixes);
     }
+    if (!fits && r.textHeavy && r.method === 'compressed') textAdvice(o, r, main);
     if (r.missing && r.missing.length) {
       main.append(el('p', { class: 'out-msg bad', text: '部分文字可能缺漏，請預覽' }));
     }

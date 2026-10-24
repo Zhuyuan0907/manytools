@@ -22,6 +22,13 @@
     [100, 16], [90, 16], [84, 16], [78, 16], [72, 16], [72, 8], [66, 8], [60, 8],
   ].map(([dpi, colors]) => ({ fmt: 'png', dpi, colors }));
 
+  // pdf-lib's copyPages clones every stream with its bytes. Nothing here edits stream bytes in place (changes
+  // always put a new stream object in), so the copies can share them: a 450 MB design-app export would
+  // otherwise need another 450 MB, enough to crash the tab.
+  PDFLib.PDFRawStream.prototype.clone = function (context) { return PDFLib.PDFRawStream.of(this.dict.clone(context), this.contents); };
+  // Bytes the file will take at least once saved (its streams alone).
+  const sizeAtLeast = (doc) => doc.context.enumerateIndirectObjects().reduce((a, [, o]) => a + (o instanceof PDFLib.PDFRawStream ? o.contents.length : 0), 0);
+
   class Cancelled extends Error { constructor() { super('cancelled'); this.name = 'Cancelled'; } }
   const check = (job) => { if (job && job.cancelled) throw new Cancelled(); };
 
@@ -468,6 +475,84 @@
     return { data, bpc: depth, colorSpace: ctx.obj([N_('Indexed'), base, n - 1, PDFLib.PDFHexString.of(hex)]) };
   }
 
+  // Page drawings with shorter numbers. Design apps write every coordinate with six decimals ("603.000000
+  // 0.000000 -0.000000 …"), and a page of text turned into outlines (Figma does this) is megabytes of them.
+  // Trailing zeros go everywhere (the same value); path coordinates are rounded to at most 0.005 pt (0.002 mm)
+  // off on the page, with the current transformation taken into account. Everything else (text, colours,
+  // strings, dictionaries) is copied byte for byte. state carries the transformation across the content
+  // streams of one page. Returns the shorter bytes, null when nothing changed, false when the stream has
+  // something it doesn't read (inline images, stray delimiters): then it and the page's later streams stay.
+  const PATH_OPS = new Set(['m', 'l', 'c', 'v', 'y', 're']);
+  const CS_WS = ' \t\n\r\f\0', CS_DELIM = '()<>[]{}/%';
+  function shortenNumbers(bytes, state) {
+    const n = bytes.length;
+    let src = '';
+    for (let i = 0; i < n; i += 0x8000) src += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+    const out = [], operands = [];
+    let copied = 0, changed = false;
+    const exact = (t) => {   // the same value in the fewest characters
+      let x = t;
+      if (x.includes('.')) x = x.replace(/0+$/, '').replace(/\.$/, '');
+      x = x.replace(/^([+-]?)0+(?=\d)/, '$1').replace(/^\+/, '');
+      if (x.startsWith('0.')) x = x.slice(1); else if (x.startsWith('-0.')) x = '-' + x.slice(2);
+      return x === '' || x === '-' || x === '-0' || x === '.' || x === '-.' ? '0' : x;
+    };
+    const skipString = (i) => {
+      let depth = 1; i++;
+      while (i < n && depth) { const c = src[i]; if (c === '\\') i += 2; else { if (c === '(') depth++; else if (c === ')') depth--; i++; } }
+      return i;
+    };
+    let i = 0;
+    while (i < n) {
+      const ch = src[i];
+      if (CS_WS.includes(ch)) { i++; continue; }
+      if (ch === '%') { while (i < n && src[i] !== '\n' && src[i] !== '\r') i++; continue; }
+      if (ch === '(') { i = skipString(i); operands.push(null); continue; }
+      if (ch === '<') {
+        if (src[i + 1] === '<') {   // dictionary: left as it is
+          let depth = 1; i += 2;
+          while (i < n && depth) {
+            if (src[i] === '(') i = skipString(i);
+            else if (src.startsWith('<<', i)) { depth++; i += 2; } else if (src.startsWith('>>', i)) { depth--; i += 2; } else i++;
+          }
+        } else { const j = src.indexOf('>', i); i = j < 0 ? n : j + 1; }
+        operands.push(null); continue;
+      }
+      if (ch === '[' || ch === ']' || ch === '{' || ch === '}') { i++; continue; }
+      if (ch === '/') { i++; while (i < n && !CS_WS.includes(src[i]) && !CS_DELIM.includes(src[i])) i++; operands.push(null); continue; }
+      let j = i;
+      while (j < n && !CS_WS.includes(src[j]) && !CS_DELIM.includes(src[j])) j++;
+      if (j === i) return false;
+      const tok = src.slice(i, j);
+      if (/^[+-]?(\d+\.?\d*|\.\d+)$/.test(tok)) { operands.push({ s: i, e: j, t: tok, v: parseFloat(tok) }); i = j; continue; }
+      if (tok === 'BI' || tok === 'ID') return false;
+      const nums = operands.filter(Boolean);
+      let d = null;
+      if (PATH_OPS.has(tok)) {
+        const [a, b, c, dd] = state.ctm, sc = Math.max(Math.hypot(a, b), Math.hypot(c, dd));
+        d = sc > 0 ? Math.max(0, Math.ceil(Math.log10(sc / 0.01))) : null;
+        if (d !== null && d > 6) d = null;
+      }
+      for (const o of nums) {
+        const text = d !== null && Math.abs(o.v) < 1e6 ? exact(o.v.toFixed(d)) : exact(o.t);
+        if (text !== o.t) { out.push(src.slice(copied, o.s), text); copied = o.e; changed = true; }
+      }
+      if (tok === 'q') state.stack.push(state.ctm.slice());
+      else if (tok === 'Q') { if (state.stack.length) state.ctm = state.stack.pop(); }
+      else if (tok === 'cm' && operands.length === 6 && nums.length === 6) {
+        const [a, b, c, dd, e, f] = nums.map((o) => o.v), m = state.ctm;
+        state.ctm = [a * m[0] + b * m[2], a * m[1] + b * m[3], c * m[0] + dd * m[2], c * m[1] + dd * m[3], e * m[0] + f * m[2] + m[4], e * m[1] + f * m[3] + m[5]];
+      }
+      operands.length = 0;
+      i = j;
+    }
+    if (!changed) return null;
+    out.push(src.slice(copied));
+    const str = out.join(''), res = new Uint8Array(str.length);
+    for (let k = 0; k < str.length; k++) res[k] = str.charCodeAt(k);
+    return res;
+  }
+
   // pdf-lib writes every object it holds, referenced or not: drop what nothing points to any more.
   function dropUnreachable(doc) {
     const ctx = doc.context, seen = new Set(), todo = [];
@@ -482,13 +567,62 @@
     for (const [ref] of ctx.enumerateIndirectObjects()) if (!seen.has(ref)) ctx.delete(ref);
   }
 
-  // Returns whether anything changed.
-  async function slimDoc(doc, job, progress) {
-    const ctx = doc.context, all = ctx.enumerateIndirectObjects();
+  // Returns whether anything changed. light: the file is still far over the limit, so the images will be
+  // re-encoded anyway and making them losslessly smaller first would only cost time.
+  async function slimDoc(doc, job, progress, light) {
+    const ctx = doc.context;
     let changed = false;
+    const done = new Set();
+    // page drawings first, in page order, so the transformation carries across a page's streams
+    const pages = doc.getPages(), seen = new Map();
+    for (const page of pages) {
+      const c = page.node.get(N_('Contents'));
+      for (const r of c instanceof PDFLib.PDFArray ? c.asArray() : [c]) if (r instanceof PDFLib.PDFRef) seen.set(r, (seen.get(r) || 0) + 1);
+    }
+    for (let p = 0; p < pages.length; p++) {
+      check(job); progress(0.3 * p / pages.length); await Core.nextFrame();
+      const c = pages[p].node.get(N_('Contents'));
+      const state = { ctm: [1, 0, 0, 1, 0, 0], stack: [] };
+      for (const ref of c instanceof PDFLib.PDFArray ? c.asArray() : [c]) {
+        const obj = ref instanceof PDFLib.PDFRef ? ctx.lookup(ref) : null;
+        if (!(obj instanceof PDFLib.PDFRawStream) || seen.get(ref) > 1 || obj.dict.has(N_('DecodeParms'))) break;   // shared or unusual: leave the rest of the page
+        const f = obj.dict.lookup(N_('Filter'));
+        if (f !== undefined && f !== N_('FlateDecode') && !(f instanceof PDFLib.PDFArray && f.size() === 1 && f.get(0) === N_('FlateDecode'))) break;
+        let data;
+        try { data = f === undefined ? obj.contents : await inflated(obj); } catch { break; }
+        const short = shortenNumbers(data, state);
+        if (short === false) break;
+        done.add(ref);
+        const bytes = await deflate(short || data);
+        if (bytes.length > obj.contents.length * 0.97) continue;
+        obj.dict.set(N_('Filter'), N_('FlateDecode'));
+        ctx.assign(ref, PDFLib.PDFRawStream.of(obj.dict, bytes));
+        changed = true;
+      }
+    }
+    // transparency masks that are opaque everywhere change nothing: drop them (design apps add one to every picture)
+    for (const [, obj] of ctx.enumerateIndirectObjects()) {
+      if (!(obj instanceof PDFLib.PDFRawStream) || obj.dict.get(N_('Subtype')) !== N_('Image')) continue;
+      const sm = obj.dict.lookup(N_('SMask'));
+      if (!(sm instanceof PDFLib.PDFRawStream) || num(sm.dict.get(N_('BitsPerComponent'))) !== 8 || sm.dict.has(N_('Decode')) || sm.dict.has(N_('Matte'))) continue;
+      const f = sm.dict.lookup(N_('Filter'));
+      if (f !== N_('FlateDecode') && !(f instanceof PDFLib.PDFArray && f.size() === 1 && f.get(0) === N_('FlateDecode'))) continue;
+      let raw;
+      try { raw = await inflated(sm); } catch { continue; }
+      const parms = sm.dict.lookup(N_('DecodeParms')), pred = parms instanceof PDFLib.PDFDict ? num(parms.get(N_('Predictor'))) || 1 : 1;
+      const W = num(sm.dict.get(N_('Width'))), H = num(sm.dict.get(N_('Height')));
+      if (pred >= 10) raw = unpredictPng(raw, 1, 8, W); else if (pred !== 1) continue;
+      if (!W || !H || raw.length < W * H) continue;
+      let opaque = true;
+      for (let i = 0; i < W * H && opaque; i++) opaque = raw[i] === 255;
+      if (opaque) { obj.dict.delete(N_('SMask')); changed = true; }
+      check(job);
+    }
+    const all = ctx.enumerateIndirectObjects();
     for (let k = 0; k < all.length; k++) {
       const [ref, obj] = all[k];
-      if (k % 8 === 0) { check(job); progress(k / all.length); await Core.nextFrame(); }
+      if (k % 8 === 0) { check(job); progress(0.3 + 0.7 * k / all.length); await Core.nextFrame(); }
+      if (done.has(ref)) continue;
       const dict = obj instanceof PDFLib.PDFRawStream ? obj.dict : obj instanceof PDFLib.PDFDict ? obj : null;
       if (!dict) continue;
       // display never uses these: editing apps' private data, page thumbnails, per-object XMP metadata
@@ -508,8 +642,9 @@
       if (parms && (names.length !== 1 || !(parms instanceof PDFLib.PDFDict))) continue;
       const before = obj.contents.length;
       if (before < 200) continue;
+      if (light && names.length && dict.get(N_('Subtype')) === N_('Image') && before > 64 * 1024) continue;
       let data;
-      try { data = names.length ? PDFLib.decodePDFRawStream(obj).decode() : obj.contents; } catch { continue; }
+      try { data = !names.length ? obj.contents : names.length === 1 && names[0] === 'FlateDecode' ? await inflated(obj) : PDFLib.decodePDFRawStream(obj).decode(); } catch { continue; }
       // the decoded bytes keep any PNG/TIFF predictor, so its parameters carry over (minus LZW's own)
       const predictor = parms ? num(parms.get(N_('Predictor'))) || 1 : 1;
       const keep = {};
@@ -628,7 +763,9 @@
     return src.libDocPromise;
   }
 
-  async function buildLossless(project, pagesG, title, job) {
+  // limit: when the copy is clearly far bigger than this, it isn't written out (bytes: null, size: a lower
+  // bound); writing a 450 MB file just to learn it doesn't fit would only cost memory.
+  async function buildLossless(project, pagesG, title, job, limit) {
     const { PDFDocument } = PDFLib;
     const doc = await PDFDocument.create();
     const pages = [];
@@ -657,8 +794,9 @@
     writeOutline(doc, filterOutline(await outlineTree(project), localOf), pages);
     finishMeta(doc, title);
     try { storeOnce(doc); } catch (e) { console.warn('sharing identical objects skipped', e); }
-    const bytes = await doc.save({ useObjectStreams: true });
-    return { bytes, linkCount, doc, unlocked };
+    const least = sizeAtLeast(doc);
+    const bytes = limit && least > limit * 1.5 ? null : await doc.save({ useObjectStreams: true });
+    return { bytes, size: bytes ? bytes.length : least, linkCount, doc, unlocked };
   }
 
   // ---------- stage 1: shrink the images, keep text and vector graphics as they are ----------
@@ -677,6 +815,17 @@
     if (stream instanceof PDFLib.PDFRawStream) return PDFLib.decodePDFRawStream(stream).decode();
     if (stream && typeof stream.getUnencodedContents === 'function') return stream.getUnencodedContents();
     return new Uint8Array(0);
+  }
+  // The same, through the browser's own zlib when the stream is plain Flate (many times faster than pdf-lib's,
+  // which matters for design-app exports with hundreds of lossless 4096-pixel photos).
+  async function inflated(stream) {
+    const f = stream.dict.lookup(N_('Filter'));
+    const flate = f === N_('FlateDecode') || (f instanceof PDFLib.PDFArray && f.size() === 1 && f.get(0) === N_('FlateDecode'));
+    if (flate && typeof DecompressionStream === 'function' && stream instanceof PDFLib.PDFRawStream) {
+      try { return new Uint8Array(await new Response(new Blob([stream.contents]).stream().pipeThrough(new DecompressionStream('deflate'))).arrayBuffer()); }
+      catch { /* damaged or unusual data: pdf-lib is more forgiving */ }
+    }
+    return decodedBytes(stream);
   }
 
   // Minimal content-stream reader: tracks q/Q/cm and reports every "/Name Do" with the current matrix.
@@ -876,7 +1025,7 @@
       return { source: bmp, w: bmp.width, h: bmp.height, kind: 'photo' };
     }
     if (filter !== N_('FlateDecode') || bpc !== 8) return null;
-    let raw = decodedBytes(stream);
+    let raw = await inflated(stream);
     const parms = d.lookup(N_('DecodeParms'));
     const pred = parms instanceof PDFLib.PDFDict ? num(parms.get(N_('Predictor'))) || 1 : 1;
     if (pred >= 10) raw = unpredictPng(raw, ci.comps, 8, W);
@@ -1057,12 +1206,36 @@
   }
 
   // Try to fit by shrinking images only. Returns a result, or null when even the lowest rung is too big.
+  // What each page's drawing (its content streams) weighs; the rest of what isn't images (fonts, shared
+  // structure) is spread evenly. Used to say how many pages per file would keep the text as text.
+  function textPerPage(doc, textBytes) {
+    const own = doc.getPages().map((page) => {
+      const c = page.node.get(N_('Contents'));
+      return (c instanceof PDFLib.PDFArray ? c.asArray() : [c]).reduce((a, r) => {
+        const o = r instanceof PDFLib.PDFRef ? doc.context.lookup(r) : null;
+        return a + (o instanceof PDFLib.PDFRawStream ? o.contents.length : 0);
+      }, 0);
+    });
+    const shared = Math.max(0, textBytes - own.reduce((a, b) => a + b, 0)) / Math.max(1, own.length);
+    return own.map((b) => b + shared);
+  }
+
+  // Returns a result, or { textBytes, pageText } when the part that isn't images (text, drawings, fonts) is
+  // already over the limit by itself, or null when even the lowest rung is too big.
   async function imageOnly(doc, baseBytes, targetBytes, gray, job, progress) {
     progress(0.02, '分析圖片…');
+    // before decoding anything: what's left if every image vanished?
+    let allImages = 0;
+    for (const e of collectImages(doc)) {
+      allImages += e.stream.contents.length;
+      const sm = e.stream.dict.lookup(N_('SMask'));
+      if (sm instanceof PDFLib.PDFRawStream) allImages += sm.contents.length;
+    }
+    if (baseBytes - allImages + 2000 > targetBytes) return { textBytes: baseBytes - allImages, pageText: textPerPage(doc, baseBytes - allImages) };
     const prepared = await prepareImages(doc, gray, job, (f, t) => progress(0.02 + 0.3 * f, t));
     if (!prepared.length) return null;
     const totalOrig = prepared.reduce((a, e) => a + e.origBytes + (e.mask ? e.mask.stream.contents.length : 0), 0);
-    if (baseBytes - totalOrig + 2000 > targetBytes) return null;          // the non-image part alone is too big
+    if (baseBytes - totalOrig + 2000 > targetBytes) return { textBytes: baseBytes - totalOrig, pageText: textPerPage(doc, baseBytes - totalOrig) };   // what's left can't shrink
     let probe = 0;
     const tryRung = async (idx) => {
       probe++;
@@ -1120,11 +1293,12 @@
       progress(1, '原檔就符合上限');
       return done(asIs);
     }
+    let base = null, textHeavy = null;
     if (settings.keepOriginal || !asIs) {
       try {
         progress(0.01, '整理頁面…');
-        const base = await buildLossless(project, out.pages, out.title, job);
-        const copy = { blob: new Blob([base.bytes], { type: 'application/pdf' }), size: base.bytes.length, method: 'lossless', linkCount: base.linkCount, unlocked: base.unlocked };
+        base = await buildLossless(project, out.pages, out.title, job, targetBytes);
+        const copy = { blob: base.bytes && new Blob([base.bytes], { type: 'application/pdf' }), size: base.size, method: 'lossless', linkCount: base.linkCount, unlocked: base.unlocked };
         if (!asIs || copy.size < asIs.size) asIs = copy;
         if (settings.keepOriginal) {
           if (copy.size <= targetBytes) {
@@ -1133,13 +1307,15 @@
           }
           // still too big: slim it without changing anything visible, and check again
           // (a failure here only skips the slimming: every change it makes is complete on its own)
-          const slim = await slimDoc(base.doc, job, (f) => progress(0.01 + 0.07 * f, '無損瘦身…'))
+          const slim = await slimDoc(base.doc, job, (f) => progress(0.01 + 0.07 * f, '無損瘦身…'), copy.size > targetBytes * 2)
             .catch((e) => { if (e instanceof Cancelled) throw e; console.warn('lossless slimming skipped', e); return false; });
           if (slim) {
-            const bytes = await base.doc.save({ useObjectStreams: true });
-            if (bytes.length < copy.size) {
-              base.bytes = bytes;
-              Object.assign(copy, { blob: new Blob([bytes], { type: 'application/pdf' }), size: bytes.length });
+            const least = sizeAtLeast(base.doc);
+            const bytes = least > targetBytes * 1.5 ? null : await base.doc.save({ useObjectStreams: true });
+            const size = bytes ? bytes.length : least;
+            if (size < copy.size) {
+              Object.assign(base, { bytes, size });
+              Object.assign(copy, { blob: bytes && new Blob([bytes], { type: 'application/pdf' }), size });
               if (copy.size < asIs.size) asIs = copy;
             }
             if (copy.size <= targetBytes) {
@@ -1148,8 +1324,9 @@
             }
           }
           if (settings.mode === 'auto') {
-            const r = await imageOnly(base.doc, base.bytes.length, targetBytes, settings.gray, job, (f, t) => progress(0.08 + 0.37 * f, t));
-            if (r) {
+            const r = await imageOnly(base.doc, base.size, targetBytes, settings.gray, job, (f, t) => progress(0.08 + 0.37 * f, t));
+            if (r && r.textBytes) textHeavy = { bytes: r.textBytes, pages: N, pageText: r.pageText };   // why the pages become pictures
+            else if (r) {
               progress(1, '完成');
               return done({ blob: new Blob([r.bytes], { type: 'application/pdf' }), size: r.bytes.length, method: 'smart', setting: r.setting, images: r.images, linkCount: base.linkCount, unlocked: base.unlocked });
             }
@@ -1170,7 +1347,14 @@
     // within the limit wins, and when both or neither are, the smaller one.
     const goal = Math.min(targetBytes, asIs ? Math.floor(asIs.size * 0.98) : Infinity);
     const fits = (r) => r.size <= targetBytes;
-    const finish = (flat) => done(asIs && (fits(asIs) !== fits(flat) ? fits(asIs) : asIs.size <= flat.size) ? { ...asIs, smaller: true } : flat);
+    const finish = async (flat) => {
+      if (!(asIs && (fits(asIs) !== fits(flat) ? fits(asIs) : asIs.size <= flat.size))) return done({ ...flat, textHeavy });
+      if (!asIs.blob) {   // the copy wasn't written out because it looked far too big; it still wins, so write it now
+        const bytes = await base.doc.save({ useObjectStreams: true });
+        Object.assign(asIs, { blob: new Blob([bytes], { type: 'application/pdf' }), size: bytes.length });
+      }
+      return done({ ...asIs, smaller: true });
+    };
     if (settings.mode === 'manual') {
       setting = settings.format === 'jpeg'
         ? { fmt: 'jpeg', dpi: settings.dpi, q: settings.quality / 100 }
