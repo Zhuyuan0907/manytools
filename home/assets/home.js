@@ -39,12 +39,27 @@
   }
 
   // ---------- the tools hiding behind the PDF and avatar cards ----------
-  // Hover and keyboard focus show them by CSS alone; touch screens use the "+1" buttons, and a tap elsewhere hides them.
-  const stacks = [...document.querySelectorAll('.tool-stack')].map((stack) => ({ stack, btn: stack.querySelector('.peek-toggle') })).filter((x) => x.btn);
-  const show = (x, open) => { x.stack.classList.toggle('open', open); x.btn.setAttribute('aria-expanded', String(open)); };
-  for (const x of stacks) x.btn.addEventListener('click', () => { const open = !x.stack.classList.contains('open'); for (const y of stacks) show(y, y === x && open); });
+  // Hover and keyboard focus show them by CSS alone. A finger has no hover: its first tap on the edge that peeks out
+  // slides the card up instead of going in, the next one goes in, and a tap elsewhere hides it again.
+  const stacks = [...document.querySelectorAll('.tool-stack')].map((stack) => ({ stack, peek: stack.querySelector('.peek') })).filter((x) => x.peek);
+  const show = (x, open) => x.stack.classList.toggle('open', open);
+  let finger = false;
+  document.addEventListener('pointerdown', (e) => { finger = e.pointerType !== 'mouse'; }, true);
+  for (const x of stacks) x.peek.addEventListener('click', (e) => {
+    if (!finger || x.stack.classList.contains('open')) return;
+    e.preventDefault();
+    for (const y of stacks) show(y, y === x);
+  });
   document.addEventListener('click', (e) => { for (const x of stacks) if (!x.stack.contains(e.target)) show(x, false); });
-  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') for (const x of stacks) show(x, false); });
+  document.addEventListener('keydown', (e) => { finger = false; if (e.key === 'Escape') for (const x of stacks) show(x, false); });
+  // Back brings this page back as it was left: hidden cards down again, and no leftover focus from the click that left
+  // (keyboard focus stays, so a keyboard user is back where they were).
+  window.addEventListener('pageshow', (e) => {
+    if (!e.persisted) return;
+    for (const x of stacks) show(x, false);
+    const a = document.activeElement;
+    if (a && a.closest('.tool-stack') && !a.matches(':focus-visible')) a.blur();
+  });
 
   // ---------- drop area → the right tool ----------
   const drop = $('#drop'), pick = $('#pick'), toast = $('#toast');
