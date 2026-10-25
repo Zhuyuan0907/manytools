@@ -5,6 +5,8 @@
   const Core = {};
   Core.MB = 1000 * 1000;
   Core.ready = typeof window.pdfjsLib !== 'undefined' && typeof window.__PDFJS_WORKER_SRC === 'string';
+  // lib/ and data/ sit next to this file's assets/ folder; other tools (PDF watermark) load it from /pdf/assets/
+  const HOME = (() => { try { return new URL('..', document.currentScript.src).href; } catch { return ''; } })();
 
   // ---------- pdf.js worker ----------
   // Browsers refuse to start a worker from a file:// URL, so start it from an in-memory copy.
@@ -15,7 +17,7 @@
     if (!mainThread) {
       mainThread = new Promise((resolve, reject) => {
         const s = document.createElement('script');
-        s.src = 'lib/pdf.worker.min.js';
+        s.src = HOME + 'lib/pdf.worker.min.js';
         s.onload = () => { pdfjsLib.GlobalWorkerOptions.workerPort = null; Core.workerMode = 'main'; resolve(); };
         s.onerror = () => reject(new Error('lib/pdf.worker.min.js 載入失敗'));
         document.head.append(s);
@@ -51,7 +53,7 @@
     if (!dataCache.has(key)) {
       dataCache.set(key, new Promise((resolve, reject) => {
         const s = document.createElement('script');
-        s.src = 'data/' + key + '.js';
+        s.src = HOME + 'data/' + key + '.js';
         s.onload = () => {
           const b64 = window.__pdfData.store[key];
           delete window.__pdfData.store[key];
@@ -86,9 +88,9 @@
       isEvalSupported: false,
       CMapReaderFactory: CMapFactory,
       StandardFontDataFactory: FontFactory,
-      cMapUrl: 'data/cmaps/',
+      cMapUrl: HOME + 'data/cmaps/',
       cMapPacked: true,
-      standardFontDataUrl: 'data/standard_fonts/',
+      standardFontDataUrl: HOME + 'data/standard_fonts/',
       useWorkerFetch: false,
     });
   }

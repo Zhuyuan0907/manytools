@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="ZhuyuanLoveMark">
+  <defs>
+    <linearGradient id="zlm-bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#17a9bc"/>
+      <stop offset="1" stop-color="#0a7d8e"/>
+    </linearGradient>
+  </defs>
+  <rect width="64" height="64" rx="15" fill="url(#zlm-bg)"/>
+  <!-- the PDF page, folded corner -->
+  <path d="M21 9.5h17.5L48 19v31a4.5 4.5 0 0 1-4.5 4.5h-22.5A4.5 4.5 0 0 1 16.5 50V14A4.5 4.5 0 0 1 21 9.5z" fill="#fff"/>
+  <path d="M38.5 9.5V16a3 3 0 0 0 3 3H48z" fill="#bde6ec"/>
+  <!-- text lines -->
+  <path d="M22.5 17h10M22.5 23h19M22.5 47h13" stroke="#d2eef2" stroke-width="2.8" stroke-linecap="round"/>
+  <!-- the watermark: a stamp turned across the page, a heart in it -->
+  <g transform="rotate(-30 32.25 35)">
+    <rect x="19.5" y="28" width="25.5" height="14" rx="3.5" fill="none" stroke="#0b8c9e" stroke-width="2.4" opacity=".85"/>
+    <path transform="translate(27.1 29.6) scale(.45)" d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" fill="#ff5a4e"/>
+  </g>
+</svg>

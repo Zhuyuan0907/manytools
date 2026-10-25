@@ -1,0 +1,300 @@
+<!doctype html>
+<html lang="zh-Hant-TW">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#ffffff">
+<title>ZhuyuanLoveMark・PDF 浮水印</title>
+<meta name="description" content="幫 PDF 加上浮水印：機密、草稿、僅供○○使用，或放上自己的 Logo。可以斜放、平鋪滿版、調整透明度，一次處理很多份。檔案只在你的電腦裡處理，不會上傳。">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="ZhuyuanTools">
+<meta property="og:locale" content="zh_TW">
+<meta property="og:title" content="ZhuyuanLoveMark・PDF 浮水印">
+<meta property="og:description" content="幫 PDF 加上浮水印：機密、草稿、僅供○○使用，或放上自己的 Logo。可以斜放、平鋪滿版、調整透明度，一次處理很多份。檔案只在你的電腦裡處理，不會上傳。">
+<meta property="og:url" content="https://tools.zhuyuan.tw/watermark">
+<meta property="og:image" content="https://tools.zhuyuan.tw/watermark/assets/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" href="assets/logo.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/fonts/noto-sans-tc.css">
+<link rel="stylesheet" href="assets/app.css">
+</head>
+<body>
+<div class="app">
+  <header class="top">
+    <a class="brand" id="brand" href="../home/index.html" title="回到 ZhuyuanTools 首頁">
+      <img class="logo" src="assets/logo.svg" alt="" width="44" height="44">
+      <span class="brand-text">
+        <span class="wordmark">Zhuyuan<span class="w-love">Love</span><span class="w-tool">Mark</span></span>
+        <span class="tagline">PDF 浮水印工具</span>
+      </span>
+    </a>
+    <p class="privacy">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="10" width="16" height="11" rx="2"></rect><path d="M8 10V7a4 4 0 0 1 8 0v3"></path></svg>
+      <span class="privacy-long">檔案只在你的電腦裡處理，不會上傳到任何伺服器。</span><span class="privacy-short">不上傳</span>
+    </p>
+  </header>
+
+  <nav class="stepper" aria-label="步驟">
+    <p class="m-step" id="mStep" aria-hidden="true"></p>
+    <ol>
+      <li><button type="button" data-goto="1"><span class="dot">1</span><span class="lbl">放入 PDF</span></button></li>
+      <li><button type="button" data-goto="2"><span class="dot">2</span><span class="lbl">設定浮水印</span></button></li>
+      <li><button type="button" data-goto="3"><span class="dot">3</span><span class="lbl">輸出與下載</span></button></li>
+    </ol>
+  </nav>
+
+  <main>
+    <div id="libError" class="banner" hidden>程式檔案沒有載入完整，請重新整理頁面。</div>
+
+    <!-- ============ STEP 1 ============ -->
+    <section class="panel" id="step1" aria-labelledby="h1t">
+      <div class="hero" id="hero">
+        <div class="hero-text">
+          <h2 class="hero-title" id="h1t">PDF 加上浮水印，<span><em>免費</em>又不用上傳</span></h2>
+          <p class="hero-count" id="heroCount" aria-live="polite">免費・免註冊・檔案不上傳</p>
+        </div>
+        <div class="hero-art" aria-hidden="true">
+          <svg viewBox="0 0 300 160" width="300" height="160">
+            <g class="ha-big">
+              <rect x="14" y="8" width="104" height="138" rx="10" class="ha-page"/>
+              <path d="M88 8v22a6 6 0 0 0 6 6h24" class="ha-fold"/>
+              <path d="M32 50h56M32 64h68M32 78h68M32 92h68M32 106h48" class="ha-lines"/>
+            </g>
+            <g class="ha-arrow"><path d="M136 77h36"/><path d="M164 67l10 10-10 10"/></g>
+            <g class="ha-small">
+              <rect x="190" y="8" width="104" height="138" rx="10" class="ha-page"/>
+              <path d="M264 8v22a6 6 0 0 0 6 6h24" class="ha-fold"/>
+              <path d="M208 50h56M208 64h68M208 78h68M208 92h68M208 106h48" class="ha-lines"/>
+              <text x="242" y="88" class="ha-mark" transform="rotate(-35 242 80)">機密</text>
+              <circle cx="288" cy="14" r="14" class="ha-check-bg"/>
+              <path d="M281.5 14.5l4.5 4.5 8-9" class="ha-check"/>
+            </g>
+          </svg>
+        </div>
+      </div>
+      <div class="panel-body step1-body">
+        <label class="drop" id="drop" for="fileInput">
+          <input type="file" id="fileInput" accept="application/pdf,.pdf" multiple aria-label="選擇 PDF 檔">
+          <span class="drop-inner">
+            <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"></path><path d="M14 3v5h5"></path><path d="M12 18v-6"></path><path d="m9 15 3-3 3 3"></path></svg>
+            <span class="drop-title"><span class="d-desk">把 PDF 拖進這裡</span><span class="d-mob">選擇 PDF 檔案</span></span>
+            <span class="drop-hint"><span class="d-desk">或點一下選擇檔案・</span>可以一次放很多份</span>
+          </span>
+        </label>
+        <ol class="how" aria-label="怎麼用">
+          <li><span class="how-no">1</span><b>放入 PDF</b><span>可以一次放很多份</span></li>
+          <li><span class="how-no">2</span><b>打字或放 Logo</b><span>斜放、平鋪、調透明度</span></li>
+          <li><span class="how-no">3</span><b>下載</b><span>每一頁都蓋好浮水印</span></li>
+        </ol>
+        <ol class="sources" id="sources" aria-label="已加入的檔案"></ol>
+      </div>
+      <div class="panel-foot">
+        <span class="foot-note" id="note1">還沒有加入檔案。</span>
+        <button type="button" class="btn primary" id="next1" disabled>下一步：設定浮水印 →</button>
+      </div>
+    </section>
+
+    <!-- ============ STEP 2 ============ -->
+    <section class="panel fill" id="step2" aria-labelledby="h2t" hidden>
+      <div class="panel-body step2-body">
+        <!-- the page preview runs the card's full height; the step's heading sits above the settings -->
+        <div class="editor" id="editor">
+          <div class="panel-head">
+            <span class="step-no" aria-hidden="true">2</span>
+            <div class="head-text">
+              <h2 id="h2t">浮水印要長怎樣？</h2>
+              <p>預覽的是你實際的頁面，改什麼馬上看得到。</p>
+            </div>
+          </div>
+          <div class="stage" id="stage">
+            <canvas id="stageCanvas" tabindex="0" aria-label="預覽：左右方向鍵換頁"></canvas>
+            <div class="pager" id="pager">
+              <button type="button" class="icon-btn" id="prevPage" aria-label="上一頁" title="上一頁"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg></button>
+              <span class="pager-text" id="pageText" aria-live="polite"></span>
+              <button type="button" class="icon-btn" id="nextPage" aria-label="下一頁" title="下一頁"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg></button>
+            </div>
+          </div>
+          <div class="side">
+           <div class="side-in">
+            <div class="set set-what">
+              <div class="set-top">
+                <span class="set-label" id="lblWhat">內容</span>
+                <div class="seg sm" role="radiogroup" aria-labelledby="lblWhat">
+                  <label><input type="radio" name="kind" value="text" checked><span>文字</span></label>
+                  <label><input type="radio" name="kind" value="image"><span>圖片</span></label>
+                </div>
+              </div>
+              <div class="text-box" id="textBox">
+                <textarea id="wmText" rows="2" maxlength="80" spellcheck="false" aria-label="浮水印文字">機密</textarea>
+                <div class="presets" id="presets" aria-label="常用文字">
+                  <button type="button" data-text="機密">機密</button>
+                  <button type="button" data-text="草稿">草稿</button>
+                  <button type="button" data-text="副本">副本</button>
+                  <button type="button" data-text="樣本">樣本</button>
+                  <button type="button" data-text="僅供○○○使用&#10;他用無效" data-pick="○○○">僅供○○使用</button>
+                  <button type="button" data-text="CONFIDENTIAL">CONFIDENTIAL</button>
+                </div>
+              </div>
+              <div class="image-box" id="imageBox" hidden>
+                <label class="pick-img" id="pickImg">
+                  <input type="file" id="imgInput" accept="image/png,image/jpeg,image/webp,image/svg+xml,image/gif,.png,.jpg,.jpeg,.webp,.svg,.gif" aria-label="選擇浮水印圖片">
+                  <span class="pick-th" id="imgThumb"></span>
+                  <span class="pick-text"><b id="imgName">選擇圖片</b><span id="imgMeta">Logo 或印章，去背的 PNG 最好看</span></span>
+                </label>
+              </div>
+            </div>
+            <div class="set set-look">
+              <div class="set-top"><span class="set-label">樣式</span></div>
+              <div class="line" id="fontLine">
+                <span class="line-label" id="lblFont">字型</span>
+                <div class="seg sm" role="radiogroup" aria-labelledby="lblFont">
+                  <label><input type="radio" name="font" value="sans"><span>黑體</span></label>
+                  <label><input type="radio" name="font" value="bold" checked><span>粗黑體</span></label>
+                  <label><input type="radio" name="font" value="serif"><span>明體</span></label>
+                </div>
+              </div>
+              <div class="line" id="colorLine">
+                <span class="line-label" id="lblColor">顏色</span>
+                <div class="swatches" role="radiogroup" aria-labelledby="lblColor">
+                  <label title="灰色" style="--sw:#8c929c"><input type="radio" name="color" value="#8c929c" checked aria-label="灰色"><span></span></label>
+                  <label title="紅色" style="--sw:#d13a2c"><input type="radio" name="color" value="#d13a2c" aria-label="紅色"><span></span></label>
+                  <label title="藍色" style="--sw:#2468e0"><input type="radio" name="color" value="#2468e0" aria-label="藍色"><span></span></label>
+                  <label title="黑色" style="--sw:#1f2328"><input type="radio" name="color" value="#1f2328" aria-label="黑色"><span></span></label>
+                  <label class="custom" title="自訂顏色" id="customSw"><input type="radio" name="color" value="custom" aria-label="自訂顏色"><span></span><input type="color" id="customColor" value="#0b8c9e" aria-label="選擇自訂顏色" tabindex="-1"></label>
+                </div>
+              </div>
+              <div class="line">
+                <label class="line-label" for="size">大小</label>
+                <input type="range" id="size" min="5" max="100" value="60">
+                <output class="val" id="sizeVal" for="size">60%</output>
+              </div>
+              <div class="line">
+                <label class="line-label" for="opacity">透明度</label>
+                <input type="range" id="opacity" min="5" max="100" value="35">
+                <output class="val" id="opacityVal" for="opacity">35%</output>
+              </div>
+              <div class="line">
+                <label class="line-label" for="angle">角度</label>
+                <input type="range" id="angle" min="-90" max="90" value="45">
+                <output class="val" id="angleVal" for="angle">45°</output>
+              </div>
+              <div class="angles" id="angles" aria-label="常用角度">
+                <button type="button" data-angle="0">水平</button>
+                <button type="button" data-angle="45">斜 45°</button>
+                <button type="button" data-angle="-45">斜 −45°</button>
+                <button type="button" data-angle="90">直立</button>
+              </div>
+              <div class="line layer-line">
+                <span class="line-label" id="lblLayer">圖層</span>
+                <div class="seg sm" role="radiogroup" aria-labelledby="lblLayer">
+                  <label title="蓋在文字和圖片上面，掃描檔也看得到"><input type="radio" name="layer" value="top" checked><span>蓋在上面</span></label>
+                  <label title="墊在文字和圖片下面，不會擋到內容"><input type="radio" name="layer" value="under"><span>墊在下面</span></label>
+                </div>
+              </div>
+              <p class="help" id="layerHelp"></p>
+            </div>
+            <div class="set set-where">
+              <div class="set-top">
+                <span class="set-label" id="lblMode">位置</span>
+                <div class="seg sm" role="radiogroup" aria-labelledby="lblMode">
+                  <label title="一個，放在選的位置"><input type="radio" name="mode" value="single" checked><span>單個</span></label>
+                  <label title="重複排滿整頁"><input type="radio" name="mode" value="tile"><span>平鋪滿版</span></label>
+                </div>
+              </div>
+              <div class="where-body">
+                <div class="grid9" id="grid9" role="radiogroup" aria-label="放在頁面的哪裡">
+                  <label title="左上"><input type="radio" name="pos" value="0,0" aria-label="左上"><span></span></label>
+                  <label title="上方"><input type="radio" name="pos" value="1,0" aria-label="上方"><span></span></label>
+                  <label title="右上"><input type="radio" name="pos" value="2,0" aria-label="右上"><span></span></label>
+                  <label title="左邊"><input type="radio" name="pos" value="0,1" aria-label="左邊"><span></span></label>
+                  <label title="正中間"><input type="radio" name="pos" value="1,1" checked aria-label="正中間"><span></span></label>
+                  <label title="右邊"><input type="radio" name="pos" value="2,1" aria-label="右邊"><span></span></label>
+                  <label title="左下"><input type="radio" name="pos" value="0,2" aria-label="左下"><span></span></label>
+                  <label title="下方"><input type="radio" name="pos" value="1,2" aria-label="下方"><span></span></label>
+                  <label title="右下"><input type="radio" name="pos" value="2,2" aria-label="右下"><span></span></label>
+                </div>
+                <div class="gap-box" id="gapBox" hidden>
+                  <div class="line">
+                    <label class="line-label" for="gap">間距</label>
+                    <input type="range" id="gap" min="0" max="100" value="40">
+                  </div>
+                  <p class="help">排得越密，越難被裁掉或遮住</p>
+                </div>
+              </div>
+            </div>
+           </div>
+          </div>
+        </div>
+      </div>
+      <div class="panel-foot">
+        <button type="button" class="btn back" data-goto="1" aria-label="上一步"><span aria-hidden="true">←</span><span class="lbl">上一步</span></button>
+        <span class="foot-note" id="note2"></span>
+        <button type="button" class="btn primary" id="next2">下一步：輸出 →</button>
+      </div>
+    </section>
+
+    <!-- ============ STEP 3 ============ -->
+    <section class="panel" id="step3" aria-labelledby="h3t" hidden>
+      <div class="panel-head">
+        <span class="step-no" aria-hidden="true">3</span>
+        <div class="head-text">
+          <h2 id="h3t">輸出與下載</h2>
+          <p>選好要加在哪幾頁，結果馬上更新。</p>
+        </div>
+      </div>
+      <div class="panel-body step3-body">
+        <div class="out-grid">
+          <div class="set-col out-settings">
+            <div class="set">
+              <span class="set-label" id="lblPages">加在哪幾頁</span>
+              <div class="seg" role="radiogroup" aria-labelledby="lblPages">
+                <label><input type="radio" name="pages" value="all" checked><span>每一頁</span></label>
+                <label><input type="radio" name="pages" value="first"><span>只有第一頁</span></label>
+                <label><input type="radio" name="pages" value="custom"><span>自訂</span></label>
+              </div>
+              <div class="custom-pages" id="customPages" hidden>
+                <input type="text" id="pageList" class="text-in" inputmode="numeric" autocomplete="off" spellcheck="false" placeholder="例如 1-3, 5" aria-label="要加浮水印的頁碼">
+                <p class="help" id="pageHelp">用逗號分開，連續的頁用「-」</p>
+              </div>
+            </div>
+            <div class="set">
+              <label class="switch">
+                <input type="checkbox" id="flatten">
+                <span class="track" aria-hidden="true"></span>
+                <span class="sw-text"><b>防止浮水印被移除</b><span class="help">把頁面和浮水印合成一張圖，用編輯軟體也拿不掉</span></span>
+              </label>
+              <p class="help warn-note" id="flattenHelp" hidden>文字會變成圖片，不能再選取或搜尋，檔案也會變大</p>
+            </div>
+          </div>
+          <div class="out-results">
+            <p class="sum" id="sum"></p>
+            <ol class="list" id="results" aria-label="加好浮水印的檔案"></ol>
+            <p class="help xlink" id="toPdf">檔案太大？<a href="/pdf" id="toPdfLink">帶到 PDF 壓縮，壓到上限內 →</a></p>
+            <button type="button" class="btn small restart" id="restart"><span aria-hidden="true">↺</span> 換別的檔案重新開始</button>
+          </div>
+        </div>
+      </div>
+      <div class="panel-foot">
+        <button type="button" class="btn back" data-goto="2" aria-label="回去修改浮水印"><span aria-hidden="true">←</span><span class="lbl">回去修改浮水印</span></button>
+        <span class="foot-note" id="note3"></span>
+        <button type="button" class="btn primary" id="zipAll" disabled>全部下載（ZIP）</button>
+      </div>
+    </section>
+  </main>
+</div>
+
+<div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+
+<script src="/pdf/lib/pdf.min.js"></script>
+<script src="/pdf/lib/pdf.worker.src.js"></script>
+<script src="/pdf/lib/pdf-lib.min.js"></script>
+<script src="/pdf/assets/core.js"></script>
+<script src="/pdf/assets/pdfcrypt.js"></script>
+<script src="/shared/zip.js"></script>
+<script src="assets/app.js"></script>
+<script src="/shared/handoff.js" data-tool="watermark" data-input="#fileInput"></script>
+<script src="/shared/mobile-nav.js"></script>
+</body>
+</html>

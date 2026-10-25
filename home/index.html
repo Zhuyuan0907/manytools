@@ -62,21 +62,33 @@
           </svg>
         </span>
       </a>
-      <a class="tool pdf" href="/pdf" data-local="../pdftools/local/index.html">
-        <span class="tool-text">
-          <span class="tool-top"><span class="no">02</span><span class="word">Zhuyuan<i>Love</i><u>PDF</u></span></span>
-          <b class="tool-name">PDF 壓縮・拆分</b>
-          <span class="tool-desc">備審資料壓到上限內</span>
-          <span class="cta">開始處理 <span aria-hidden="true">→</span></span>
-        </span>
-        <span class="art" aria-hidden="true">
-          <svg viewBox="0 0 300 160">
-            <g><rect x="16" y="6" width="104" height="128" rx="10" class="page"/><path d="M34 40h56M34 54h68M34 68h68M34 82h48" class="lines"/><rect x="28" y="96" width="80" height="30" rx="8" class="chip-bad"/><text x="68" y="116" class="chip-t">50 MB</text></g>
-            <g class="arrow"><path d="M136 70h36"/><path d="M164 60l10 10-10 10"/></g>
-            <g class="small"><rect x="196" y="28" width="80" height="104" rx="9" class="page"/><path d="M210 58h42M210 69h52M210 80h36" class="lines"/><rect x="204" y="96" width="64" height="26" rx="7" class="chip-ok"/><text x="236" y="114" class="chip-t">5 MB</text><circle cx="272" cy="30" r="14" class="check-bg"/><path d="M265.5 30.5l4.5 4.5 8-9" class="check"/></g>
-          </svg>
-        </span>
-      </a>
+      <!-- 02 and 04 each hide a second tool of the same kind: it slides out on hover or focus, or with the "+1" button on touch screens -->
+      <div class="tool-stack" id="pdfStack">
+        <a class="tool pdf" href="/pdf" data-local="../pdftools/local/index.html">
+          <span class="tool-text">
+            <span class="tool-top"><span class="no">02</span><span class="word">Zhuyuan<i>Love</i><u>PDF</u></span></span>
+            <b class="tool-name">PDF 壓縮・拆分</b>
+            <span class="tool-desc">備審資料壓到上限內</span>
+            <span class="cta">開始處理 <span aria-hidden="true">→</span></span>
+          </span>
+          <span class="art" aria-hidden="true">
+            <svg viewBox="0 0 300 160">
+              <g><rect x="16" y="6" width="104" height="128" rx="10" class="page"/><path d="M34 40h56M34 54h68M34 68h68M34 82h48" class="lines"/><rect x="28" y="96" width="80" height="30" rx="8" class="chip-bad"/><text x="68" y="116" class="chip-t">50 MB</text></g>
+              <g class="arrow"><path d="M136 70h36"/><path d="M164 60l10 10-10 10"/></g>
+              <g class="small"><rect x="196" y="28" width="80" height="104" rx="9" class="page"/><path d="M210 58h42M210 69h52M210 80h36" class="lines"/><rect x="204" y="96" width="64" height="26" rx="7" class="chip-ok"/><text x="236" y="114" class="chip-t">5 MB</text><circle cx="272" cy="30" r="14" class="check-bg"/><path d="M265.5 30.5l4.5 4.5 8-9" class="check"/></g>
+            </svg>
+          </span>
+        </a>
+        <a class="tool mark peek" id="markCard" href="/watermark" data-local="../watermarktools/index.html">
+          <span class="tool-text">
+            <span class="tool-top"><span class="no">06</span><span class="word">Zhuyuan<i>Love</i><u>Mark</u></span></span>
+            <b class="tool-name">PDF 浮水印</b>
+            <span class="tool-desc">蓋上機密、草稿字樣</span>
+            <span class="cta"><span aria-hidden="true">→</span></span>
+          </span>
+        </a>
+        <button type="button" class="peek-toggle" aria-expanded="false" aria-controls="markCard" title="同一類還有：PDF 浮水印"><span aria-hidden="true">+1</span><span class="sr">顯示 PDF 浮水印</span></button>
+      </div>
       <a class="tool image" href="/image" data-local="../imagetools/index.html">
         <span class="tool-text">
           <span class="tool-top"><span class="no">03</span><span class="word">Zhuyuan<i>Love</i><u>Image</u></span></span>
@@ -92,7 +104,6 @@
           </svg>
         </span>
       </a>
-      <!-- 04 hides a second avatar tool behind it: it slides out on hover or focus, or with the "+1" button on touch screens -->
       <div class="tool-stack" id="avatarStack">
         <a class="tool avatar" href="/avatar" data-local="../avatartools/index.html">
           <span class="tool-text">
@@ -117,7 +128,7 @@
             <span class="cta"><span aria-hidden="true">→</span></span>
           </span>
         </a>
-        <button type="button" class="peek-toggle" id="peekToggle" aria-expanded="false" aria-controls="cropCard" title="同一類還有：頭貼裁切"><span aria-hidden="true">+1</span><span class="sr">顯示頭貼裁切</span></button>
+        <button type="button" class="peek-toggle" aria-expanded="false" aria-controls="cropCard" title="同一類還有：頭貼裁切"><span aria-hidden="true">+1</span><span class="sr">顯示頭貼裁切</span></button>
       </div>
     </section>
   </main>
