@@ -1,0 +1,12 @@
+exiftool-13.42.js
+  ExifTool 13.42 by Phil Harvey — https://exiftool.org
+    "This is free software; you can redistribute it and/or modify it under the same terms as Perl itself"
+    (the Artistic License or the GNU General Public License, at your choice).
+  @uswriting/exiftool 1.0.9 (ExifTool for the browser) — Apache License 2.0 — https://github.com/6over3/exiftool
+  @6over3/zeroperl-ts 1.0.10 (Perl 5 for WebAssembly, its JavaScript side) — Apache License 2.0 — https://github.com/6over3/zeroperl
+  Bundled into one script with esbuild, with two small changes so it runs in a Web Worker and compiles the
+  WebAssembly only once — build.sh in this folder makes both files again.
+
+zeroperl-1.0.10.wasm.gz
+  zeroperl 1.0.10: the Perl 5 interpreter compiled to WebAssembly, with ExifTool's modules inside —
+  Apache License 2.0 (zeroperl) / Perl's own licence (Perl, ExifTool). gzip-compressed; unpacked in the browser.

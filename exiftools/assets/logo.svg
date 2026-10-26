@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="ZhuyuanLoveExif">
+  <defs>
+    <linearGradient id="zle-bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#f3b730"/>
+      <stop offset="1" stop-color="#c88905"/>
+    </linearGradient>
+  </defs>
+  <rect width="64" height="64" rx="15" fill="url(#zle-bg)"/>
+  <!-- the camera: body, viewfinder hump, shutter button -->
+  <path d="M24.5 15.5h11a3 3 0 0 1 2.6 1.5l1.7 3H46a5 5 0 0 1 5 5V44a5 5 0 0 1-5 5H18a5 5 0 0 1-5-5V25a5 5 0 0 1 5-5h3.2l1.7-3a3 3 0 0 1 2.6-1.5z" fill="#fff"/>
+  <rect x="42" y="23.5" width="5" height="3" rx="1.5" fill="#f6dc9c"/>
+  <!-- the lens, a heart in it -->
+  <circle cx="32" cy="34.5" r="10.2" fill="#fbf1d9" stroke="#c48a06" stroke-width="2.6"/>
+  <path transform="translate(26.6 29.4) scale(.45)" d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" fill="#ff5a4e"/>
+</svg>

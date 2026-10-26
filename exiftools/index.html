@@ -1,0 +1,152 @@
+<!doctype html>
+<html lang="zh-Hant-TW">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#ffffff">
+<title>ZhuyuanLoveExif・照片參數查看</title>
+<meta name="description" content="把照片丟進來，馬上看到焦距、光圈、快門、ISO、鏡頭、快門次數、景深和拍攝位置。JPG、HEIC 和相機 RAW 檔（CR3、NEF、ARW、RAF、DNG…）都可以。照片只在你的電腦裡讀，不會上傳。">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="ZhuyuanTools">
+<meta property="og:locale" content="zh_TW">
+<meta property="og:title" content="ZhuyuanLoveExif・照片參數查看">
+<meta property="og:description" content="把照片丟進來，馬上看到焦距、光圈、快門、ISO、鏡頭、快門次數、景深和拍攝位置。JPG、HEIC 和相機 RAW 檔（CR3、NEF、ARW、RAF、DNG…）都可以。照片只在你的電腦裡讀，不會上傳。">
+<meta property="og:url" content="https://tools.zhuyuan.tw/exif">
+<meta property="og:image" content="https://tools.zhuyuan.tw/exif/assets/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" href="assets/logo.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/fonts/noto-sans-tc.css">
+<link rel="stylesheet" href="assets/app.css">
+</head>
+<body>
+<div class="app">
+  <header class="top">
+    <a class="brand" id="brand" href="../home/index.html" title="回到 ZhuyuanTools 首頁">
+      <img class="logo" src="assets/logo.svg" alt="" width="44" height="44">
+      <span class="brand-text">
+        <span class="wordmark">Zhuyuan<span class="w-love">Love</span><span class="w-tool">Exif</span></span>
+        <span class="tagline">照片參數查看</span>
+      </span>
+    </a>
+    <p class="privacy">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="10" width="16" height="11" rx="2"></rect><path d="M8 10V7a4 4 0 0 1 8 0v3"></path></svg>
+      <span class="privacy-long">照片只在你的電腦裡讀，不會上傳到任何伺服器。</span><span class="privacy-short">不上傳</span>
+    </p>
+  </header>
+
+  <main>
+    <!-- before any photo: one big place to drop it -->
+    <section class="panel start" id="start">
+      <div class="hero">
+        <div class="hero-text">
+          <h1 class="hero-title">照片的<em>拍攝參數</em>，丟進來就看到</h1>
+          <p class="hero-count" id="heroCount">焦距、光圈、快門、ISO，連鏡頭和快門次數都有</p>
+        </div>
+        <div class="hero-art" aria-hidden="true">
+          <svg viewBox="0 0 300 160" width="300" height="160">
+            <g transform="rotate(-5 92 82)">
+              <rect x="20" y="20" width="150" height="112" rx="10" fill="#fff" stroke="#e6dcc6" stroke-width="2"/>
+              <rect x="30" y="30" width="130" height="80" rx="5" fill="#fbf1d9"/>
+              <circle cx="132" cy="50" r="10" fill="#ffb21e"/>
+              <path d="M30 104l34-38 24 26 16-15 42 32v1H30z" fill="#e8c46c"/>
+              <path d="M30 105l40-30 30 30z" fill="#c48a06" opacity=".75"/>
+              <rect x="30" y="117" width="58" height="6" rx="3" fill="#efe5cf"/>
+            </g>
+            <g transform="translate(150 36)">
+              <rect x="0" y="0" width="134" height="96" rx="12" fill="#fff" stroke="#e6dcc6" stroke-width="2"/>
+              <rect x="0" y="0" width="134" height="96" rx="12" fill="none" stroke="#c48a06" stroke-width="2" opacity=".35"/>
+              <text x="14" y="25" font-family="ui-monospace, Menlo, monospace" font-size="13" font-weight="700" fill="#17202c">105 mm  f/4</text>
+              <text x="14" y="46" font-family="ui-monospace, Menlo, monospace" font-size="13" font-weight="700" fill="#17202c">1/125   ISO 800</text>
+              <rect x="14" y="58" width="106" height="5" rx="2.5" fill="#f3e8cf"/>
+              <rect x="14" y="58" width="64" height="5" rx="2.5" fill="#c48a06"/>
+              <rect x="14" y="72" width="86" height="5" rx="2.5" fill="#efe5cf"/>
+              <rect x="14" y="83" width="58" height="5" rx="2.5" fill="#efe5cf"/>
+            </g>
+          </svg>
+        </div>
+      </div>
+      <div class="start-body">
+        <label class="drop" id="drop">
+          <input type="file" id="fileInput" multiple accept="image/*,.heic,.heif,.hif,.tif,.tiff,.dng,.cr3,.cr2,.crw,.nef,.nrw,.arw,.srf,.sr2,.raf,.orf,.ori,.rw2,.rwl,.pef,.ptx,.srw,.3fr,.fff,.iiq,.erf,.kdc,.dcr,.mef,.mos,.mrw,.x3f,.gpr,.raw">
+          <span class="drop-inner">
+            <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14.5 4h-5L7.5 6.5H5A2 2 0 0 0 3 8.5v9A2 2 0 0 0 5 19.5h14a2 2 0 0 0 2-2v-9a2 2 0 0 0-2-2h-2.5z"></path><circle cx="12" cy="13" r="3.5"></circle></svg>
+            <span class="drop-title"><span class="d-desk">把照片拖進來</span><span class="d-mob">選擇照片</span></span>
+            <span class="drop-hint"><span class="d-desk">或點一下選檔案，</span>JPG、HEIC 或相機的 RAW 檔</span>
+          </span>
+        </label>
+        <ul class="how">
+          <li><span class="how-no">RAW</span><b>RAW 檔也看得懂</b><span>CR3、NEF、ARW、RAF、DNG…</span></li>
+          <li><span class="how-no">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M12 3v5M20 9l-5 2M18 19l-4-4M6 19l4-4M4 9l5 2"></path></svg>
+          </span><b>比相機選單還詳細</b><span>鏡頭、快門次數、景深、序號</span></li>
+          <li><span class="how-no">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="10" width="16" height="11" rx="2"></rect><path d="M8 10V7a4 4 0 0 1 8 0v3"></path></svg>
+          </span><b>照片不會上傳</b><span>只在你的電腦裡讀，也不留紀錄</span></li>
+        </ul>
+        <p class="engine" id="engine" role="status"><span class="spinner"></span> 正在準備解析程式…</p>
+      </div>
+    </section>
+
+    <!-- the photos: picture on the left, what the camera wrote on the right -->
+    <section class="panel viewer" id="viewer" hidden>
+      <div class="v-left">
+        <div class="stage" id="stage">
+          <canvas id="photo" aria-label="照片預覽"></canvas>
+          <div class="stage-msg" id="stageMsg" hidden></div>
+          <p class="stage-name" id="stageName"></p>
+        </div>
+        <div class="histo-box">
+          <canvas id="histo" aria-hidden="true"></canvas>
+          <p class="histo-foot"><span id="clipLo"></span><span class="histo-title">色階分佈</span><span id="clipHi"></span></p>
+        </div>
+        <div class="strip">
+          <ul class="thumbs" id="thumbs"></ul>
+          <label class="add-btn" title="再加照片">
+            <input type="file" id="moreInput" multiple accept="image/*,.heic,.heif,.hif,.tif,.tiff,.dng,.cr3,.cr2,.crw,.nef,.nrw,.arw,.srf,.sr2,.raf,.orf,.ori,.rw2,.rwl,.pef,.ptx,.srw,.3fr,.fff,.iiq,.erf,.kdc,.dcr,.mef,.mos,.mrw,.x3f,.gpr,.raw">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>
+            <span>加照片</span>
+          </label>
+        </div>
+      </div>
+
+      <div class="v-right">
+        <div class="v-head">
+          <div class="cam">
+            <h2 class="cam-name" id="camName"></h2>
+            <p class="cam-lens" id="camLens"></p>
+          </div>
+          <div class="v-acts">
+            <button type="button" class="btn small" id="copyLine" title="複製一行拍攝參數，貼到貼文或相簿說明">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="11" height="11" rx="2"></rect><path d="M5 15V6a2 2 0 0 1 2-2h9"></path></svg>
+              <span>複製參數</span>
+            </button>
+          </div>
+        </div>
+
+        <ul class="expo" id="expo"></ul>
+        <p class="when" id="when"></p>
+
+        <div class="tabs-row">
+          <div class="seg" role="tablist" aria-label="顯示">
+            <label><input type="radio" name="view" value="key" checked><span>重點</span></label>
+            <label><input type="radio" name="view" value="all"><span id="allTab">全部</span></label>
+          </div>
+          <input type="search" class="search" id="search" placeholder="搜尋，例如：快門、Lens、序號" aria-label="搜尋全部資訊" hidden>
+          <button type="button" class="link-btn" id="saveAll" title="全部資訊存成 CSV 表格，Excel 打得開" hidden>存成表格</button>
+        </div>
+
+        <div class="list" id="keyList"></div>
+        <div class="list all" id="allList" hidden></div>
+      </div>
+    </section>
+  </main>
+</div>
+<div class="drop-veil" id="veil" hidden><p>放開就加進來</p></div>
+<div class="toast" id="toast" role="status" hidden></div>
+
+<script src="assets/app.js"></script>
+<script src="/shared/handoff.js" data-tool="exif" data-input="#fileInput"></script>
+</body>
+</html>

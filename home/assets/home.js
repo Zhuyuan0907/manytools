@@ -7,9 +7,9 @@
   const $ = (s) => document.querySelector(s);
   const onServer = /^https?:$/.test(location.protocol);
   if (!onServer) for (const a of document.querySelectorAll('a[data-local]')) a.href = a.dataset.local;
-  const TOOL_URL = onServer ? { video: '/video', pdf: '/pdf', image: '/image' }
-    : { video: '../videotools/index.html', pdf: '../pdftools/local/index.html', image: '../imagetools/index.html' };
-  const TOOL_NAME = { video: '影片碼率壓縮', pdf: 'PDF 壓縮・拆分', image: '圖片壓縮' };
+  const TOOL_URL = onServer ? { video: '/video', pdf: '/pdf', image: '/image', exif: '/exif' }
+    : { video: '../videotools/index.html', pdf: '../pdftools/local/index.html', image: '../imagetools/index.html', exif: '../exiftools/index.html' };
+  const TOOL_NAME = { video: '影片碼率壓縮', pdf: 'PDF 壓縮・拆分', image: '圖片壓縮', exif: '照片參數查看' };
 
   // ---------- live numbers ----------
   function countUp(node, to) {
@@ -32,7 +32,7 @@
         countUp($('[data-stat="video.files"]'), v.files || 0);
         countUp($('[data-stat="pdf.files"]'), (p.files || 0) + (((st && st.watermark) || {}).files || 0));   // compressed + watermarked
         countUp($('[data-stat="avatar.files"]'), (((st && st.avatar) || {}).files || 0) + (((st && st.crop) || {}).files || 0));   // looked up + cropped
-        countUp($('[data-stat="image.files"]'), ((st && st.image) || {}).files || 0);
+        countUp($('[data-stat="image.files"]'), (((st && st.image) || {}).files || 0) + (((st && st.exif) || {}).files || 0));   // compressed + read
         if (saved > 0) $('[data-stat="saved"]').textContent = saved >= 1e9 ? `${(saved / 1e9).toFixed(1)} GB` : `${Math.max(1, Math.round(saved / 1e6))} MB`;
       })
       .catch(() => {});
@@ -68,7 +68,9 @@
     toast.textContent = text; toast.hidden = false;
     clearTimeout(toastTimer); toastTimer = setTimeout(() => { toast.hidden = true; }, ms);
   }
-  const kindOf = (name, type) => (/pdf$/i.test(type || '') || /\.pdf$/i.test(name) ? 'pdf'
+  // a camera's RAW file can't be compressed here, but its shooting data can be read
+  const kindOf = (name, type) => (/\.(cr3|cr2|crw|nef|nrw|arw|srf|sr2|raf|orf|ori|rw2|rwl|dng|pef|ptx|srw|3fr|fff|iiq|erf|kdc|dcr|mef|mos|mrw|x3f|gpr)$/i.test(name) ? 'exif'
+    : /pdf$/i.test(type || '') || /\.pdf$/i.test(name) ? 'pdf'
     : /^video\//.test(type || '') || /\.(mp4|mov|m4v|mts|m2ts|ts|mkv|webm|mxf)$/i.test(name) ? 'video'
     : /^image\//.test(type || '') || /\.(jpe?g|png|webp|gif|avif|bmp|heic|heif)$/i.test(name) ? 'image' : null);
   // Small files travel as themselves; a big video travels as a file handle when the browser has one (no copy).
@@ -126,6 +128,7 @@
           { description: '影片', accept: { 'video/*': ['.mp4', '.mov', '.m4v', '.mts', '.m2ts', '.ts', '.mkv', '.webm', '.mxf'] } },
           { description: 'PDF', accept: { 'application/pdf': ['.pdf'] } },
           { description: '圖片', accept: { 'image/*': ['.jpg', '.jpeg', '.png', '.webp', '.gif', '.avif', '.bmp', '.heic', '.heif'] } },
+          { description: '相機 RAW 檔', accept: { 'image/*': ['.dng', '.cr3', '.cr2', '.nef', '.nrw', '.arw', '.raf', '.orf', '.rw2', '.pef', '.srw', '.3fr', '.iiq'] } },
         ] });
       } catch (e) { if (e && e.name === 'AbortError') return; handles = null; }
       if (handles) { route(await Promise.all(handles.map(async (h) => ({ file: await h.getFile(), handle: h })))); return; }

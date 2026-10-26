@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /* ZhuyuanTools static server + the public counters. No dependencies: `node server/server.js`.
    Clean URLs, each tool still in its own folder:
-     /       → home/            /video → videotools/            /pdf → pdftools/local/     /avatar → avatartools/     /image → imagetools/     /crop → croptools/     /watermark → watermarktools/     /fonts → fonts/     /shared → shared/
+     /       → home/            /video → videotools/            /pdf → pdftools/local/     /avatar → avatartools/     /image → imagetools/     /crop → croptools/     /watermark → watermarktools/     /exif → exiftools/     /fonts → fonts/     /shared → shared/
    A tool's page is served at /video (no trailing slash) with <base href="/video/"> injected, so its relative
    asset paths keep working both here and when the folder is opened straight from disk.
    Counters keep only totals (files, seconds/pages, bytes saved) per tool — never file content:
@@ -15,6 +15,7 @@
      POST /image/api/stats/processed  ← { files, savedBytes }
      POST /crop/api/stats/processed   ← { files }   (avatars cropped)
      POST /watermark/api/stats/processed ← { files }   (PDFs watermarked)
+     POST /exif/api/stats/processed   ← { files }   (photos read)
    Env: PORT (default 8080), HOST (default 127.0.0.1), STATS_FILE (default server/data/stats.json). */
 'use strict';
 const http = require('http');
@@ -26,7 +27,8 @@ const PORT = +process.env.PORT || 8080;
 const HOST = process.env.HOST || '127.0.0.1';
 const STATS_FILE = process.env.STATS_FILE || path.join(__dirname, 'data', 'stats.json');
 
-// route → folder. The root mount must stay last. /fonts is shared by every page and never changes.
+// route → folder. The root mount must stay last. /fonts is shared by every page and never changes, and neither do
+// the photo tool's libraries (version in each file name; its 7.5 MB Perl runtime shouldn't be fetched twice).
 const MOUNTS = [
   { route: '/video', dir: path.join(ROOT, 'videotools'), tool: 'video' },
   { route: '/pdf', dir: path.join(ROOT, 'pdftools', 'local'), tool: 'pdf' },
@@ -34,6 +36,8 @@ const MOUNTS = [
   { route: '/image', dir: path.join(ROOT, 'imagetools'), tool: 'image' },
   { route: '/crop', dir: path.join(ROOT, 'croptools'), tool: 'crop' },
   { route: '/watermark', dir: path.join(ROOT, 'watermarktools'), tool: 'watermark' },
+  { route: '/exif/lib', dir: path.join(ROOT, 'exiftools', 'lib'), immutable: true },
+  { route: '/exif', dir: path.join(ROOT, 'exiftools'), tool: 'exif' },
   { route: '/fonts', dir: path.join(ROOT, 'fonts'), immutable: true },
   { route: '/shared', dir: path.join(ROOT, 'shared') },
   { route: '', dir: path.join(ROOT, 'home') },
@@ -48,19 +52,20 @@ const LEGACY = [
   [/^\/imagetools(\/(index\.html)?)?$/, '/image'],
   [/^\/croptools(\/(index\.html)?)?$/, '/crop'],
   [/^\/watermarktools(\/(index\.html)?)?$/, '/watermark'],
+  [/^\/exiftools(\/(index\.html)?)?$/, '/exif'],
 ];
 
-const FIELDS = { video: ['files', 'seconds', 'savedBytes'], pdf: ['files', 'pages', 'savedBytes'], avatar: ['files'], image: ['files', 'savedBytes'], crop: ['files'], watermark: ['files'] };
+const FIELDS = { video: ['files', 'seconds', 'savedBytes'], pdf: ['files', 'pages', 'savedBytes'], avatar: ['files'], image: ['files', 'savedBytes'], crop: ['files'], watermark: ['files'], exif: ['files'] };
 // Upper bounds for one report, so a single bad request can't inflate the counters much.
 const LIMITS = { files: 50, seconds: 6 * 3600 * 50, pages: 5000, savedBytes: 200e9 };
 
 const TYPES = {
   '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8',
   '.json': 'application/json; charset=utf-8', '.svg': 'image/svg+xml', '.png': 'image/png', '.jpg': 'image/jpeg',
-  '.txt': 'text/plain; charset=utf-8', '.woff2': 'font/woff2', '.wasm': 'application/wasm', '.ico': 'image/x-icon',
+  '.txt': 'text/plain; charset=utf-8', '.woff2': 'font/woff2', '.wasm': 'application/wasm', '.gz': 'application/gzip', '.ico': 'image/x-icon',
 };
 
-let stats = { video: {}, pdf: {}, avatar: {}, image: {}, crop: {}, watermark: {} };
+let stats = { video: {}, pdf: {}, avatar: {}, image: {}, crop: {}, watermark: {}, exif: {} };
 try { stats = { ...stats, ...JSON.parse(fs.readFileSync(STATS_FILE, 'utf8')) }; } catch {}
 for (const [k, fields] of Object.entries(FIELDS)) for (const f of fields) stats[k][f] = +stats[k][f] || 0;
 

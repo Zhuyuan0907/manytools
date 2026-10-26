@@ -38,11 +38,11 @@
       </div>
 
       <div class="drop" id="drop" role="button" tabindex="0" aria-label="選擇影片、圖片或 PDF，會帶你到對的工具">
-        <input type="file" id="pick" multiple accept="video/*,.mp4,.mov,.m4v,.mts,.m2ts,.ts,.mkv,.webm,.mxf,application/pdf,.pdf,image/*,.heic,.heif" tabindex="-1" aria-hidden="true">
+        <input type="file" id="pick" multiple accept="video/*,.mp4,.mov,.m4v,.mts,.m2ts,.ts,.mkv,.webm,.mxf,application/pdf,.pdf,image/*,.heic,.heif,.dng,.cr3,.cr2,.nef,.nrw,.arw,.raf,.orf,.rw2,.pef,.srw,.3fr,.iiq" tabindex="-1" aria-hidden="true">
         <span class="stack" aria-hidden="true"><img src="assets/tool-video.svg" alt=""><img src="assets/tool-image.svg" alt=""><img src="assets/tool-pdf.svg" alt=""></span>
         <b class="drop-title"><span class="d-desk">把影片、圖片或 PDF 拖進這裡</span><span class="d-mob">選擇影片、圖片或 PDF</span></b>
         <span class="drop-hint">會自動帶你到對的工具，<span class="d-desk">也可以點一下選檔案</span><span class="d-mob">檔案不上傳</span></span>
-        <span class="drop-formats">MP4・MOV・JPG・PNG・HEIC・PDF</span>
+        <span class="drop-formats">MP4・MOV・JPG・PNG・HEIC・RAW・PDF</span>
       </div>
     </section>
 
@@ -62,7 +62,7 @@
           </svg>
         </span>
       </a>
-      <!-- 02 and 04 each hide a second tool of the same kind: it slides out on hover or focus, or with a tap on its edge on touch screens -->
+      <!-- 02, 03 and 04 each hide a second tool of the same kind: it slides out on hover or focus, or with a tap on its edge on touch screens -->
       <div class="tool-stack" id="pdfStack">
         <a class="tool pdf" href="/pdf" data-local="../pdftools/local/index.html">
           <span class="tool-text">
@@ -88,21 +88,31 @@
           </span>
         </a>
       </div>
-      <a class="tool image" href="/image" data-local="../imagetools/index.html">
-        <span class="tool-text">
-          <span class="tool-top"><span class="no">03</span><span class="word">Zhuyuan<i>Love</i><u>Image</u></span></span>
-          <b class="tool-name">圖片壓縮</b>
-          <span class="tool-desc">照片太大？壓到上限內</span>
-          <span class="cta">開始壓縮 <span aria-hidden="true">→</span></span>
-        </span>
-        <span class="art" aria-hidden="true">
-          <svg viewBox="0 0 300 160">
-            <g><rect x="8" y="14" width="124" height="96" rx="12" class="page"/><circle cx="38" cy="42" r="10" class="sun"/><path d="M18 102l34-38 22 22 16-16 34 32z" class="play"/><rect x="30" y="120" width="80" height="30" rx="8" class="chip-bad"/><text x="70" y="140" class="chip-t">13 MB</text></g>
-            <g class="arrow"><path d="M142 64h36"/><path d="M170 54l10 10-10 10"/></g>
-            <g class="small"><rect x="196" y="30" width="94" height="72" rx="10" class="page"/><circle cx="218" cy="50" r="7" class="sun"/><path d="M204 96l24-27 16 16 11-11 27 22z" class="play"/><rect x="207" y="114" width="72" height="26" rx="7" class="chip-ok"/><text x="243" y="132" class="chip-t">9.8 MB</text><circle cx="286" cy="32" r="14" class="check-bg"/><path d="M279.5 32.5l4.5 4.5 8-9" class="check"/></g>
-          </svg>
-        </span>
-      </a>
+      <div class="tool-stack" id="imageStack">
+        <a class="tool image" href="/image" data-local="../imagetools/index.html">
+          <span class="tool-text">
+            <span class="tool-top"><span class="no">03</span><span class="word">Zhuyuan<i>Love</i><u>Image</u></span></span>
+            <b class="tool-name">圖片壓縮</b>
+            <span class="tool-desc">照片太大？壓到上限內</span>
+            <span class="cta">開始壓縮 <span aria-hidden="true">→</span></span>
+          </span>
+          <span class="art" aria-hidden="true">
+            <svg viewBox="0 0 300 160">
+              <g><rect x="8" y="14" width="124" height="96" rx="12" class="page"/><circle cx="38" cy="42" r="10" class="sun"/><path d="M18 102l34-38 22 22 16-16 34 32z" class="play"/><rect x="30" y="120" width="80" height="30" rx="8" class="chip-bad"/><text x="70" y="140" class="chip-t">13 MB</text></g>
+              <g class="arrow"><path d="M142 64h36"/><path d="M170 54l10 10-10 10"/></g>
+              <g class="small"><rect x="196" y="30" width="94" height="72" rx="10" class="page"/><circle cx="218" cy="50" r="7" class="sun"/><path d="M204 96l24-27 16 16 11-11 27 22z" class="play"/><rect x="207" y="114" width="72" height="26" rx="7" class="chip-ok"/><text x="243" y="132" class="chip-t">9.8 MB</text><circle cx="286" cy="32" r="14" class="check-bg"/><path d="M279.5 32.5l4.5 4.5 8-9" class="check"/></g>
+            </svg>
+          </span>
+        </a>
+        <a class="tool exif peek" id="exifCard" href="/exif" data-local="../exiftools/index.html">
+          <span class="tool-text">
+            <span class="tool-top"><span class="no">07</span><span class="word">Zhuyuan<i>Love</i><u>Exif</u></span></span>
+            <b class="tool-name">照片參數查看</b>
+            <span class="tool-desc">焦距、光圈、快門一次看</span>
+            <span class="cta"><span aria-hidden="true">→</span></span>
+          </span>
+        </a>
+      </div>
       <div class="tool-stack" id="avatarStack">
         <a class="tool avatar" href="/avatar" data-local="../avatartools/index.html">
           <span class="tool-text">
