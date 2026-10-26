@@ -89,17 +89,16 @@
       </div>
     </section>
 
-    <!-- the photos: picture on the left, what the camera wrote on the right -->
+    <!-- the photos: picture on the left, what the camera wrote on the right, sorted into cards -->
     <section class="panel viewer" id="viewer" hidden>
       <div class="v-left">
         <div class="stage" id="stage">
           <canvas id="photo" aria-label="照片預覽"></canvas>
           <div class="stage-msg" id="stageMsg" hidden></div>
-          <p class="stage-name" id="stageName"></p>
         </div>
         <div class="histo-box">
           <canvas id="histo" aria-hidden="true"></canvas>
-          <p class="histo-foot"><span id="clipLo"></span><span class="histo-title">色階分佈</span><span id="clipHi"></span></p>
+          <p class="histo-foot"><span class="h-lo">暗部<b id="clipLo"></b></span><span class="histo-title">色階分佈</span><span class="h-hi"><b id="clipHi"></b>亮部</span></p>
         </div>
         <div class="strip">
           <ul class="thumbs" id="thumbs"></ul>
@@ -118,27 +117,25 @@
             <p class="cam-lens" id="camLens"></p>
           </div>
           <div class="v-acts">
+            <label class="search-box">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="M20 20l-3.5-3.5"></path></svg>
+              <input type="search" id="search" placeholder="搜尋參數" aria-label="搜尋這張照片的參數">
+            </label>
             <button type="button" class="btn small" id="copyLine" title="複製一行拍攝參數，貼到貼文或相簿說明">
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="11" height="11" rx="2"></rect><path d="M5 15V6a2 2 0 0 1 2-2h9"></path></svg>
               <span>複製參數</span>
+            </button>
+            <button type="button" class="btn small" id="saveAll" title="所有參數存成 CSV 表格，Excel 打得開">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"></path></svg>
+              <span>存成表格</span>
             </button>
           </div>
         </div>
 
         <ul class="expo" id="expo"></ul>
-        <p class="when" id="when"></p>
 
-        <div class="tabs-row">
-          <div class="seg" role="tablist" aria-label="顯示">
-            <label><input type="radio" name="view" value="key" checked><span>重點</span></label>
-            <label><input type="radio" name="view" value="all"><span id="allTab">全部</span></label>
-          </div>
-          <input type="search" class="search" id="search" placeholder="搜尋，例如：快門、Lens、序號" aria-label="搜尋全部資訊" hidden>
-          <button type="button" class="link-btn" id="saveAll" title="全部資訊存成 CSV 表格，Excel 打得開" hidden>存成表格</button>
-        </div>
-
-        <div class="list" id="keyList"></div>
-        <div class="list all" id="allList" hidden></div>
+        <!-- everything else, sorted into cards; the rest of the maker's settings at the bottom -->
+        <div class="sheet" id="sheet"></div>
       </div>
     </section>
   </main>

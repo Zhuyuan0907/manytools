@@ -13,7 +13,7 @@
 | `avatartools/` | `/avatar` | Gravatar 頭貼查詢（ZhuyuanLoveAvatar）：Email 在瀏覽器裡轉成 SHA-256／MD5，查頭貼、公開資料，複製網址或打包下載 |
 | `croptools/` | `/crop` | 頭貼裁切（ZhuyuanLoveCrop）：拖曳、縮放、旋轉對準臉（虛線圓是圓形頭貼看得到的範圍），輸出正方形或圓形去背，PNG／JPEG／WebP，一次可以處理很多張、打包下載。首頁上它躲在 Gravatar 卡片後面，滑鼠移上去才滑出來（手機先點一下露出來的邊） |
 | `imagetools/` | `/image` | 圖片壓縮（ZhuyuanLoveImage）：壓到指定大小以內（找上限內畫質最高的設定），可換 JPEG／WebP／PNG、縮小尺寸、裁成正方形頭貼，打包下載 |
-| `exiftools/` | `/exif` | 照片參數查看（ZhuyuanLoveExif）：不分步驟，照片丟進去就看到焦距、光圈、快門、ISO、鏡頭、快門次數、景深、拍攝位置，「全部」列出每一項（可搜尋、存成 CSV）；RAW 檔（CR3、NEF、ARW、RAF、DNG…）顯示相機放在裡面的預覽圖和色階分佈。用的是 [ExifTool](https://exiftool.org) 13.42 的 WebAssembly 版（`exiftools/lib/`，第一次使用下載 7.5 MB，之後瀏覽器會記住）。首頁上它躲在圖片壓縮卡片後面；首頁拖進 RAW 檔也會直接帶來這裡 |
+| `exiftools/` | `/exif` | 照片參數查看（ZhuyuanLoveExif）：不分步驟，照片丟進去就看到。一個畫面放全部：焦距、光圈、快門、ISO、曝光補償五個大數字，下面按類別分成卡片（曝光、對焦、鏡頭與景深、色彩與風格、Lightroom 調色參數、後製、手機拍攝、機身、時間與地點、影像與檔案、作者），同一件事檔案裡寫好幾次的只顯示一次；剩下的原廠細部設定收在最下面「其他技術資料」，可搜尋、存成 CSV。RAW 檔（CR3、NEF、ARW、RAF、DNG…）顯示相機放在裡面的預覽圖和色階分佈。用的是 [ExifTool](https://exiftool.org) 13.42 的 WebAssembly 版（`exiftools/lib/`，第一次使用下載 7.5 MB，之後瀏覽器會記住）。首頁上它躲在圖片壓縮卡片後面；首頁拖進 RAW 檔也會直接帶來這裡 |
 | `fonts/` | `/fonts` | 共用字型：Noto Sans TC（思源黑體，SIL OFL），自己網站提供，不從 Google 載入；蘋果裝置會直接用蘋方 |
 | `shared/` | `/shared` | 共用程式：`handoff.js` 把首頁拖進來的檔案交給工具頁（只在使用者的瀏覽器裡，IndexedDB／檔案控制代碼，不上傳） |
 | `server/` | — | 小伺服器：網址對應＋處理數量計數（只存數字） |
