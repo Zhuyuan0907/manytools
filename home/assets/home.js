@@ -45,8 +45,10 @@
   const show = (x, open) => x.stack.classList.toggle('open', open);
   let finger = false;
   document.addEventListener('pointerdown', (e) => { finger = e.pointerType !== 'mouse'; }, true);
+  // on a phone the tiles lie flat (home.css), so a tap simply goes in
+  const flat = () => matchMedia('(max-width: 760px)').matches;
   for (const x of stacks) x.peek.addEventListener('click', (e) => {
-    if (!finger || x.stack.classList.contains('open')) return;
+    if (!finger || flat() || x.stack.classList.contains('open')) return;
     e.preventDefault();
     for (const y of stacks) show(y, y === x);
   });

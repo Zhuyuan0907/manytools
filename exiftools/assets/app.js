@@ -46,6 +46,8 @@
   const WEBKIT = /iP(hone|ad|od)/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
     || (/AppleWebKit/.test(navigator.userAgent) && !/(Chrome|Chromium|CriOS|Edg|OPR|Firefox|FxiOS)\//.test(navigator.userAgent));
   const JS_ONLY = ENGINE === 'js' || (WEBKIT && ENGINE !== 'exiftool');
+  // an iPhone or iPad: a photo picked from 照片 arrives as a JPEG iOS makes from it, without its location (renderSheet)
+  const IOS = /iP(hone|ad|od)/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
 
   // ---------- the engine ----------
   const engine = { state: 'loading', loaded: 0, total: 0 };
@@ -93,7 +95,7 @@
   //         look (how the finished picture looks), sheet (the cards) }
   // A photo on screen is read whole (done); the others in a set only where their metadata is (rec), a batch at a time.
   const items = [];
-  let current = -1, nextId = 1, view = 'one';
+  let current = -1, nextId = 1, view = 'one', hintedSet = false;
   const cur = () => items[current];
 
   // where a file sits, so a RAW file and its .xmp pair up (a folder from the picker or from drag and drop)
@@ -130,10 +132,44 @@
     }
     showModes();
     current = first;
-    setView(folder || fresh.length >= 6 ? 'set' : 'one');
+    // a folder was chosen for the set; photos picked one by one open one at a time, with a word about the other view
+    setView(folder ? 'set' : 'one');
+    if (!folder && view === 'one' && items.length >= 6 && !hintedSet) { hintedSet = true; toast(`${items.length} 張照片：上面切到「整組統整」可以看整組的調色習慣、一致性和檢查`, 6000); }
     renderThumbs();
     pump();
   }
+  // a photo out of the set (the × on its thumbnail); the last one gone: back to the start
+  function removeItem(it) {
+    const i = items.indexOf(it);
+    if (i < 0) return;
+    items.splice(i, 1);
+    for (const q of [fullQ, scanQ, lookQ]) { const j = q.indexOf(it); if (j >= 0) q.splice(j, 1); }
+    if (views.has(it.id)) { release(views.get(it.id).img); views.delete(it.id); }
+    setThumb(it, null);
+    if (!items.length) { reset(); return; }
+    if (i < current) current--;
+    else if (current >= items.length) current = items.length - 1;
+    loupeReset();
+    if (view === 'set' && items.length < 2) view = 'one';
+    setView(view);
+    changed();
+  }
+  // everything out: the start again
+  function reset() {
+    loupeReset();
+    closeFull();
+    for (const it of items) { setThumb(it, null); if (views.has(it.id)) { release(views.get(it.id).img); views.delete(it.id); } }
+    items.length = 0; fullQ.length = 0; scanQ.length = 0; lookQ.length = 0;
+    current = -1; moreOpen = false; checksOpen = false; lastSummary = null; hintedSet = false;
+    $('#search').value = '';
+    $('#viewer').hidden = true;
+    $('#summary').hidden = true;
+    $('#start').hidden = false;
+    view = 'one';
+    showModes();
+    renderThumbs();
+  }
+  $('#clearAll').addEventListener('click', () => { if (items.length < 2 || confirm(`把這 ${items.length} 張照片都移除，重新開始？`)) reset(); });
 
   // ---------- what the worker does next ----------
   // One job at a time, picked when the last one ends: the photo on screen first (all of it), then the rest of a set
@@ -1308,8 +1344,8 @@
     const parts = [];
     if (o.ed.length) {
       const words = st.tags.map(([t]) => t);
-      parts.push(`${o.read} 張裡，${o.ed.length === o.read ? '每張' : `${o.ed.length} 張`}都帶著 Lightroom 的調色參數。`);
-      if (words.length) parts.push(`常用的調法：${words.slice(0, 8).join('、')}${words.length > 8 ? '等' : ''}。`);
+      parts.push(o.ed.length === o.read ? `${o.read} 張都帶著 Lightroom 的調色參數。` : `${o.read} 張裡有 ${o.ed.length} 張帶著 Lightroom 的調色參數。`);
+      if (words.length) parts.push(`${o.ed.length >= 3 ? '常用的調法' : '調法'}：${words.slice(0, 8).join('、')}${words.length > 8 ? '等' : ''}。`);
       if (st.profile) parts.push(`描述檔多用 ${st.profile}。`);
       if (st.like) parts.push(`整體接近「${st.like}」。`);
     } else {
@@ -1446,7 +1482,9 @@
     }
     left.push(el('div', { class: 's-acts' },
       el('button', { type: 'button', class: 'btn small', onclick: copySummary }, '複製總結'),
-      el('button', { type: 'button', class: 'btn small', onclick: () => saveSet(o) }, '存成表格')));
+      el('button', { type: 'button', class: 'btn small', onclick: () => saveSet(o) }, '存成表格'),
+      el('button', { type: 'button', class: 'btn small', onclick: () => $('#moreInput').click() }, '加照片'),
+      el('button', { type: 'button', class: 'link-btn clear-btn', onclick: () => $('#clearAll').click() }, '清空')));
 
     // ---- right: the details
     const cards = [];
@@ -1648,7 +1686,7 @@
     if (!it.ok) { busy(['讀不到這個檔案'], engine.state === 'error' ? '解析程式沒有載入成功，請重新整理頁面再試一次' : '檔案可能壞了，或不是照片'); return; }
     const noCamera = !val(it, ['Make', 'Model']) && !val(it, ['ExposureTime', 'FNumber']);
     $('#camName').textContent = noCamera ? '沒有相機資訊' : cameraName(it) || '不知道是哪台相機';
-    $('#camLens').textContent = noCamera ? '拍攝資料被拿掉了：截圖、修圖 App 輸出、傳過通訊軟體或社群網站的照片常常這樣。要看參數，請用相機或手機裡的原始檔。'
+    $('#camLens').textContent = noCamera ? `拍攝資料被拿掉了：截圖、修圖 App 輸出、傳過通訊軟體或社群網站的照片常常這樣。要看參數，請用相機或手機裡的原始檔。${IOS ? ' iPhone 從「照片」選的時候，請選「實際大小」，縮小過的參數會不見。' : ''}`
       : lensName(it) || (/mm$/.test(val(it, 'Lens', { groups: ['Composite'] })) ? `鏡頭 ${metres(val(it, 'Lens', { groups: ['Composite'] }))}` : '鏡頭沒有記錄');
     $('#copyLine').disabled = noCamera;
     $('#saveAll').disabled = false;
@@ -1691,11 +1729,13 @@
             el('span', { class: 'kv-k', text: r.label }), el('span', { class: 'kv-v', text: r.val })))))) : null);
     }
     // meta.js reads the standard parts; a camera maker's own notes need ExifTool (not in Safari)
-    const note = it.reader === 'js' && !isPhone(it) && (it.raw || val(it, 'Make')) && !q
-      ? el('p', { class: 'reader-note', text: 'Safari 只讀得到標準的 EXIF、GPS 和 XMP；相機原廠的細部資料（快門次數、對焦設定、機身溫度等）請用 Chrome、Edge 或 Firefox 開這個網頁。' }) : null;
+    const notes = [];
+    if (!q && it.reader === 'js' && !isPhone(it) && (it.raw || val(it, 'Make'))) notes.push('Safari 只讀得到標準的 EXIF、GPS 和 XMP；相機原廠的細部資料（快門次數、對焦設定、機身溫度等）請用 Chrome、Edge 或 Firefox 開這個網頁。');
+    // iOS gives a web page a JPEG it makes from the photo in 照片 (a HEIC never arrives as itself), minus the location
+    if (!q && IOS && !it.raw && /\.jpe?g$/i.test(it.file.name) && (/apple/i.test(val(it, 'Make')) || /^image\.jpe?g$/i.test(it.file.name))) notes.push('從「照片」選進來的照片，iPhone 會先轉成 JPG 再交給網頁（HEIC 原檔不會直接送進來）：拍攝參數大多還在，但位置會被拿掉，Live Photo、Apple HDR 這些也看不到。想看原檔：選照片時點「選擇檔案」，從「檔案」App 裡挑（先在「照片」用分享 → 儲存到檔案），或傳到電腦再看。');
     fill($('#sheet'),
       cards.length ? el('div', { class: 'cards' }, ...cards) : null,
-      note,
+      ...notes.map((t) => el('p', { class: 'reader-note', text: t })),
       more,
       !cards.length && !other.length ? el('p', { class: 'nothing', text: q ? `找不到「${raw}」` : '這個檔案裡沒有資訊' }) : null);
   }
@@ -1877,6 +1917,8 @@
       const on = !!L.v;
       bar.hidden = !on;
       if (!on) return;
+      const hint = $('.z-hint', bar);
+      if (hint) hint.hidden = L.zoomed || zoomHinted;
       $('.z-pct', bar).textContent = L.zoomed && Math.abs(L.percent() - 100) >= 1 ? `${L.percent()}%` : ''; // 100 %: the button says it
       $('.z-fit', bar).classList.toggle('on', !L.zoomed);
       $('.z-100', bar).classList.toggle('on', L.zoomed && Math.abs(L.percent() - 100) < 1);
@@ -1890,6 +1932,7 @@
       if (ns <= L.fitS * 1.001) { L.zoomed = false; dropFull(); L.paint(); return; }
       L.zoomed = true;
       L.s = ns;
+      if (!zoomHinted) { zoomHinted = true; try { localStorage.setItem('exif-zoomed', '1'); } catch {} }
       L.cx = px - (x - box.clientWidth / 2) / ns;
       L.cy = py - (y - box.clientHeight / 2) / ns;
       L.paint();
@@ -1964,6 +2007,9 @@
     }
     return L;
   }
+  // "點一下放大到 100%" on the picture until the first zoom, ever
+  let zoomHinted = false;
+  try { zoomHinted = !!localStorage.getItem('exif-zoomed'); } catch {}
   let fullLoading = 0;
   async function loadFull(it) {
     if (fullLoading === it.id) return;
@@ -2120,7 +2166,9 @@
           'aria-label': it.file.name, 'aria-current': i === current ? 'true' : null, onclick: () => select(i),
         },
         it.thumb ? el('img', { src: it.thumb, alt: '', loading: 'lazy' }) : el('span', { class: 'th-ext', text: it.kind === 'xmp' ? 'XMP' : extOf(it.file.name) }),
-        it.busy && !it.rec ? el('span', { class: 'th-busy' }, el('span', { class: 'spinner' })) : null))));
+        it.busy && !it.rec ? el('span', { class: 'th-busy' }, el('span', { class: 'spinner' })) : null),
+        // the one on screen can be taken out
+        i === current ? el('button', { type: 'button', class: 'th-x', title: '移除這張', 'aria-label': `移除 ${it.file.name}`, onclick: () => removeItem(it) }, '×') : null)));
       $('.strip').classList.toggle('one', items.length < 2);
       // keep the chosen one in view by scrolling the strip only (scrollIntoView would also move the page on a phone)
       const on = ul.querySelector('.on');

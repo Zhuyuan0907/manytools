@@ -109,11 +109,12 @@
           <canvas id="photo" aria-label="照片預覽"></canvas>
           <div class="stage-msg" id="stageMsg" hidden></div>
           <div class="zoom-bar" id="zoomBar" hidden>
+            <span class="z-hint">點一下放大到 100%</span>
             <span class="z-pct"></span>
             <button type="button" class="z-fit">全圖</button>
             <button type="button" class="z-100">100%</button>
             <button type="button" class="z-full" id="zFull" title="全螢幕（F）" aria-label="全螢幕">
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 9V4h5M15 4h5v5M20 15v5h-5M9 20H4v-5"></path></svg>
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 9V4h5M15 4h5v5M20 15v5h-5M9 20H4v-5"></path></svg><span class="z-full-t">放大</span>
             </button>
           </div>
         </div>
@@ -128,6 +129,7 @@
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>
             <span>加照片</span>
           </label>
+          <button type="button" class="link-btn clear-btn" id="clearAll" title="全部移除，重新開始">清空</button>
         </div>
       </div>
 
@@ -196,5 +198,6 @@
 <script src="assets/look.js"></script>
 <script src="assets/app.js"></script>
 <script src="/shared/handoff.js" data-tool="exif" data-input="#fileInput"></script>
+<script src="/shared/tools-nav.js" data-tool="exif"></script>
 </body>
 </html>

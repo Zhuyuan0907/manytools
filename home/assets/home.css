@@ -82,7 +82,7 @@ main { display: grid; align-content: center; gap: clamp(22px, 4.5vh, 44px); }
 .drop.busy .drop-title::after { content: "…"; }
 
 /* bottom: the tools */
-.tools { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 18px; }
+.tools { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 18px; padding-top: 36px; }
 .tool {
   --c: var(--blue); --cs: var(--blue-strong); --soft: var(--blue-soft);
   display: grid; grid-template-rows: auto 1fr; border-radius: 20px; overflow: hidden;
@@ -147,18 +147,20 @@ main { display: grid; align-content: center; gap: clamp(22px, 4.5vh, 44px); }
 .tool-stack { position: relative; display: grid; isolation: isolate; }
 .tool-stack > .tool:not(.peek) { position: relative; z-index: 2; }
 .peek {
-  --rest: 26px;
+  --rest: 62px;
   position: absolute; z-index: 1; left: 12px; right: 12px; bottom: calc(100% - 16px);
   grid-template-rows: auto; border-top: 4px solid var(--c); border-radius: 16px 16px 12px 12px;
   box-shadow: 0 -4px 16px rgba(23, 32, 44, .08);
   transform: translateY(calc(100% - var(--rest))); transition: transform .42s cubic-bezier(.2, .9, .25, 1.12), box-shadow .2s, border-color .15s;
 }
-.peek .tool-text { grid-row: auto; grid-template-columns: minmax(0, 1fr) auto; grid-template-rows: auto auto auto; column-gap: 12px; row-gap: 1px; padding: 12px 14px 22px 16px; }
-.peek .tool-top, .peek .tool-name, .peek .tool-desc { grid-column: 1; }
-.peek .tool-name { font-size: 1.12rem; }
-.peek .tool-desc { font-size: .84rem; white-space: nowrap; }
+/* at rest its first line shows above the other card, like a tab you can read: "06 PDF 浮水印" */
+.peek .tool-text { grid-row: auto; grid-template-columns: auto minmax(0, 1fr) auto; grid-template-rows: auto auto; column-gap: 10px; row-gap: 1px; padding: 10px 14px 22px 16px; }
+.peek .tool-top { grid-column: 1; grid-row: 1; }
+.peek .word { display: none; }
+.peek .tool-name { grid-column: 2; grid-row: 1; font-size: 1.08rem; line-height: 1.5; }
+.peek .tool-desc { grid-column: 1 / 3; grid-row: 2; font-size: .84rem; white-space: nowrap; }
 @media (max-width: 1150px) and (min-width: 1001px) { .peek { left: 6px; right: 6px; } .peek .tool-text { padding-right: 10px; column-gap: 8px; } }
-.peek .cta { grid-column: 2; grid-row: 1 / span 3; align-self: center; margin: 0; width: 38px; height: 38px; padding: 0; border-radius: 50%; justify-content: center; box-shadow: none; }
+.peek .cta { grid-column: 3; grid-row: 1 / span 2; align-self: center; margin: 0; width: 38px; height: 38px; padding: 0; border-radius: 50%; justify-content: center; box-shadow: none; }
 /* keyboard focus on either card, not the focus a mouse click leaves on one: Back brings this page back with that focus
    still there, and the card would stay up */
 .tool-stack.open .peek, .tool:focus-visible + .peek, .peek:focus-visible { transform: translateY(0); box-shadow: 0 -2px 4px rgba(23, 32, 44, .05), 0 -14px 34px rgba(23, 32, 44, .16); }
@@ -204,7 +206,7 @@ main { display: grid; align-content: center; gap: clamp(22px, 4.5vh, 44px); }
 @media (max-width: 1000px) and (min-width: 761px) {
   .drop-title { font-size: 1rem; }
   .drop-hint { font-size: .84rem; }
-  .tools { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .tools { grid-template-columns: repeat(2, minmax(0, 1fr)); row-gap: 58px; padding-top: 40px; }
   .art { display: none; }
   .tool { grid-template-rows: auto; }
   .tool-text { grid-row: auto; grid-template-columns: minmax(0, 1fr) auto; column-gap: 12px; }
@@ -216,7 +218,7 @@ main { display: grid; align-content: center; gap: clamp(22px, 4.5vh, 44px); }
   .privacy-long { display: none; }
   .privacy-short { display: inline; }
   .lead { gap: 28px; }
-  .tools { gap: 14px; }
+  .tools { gap: 58px 14px; }
   .tool-text { padding: 14px 16px 16px; }
   .tool-name { font-size: 1.2rem; }
   .tool-desc { font-size: .86rem; }
@@ -264,11 +266,16 @@ main { display: grid; align-content: center; gap: clamp(22px, 4.5vh, 44px); }
   .cta span { font-size: .95rem; }
   .tool-name { grid-column: 1 / -1; font-size: .96rem; white-space: nowrap; margin-top: 4px; }
   .tool-desc { grid-column: 1 / -1; font-size: .74rem; line-height: 1.45; white-space: nowrap; }
-  .peek { --rest: 22px; left: 8px; right: 8px; }
-  .peek .tool-text { padding: 10px 10px 20px 12px; }
-  .peek .tool-name { font-size: .96rem; margin-top: 2px; }
-  .peek .tool-desc { font-size: .74rem; }
-  .peek .cta { grid-row: 1; width: 32px; height: 32px; }
+  /* seven plain tiles, in order: nothing hides behind anything (no hover to find it with) */
+  .tools { padding-top: 0; }
+  .tool-stack { display: contents; }
+  .peek { position: static; transform: none !important; animation: none !important; border-top: 0; border-radius: 16px; box-shadow: var(--shadow); }
+  .peek .tool-text { grid-template-columns: minmax(0, 1fr) auto; grid-template-rows: auto; row-gap: 2px; padding: 12px 12px 14px; }
+  .peek .tool-top { grid-column: 1; grid-row: 1; }
+  .peek .tool-name { grid-column: 1 / -1; grid-row: auto; font-size: .96rem; line-height: 1.3; margin-top: 4px; }
+  .peek .tool-desc { grid-column: 1 / -1; grid-row: auto; font-size: .74rem; }
+  .peek .cta { grid-column: 2; grid-row: 1; width: 32px; height: 32px; }
+  .tool.video { order: 1; } .tool.pdf { order: 2; } .tool.image { order: 3; } .tool.avatar { order: 4; } .tool.crop { order: 5; } .tool.mark { order: 6; } .tool.exif { order: 7; grid-column: 1 / -1; }
 }
 @media (max-width: 760px) and (max-height: 700px) {
   .app { gap: 8px; padding-top: 10px; }
@@ -283,8 +290,7 @@ main { display: grid; align-content: center; gap: clamp(22px, 4.5vh, 44px); }
   .tool-name { font-size: .98rem; }
   .tool-desc { font-size: .76rem; }
 }
-/* touch screens: a bigger edge to tap (rows spaced so it doesn't run into what's above) */
-@media (any-hover: none) {
-  .peek { --rest: 30px; }
-  .tools { row-gap: 26px; padding-top: 12px; }
+/* a tablet: no hover, the tab is tapped (rows spaced so it doesn't run into what's above) */
+@media (any-hover: none) and (min-width: 761px) {
+  .tools { row-gap: 58px; padding-top: 40px; }
 }

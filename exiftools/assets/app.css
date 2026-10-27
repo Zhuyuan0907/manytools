@@ -140,6 +140,8 @@ main { min-height: 0; display: flex; flex-direction: column; }
 .zoom-bar button:hover { background: rgba(255, 255, 255, .12); }
 .zoom-bar button.on { background: rgba(255, 255, 255, .2); color: #fff; }
 .z-pct { padding: 0 6px; font-variant-numeric: tabular-nums; color: #ffd27a; font-weight: 700; }
+.z-hint { padding: 0 8px 0 10px; color: #e9ebee; }
+.z-full-t { display: none; }
 .z-pct:empty { display: none; }
 .stage-msg { display: grid; gap: 4px; justify-items: center; text-align: center; color: #c9ced6; font-size: .9rem; padding: 0 24px; max-width: 360px; }
 .stage-msg b { color: #fff; font-size: 1rem; }
@@ -154,7 +156,13 @@ main { min-height: 0; display: flex; flex-direction: column; }
 .h-hi b { color: #ffb4a8; margin-right: 6px; }
 .histo-title { color: #8a919b; }
 .strip { display: flex; align-items: center; gap: 8px; min-width: 0; }
-.thumbs { position: relative; list-style: none; margin: 0; padding: 3px; display: flex; gap: 6px; overflow-x: auto; min-width: 0; flex: 0 1 auto; scrollbar-width: thin; }
+.thumbs { position: relative; list-style: none; margin: 0; padding: 7px 8px 3px 3px; display: flex; gap: 6px; overflow-x: auto; min-width: 0; flex: 0 1 auto; scrollbar-width: thin; }
+.thumbs li { position: relative; flex: none; }
+/* the × on the photo being looked at */
+.th-x { position: absolute; right: -6px; top: -6px; width: 19px; height: 19px; padding: 0; border: 0; border-radius: 50%; background: var(--ink); color: #fff; font-size: 14px; line-height: 1; display: grid; place-items: center; cursor: pointer; box-shadow: 0 0 0 2px var(--surface); }
+.th-x:hover { background: var(--bad); }
+.clear-btn { color: var(--muted); font-weight: 500; }
+.clear-btn:hover { color: var(--bad); background: #fdeeec; }
 .strip.one .thumbs { display: none; }
 .thumb { position: relative; width: 52px; height: 52px; padding: 0; border: 0; border-radius: 9px; overflow: hidden; background: var(--surface-2); cursor: pointer; flex: none; display: grid; place-items: center; box-shadow: 0 0 0 1px var(--line); }
 .thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
@@ -476,23 +484,32 @@ html.full-open, html.full-open body { overflow: hidden; }
   .d-mob { display: inline; }
   .how { grid-template-columns: 1fr; gap: 8px; }
 
-  .panel.viewer { display: block; }
-  .v-left { border-right: 0; border-bottom: 1px solid var(--line); padding: 12px max(12px, env(safe-area-inset-right)) 12px max(12px, env(safe-area-inset-left)); grid-template-rows: auto auto auto; }
-  .stage { height: min(62vw, 46vh); }
-  .histo-box { height: 96px; }
-  .v-right { padding: 16px max(16px, env(safe-area-inset-right)) 0 max(16px, env(safe-area-inset-left)); background: var(--surface-3); }
+  /* one column, the parameters right under the photo: the photo, the other photos, camera and the five numbers,
+     the histogram, search and buttons, then the cards */
+  .panel.viewer { display: flex; flex-direction: column; gap: 10px; padding: 12px max(14px, env(safe-area-inset-right)) calc(28px + env(safe-area-inset-bottom)) max(14px, env(safe-area-inset-left)); background: var(--surface); }
+  .v-left, .v-right, .v-head { display: contents; }
+  .stage { order: 1; height: min(62vw, 46vh); }
+  .strip { order: 2; }
+  .cam { order: 3; margin-top: 6px; }
+  .expo { order: 4; }
+  .histo-box { order: 5; height: 84px; }
+  .v-acts { order: 6; width: 100%; margin-top: 2px; }
+  .search-box { flex: 1 1 100%; width: auto; }
+  .v-acts .btn { flex: 1 1 0; }
+  .sheet { order: 7; overflow: visible; margin: 0; padding: 0; }
   .cam-name { font-size: 1.25rem; }
-  .expo { gap: 6px; }
-  .expo li { padding: 7px 9px 6px; }
+  .expo { gap: 6px; grid-template-columns: repeat(6, minmax(0, 1fr)); }
+  .expo li { padding: 7px 9px 6px; grid-column: span 2; }
+  .expo li:nth-child(n + 4) { grid-column: span 3; }
   .ex-v { font-size: 1.22rem; }
-  .sheet { overflow: visible; margin: 0; padding: 0 0 calc(28px + env(safe-area-inset-bottom)); }
   .cards { column-width: auto; column-count: 1; }
   .more-body { column-width: auto; column-count: 1; }
   .drop-veil { inset: 6px; }
   .toast { top: calc(env(safe-area-inset-top) + 10px); }
   .stage { cursor: default; }
-  .zoom-bar .z-fit, .zoom-bar .z-100 { display: none; }
-  .zoom-bar .z-full { padding: 6px 10px; }
+  .zoom-bar .z-fit, .zoom-bar .z-100, .z-hint { display: none; }
+  .zoom-bar .z-full { padding: 6px 10px; display: inline-flex; align-items: center; gap: 5px; }
+  .z-full-t { display: inline; }
   .full .zoom-bar .z-fit, .full .zoom-bar .z-100 { display: inline-grid; }
   .full-nav { display: none; }
   /* the two views: a bar of their own under the header, always in reach */
