@@ -5,12 +5,12 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#ffffff">
 <title>ZhuyuanLoveExif・照片參數查看</title>
-<meta name="description" content="把照片丟進來，馬上看到焦距、光圈、快門、ISO、鏡頭、快門次數、景深和拍攝位置；一次放一整個資料夾，統整你的 Lightroom 調色習慣。JPG、HEIC 和相機 RAW 檔（CR3、NEF、ARW、RAF、DNG…）都可以。照片只在你的電腦裡讀，不會上傳。">
+<meta name="description" content="把照片丟進來，馬上看到焦距、光圈、快門、ISO、鏡頭、快門次數、景深和拍攝位置；JPG、HEIC 和相機 RAW 檔（CR3、NEF、ARW、RAF、DNG…）都可以，照片只在你的電腦裡讀，不會上傳。也可以貼 Flickr 照片、相簿或藝廊的連結，看每張照片的拍攝參數和授權。">
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="ZhuyuanTools">
 <meta property="og:locale" content="zh_TW">
 <meta property="og:title" content="ZhuyuanLoveExif・照片參數查看">
-<meta property="og:description" content="把照片丟進來，馬上看到焦距、光圈、快門、ISO、鏡頭、快門次數、景深和拍攝位置；一次放一整個資料夾，統整你的 Lightroom 調色習慣。JPG、HEIC 和相機 RAW 檔（CR3、NEF、ARW、RAF、DNG…）都可以。照片只在你的電腦裡讀，不會上傳。">
+<meta property="og:description" content="把照片丟進來，馬上看到焦距、光圈、快門、ISO、鏡頭、快門次數、景深和拍攝位置；JPG、HEIC 和相機 RAW 檔（CR3、NEF、ARW、RAF、DNG…）都可以，照片只在你的電腦裡讀，不會上傳。也可以貼 Flickr 照片、相簿或藝廊的連結，看每張照片的拍攝參數和授權。">
 <meta property="og:url" content="https://tools.zhuyuan.tw/exif">
 <meta property="og:image" content="https://tools.zhuyuan.tw/exif/assets/og.png">
 <meta property="og:image:width" content="1200">
@@ -30,11 +30,8 @@
         <span class="tagline">照片參數查看</span>
       </span>
     </a>
-    <!-- with two or more photos: one at a time, or the whole set added up -->
-    <div class="modes" id="modes" role="tablist" aria-label="檢視方式" hidden>
-      <button type="button" role="tab" data-mode="one" aria-selected="true">逐張查看</button>
-      <button type="button" role="tab" data-mode="set" aria-selected="false">整組統整<span class="set-n" id="setCount"></span></button>
-    </div>
+    <!-- from a Flickr link: where you are (someone's albums › an album › 3 / 174), each a way back -->
+    <nav class="crumbs" id="crumbs" aria-label="Flickr" hidden></nav>
     <p class="privacy">
       <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="10" width="16" height="11" rx="2"></rect><path d="M8 10V7a4 4 0 0 1 8 0v3"></path></svg>
       <span class="privacy-long">照片只在你的電腦裡讀，不會上傳到任何伺服器。</span><span class="privacy-short">不上傳</span>
@@ -81,19 +78,19 @@
             <span class="drop-hint"><span class="d-desk">一張、很多張或整個資料夾，</span>JPG、HEIC 或相機的 RAW 檔</span>
           </span>
         </label>
-        <p class="drop-more folder-only">
-          <label class="link-btn">
-            <input type="file" id="folderInput" webkitdirectory multiple>
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 7a2 2 0 0 1 2-2h4l2 2.5h8a2 2 0 0 1 2 2V17a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path></svg>
-            選一整個資料夾
-          </label>
-          <span>統整整組照片的調色習慣（Lightroom 輸出的 JPG，或 RAW 加 .xmp）</span>
-        </p>
+        <!-- or a Flickr link (only with a Flickr key in flickr.json: .fk-on); this browser asks Flickr itself -->
+        <form class="flk fk-only" id="flkForm" novalidate>
+          <label class="flk-label" for="flkUrl"><span class="flk-dots" aria-hidden="true"><i></i><i></i></span>Flickr 連結</label>
+          <input type="url" id="flkUrl" inputmode="url" autocomplete="off" autocapitalize="off" spellcheck="false" enterkeyhint="go" placeholder="貼上照片、相簿或藝廊的網址">
+          <button type="submit" class="btn">查看</button>
+          <p class="flk-msg" id="flkMsg" role="status"></p>
+        </form>
         <ul class="how">
           <li><span class="how-no">RAW</span><b>RAW 檔也看得懂</b><span>CR3、NEF、ARW、RAF、DNG…</span></li>
           <li><span class="how-no">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6h9M17 6h3M4 12h3M11 12h9M4 18h11M19 18h1"></path><circle cx="15" cy="6" r="2"></circle><circle cx="9" cy="12" r="2"></circle><circle cx="17" cy="18" r="2"></circle></svg>
-          </span><b>整組調色統整</b><span>一次放很多張，看你的 Lightroom 調色習慣</span></li>
+            <svg class="fk-only" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1"></path><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"></path></svg>
+            <svg class="fk-off" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="7" width="14" height="13" rx="2"></rect><path d="M7 4h12a2 2 0 0 1 2 2v11"></path></svg>
+          </span><b class="fk-only">Flickr 連結也可以</b><span class="fk-only">直接向 Flickr 查詢，不經過本站伺服器</span><b class="fk-off">很多張一起放</b><span class="fk-off">用縮圖或 ← → 一張一張看</span></li>
           <li><span class="how-no">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="10" width="16" height="11" rx="2"></rect><path d="M8 10V7a4 4 0 0 1 8 0v3"></path></svg>
           </span><b>照片不會上傳</b><span>只在你的電腦裡讀，也不留紀錄</span></li>
@@ -129,6 +126,7 @@
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>
             <span>加照片</span>
           </label>
+          <button type="button" class="link-btn flk-add fk-only" id="flkAdd" title="貼上 Flickr 照片或相簿的網址"><span class="flk-dots" aria-hidden="true"><i></i><i></i></span>Flickr</button>
           <button type="button" class="link-btn clear-btn" id="clearAll" title="全部移除，重新開始">清空</button>
         </div>
       </div>
@@ -162,10 +160,28 @@
       </div>
     </section>
 
-    <!-- many photos: the set added up; left the verdict, right the details -->
-    <section class="panel summary" id="summary" hidden>
-      <div class="s-main" id="sMain"></div>
-      <div class="s-cards" id="sCards"></div>
+    <!-- a Flickr list: someone's albums as covers, or an album's photos; a photo opens in the viewer -->
+    <section class="panel browse" id="browse" hidden>
+      <div class="b-head">
+        <div class="b-titles">
+          <h2 class="b-title" id="bTitle"></h2>
+          <p class="b-meta" id="bMeta"></p>
+        </div>
+        <div class="b-tools">
+          <label class="search-box">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="M20 20l-3.5-3.5"></path></svg>
+            <input type="search" id="bFilter" placeholder="篩選標題" aria-label="篩選">
+          </label>
+          <span class="b-count" id="bCount"></span>
+          <a class="btn small" id="bOpen" target="_blank" rel="noopener noreferrer">在 Flickr 打開 ↗</a>
+          <button type="button" class="btn small" id="bNew">其他連結</button>
+        </div>
+        <p class="b-desc" id="bDesc" hidden></p>
+      </div>
+      <div class="b-scroll" id="bScroll">
+        <ul class="b-grid" id="bGrid"></ul>
+        <div class="b-more" id="bMore"></div>
+      </div>
     </section>
   </main>
 </div>
@@ -191,11 +207,18 @@
     <button type="button" class="z-100">100%</button>
   </div>
 </div>
-<div class="tip" id="tip" role="tooltip" hidden></div>
+<!-- another Flickr link, from the viewer or the grid -->
+<form class="flk flk-pop" id="flkPop" novalidate hidden>
+  <label class="flk-label" for="flkPopUrl"><span class="flk-dots" aria-hidden="true"><i></i><i></i></span>Flickr 連結</label>
+  <input type="url" id="flkPopUrl" inputmode="url" autocomplete="off" autocapitalize="off" spellcheck="false" enterkeyhint="go" placeholder="貼上照片、相簿或藝廊的網址">
+  <button type="submit" class="btn small">查看</button>
+  <button type="button" class="link-btn" id="flkPopClose" aria-label="關閉">取消</button>
+  <p class="flk-msg" id="flkPopMsg" role="status"></p>
+</form>
 <div class="toast" id="toast" role="status" hidden></div>
 
 <script src="assets/meta.js"></script>
-<script src="assets/look.js"></script>
+<script src="assets/flickr.js"></script>
 <script src="assets/app.js"></script>
 <script src="/shared/handoff.js" data-tool="exif" data-input="#fileInput"></script>
 <script src="/shared/tools-nav.js" data-tool="exif"></script>

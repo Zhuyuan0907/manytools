@@ -1,9 +1,11 @@
 /* ZhuyuanLoveExif — what the camera wrote into a photo, read in this browser. No steps: drop photos and look.
-   ExifTool (the real one, as WebAssembly, in assets/worker.js) reads every tag. One photo: the cards on one screen
-   (exposure, focus, lens, colour, Lightroom edits, body, time and place, file), each thing said once however many
-   times the file repeats it, the picture with its histogram and a Lightroom-like zoom. Many photos or a folder:
-   整組統整 — Lightroom's sliders and the finished pictures added up (style, how alike they are, what to check),
-   read a batch at a time from only the part of each file that holds metadata (assets/look.js measures the pixels).
+   ExifTool (the real one, as WebAssembly, in assets/worker.js) reads every tag; in Safari meta.js. A photo: the
+   cards on one screen (exposure, focus, lens, colour, Lightroom edits, body, time and place, file), each thing said
+   once however many times the file repeats it, the picture with its histogram and a Lightroom-like zoom; more
+   photos: one at a time, a strip of them under the picture.
+   Or a Flickr link (assets/flickr.js asks Flickr's API from this browser, never through the server): a photo opens
+   like a file, its EXIF as Flickr read it from the original; an album, a gallery, a photostream… opens as a grid
+   first; someone's albums or galleries as covers.
    On a server only the number of photos read is reported. */
 (() => {
   'use strict';
@@ -33,6 +35,8 @@
   // what an <img> can show by itself (HEIC and TIFF only in Safari: tried, and the embedded JPEG looked for too)
   const SHOWABLE = /\.(jpe?g|jpe|png|webp|avif|gif|bmp)$/i;
   const extOf = (name) => (name.match(/\.([^.]+)$/) || [, ''])[1].toUpperCase();
+  // what a photo is called on screen: its file name, or a Flickr photo's title
+  const nameOf = (it) => (it.fk ? it.fk.title || `Flickr ${it.fk.id}` : it.file.name);
   // A phone's browser closes a page that uses too much memory (Safari: "A problem repeatedly occurred"), so there
   // pictures are decoded no bigger than the screen, at most one at full size, and Perl is renewed sooner.
   const SMALL_DEVICE = /iP(hone|ad|od)|Android/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
@@ -90,12 +94,12 @@
   }
 
   // ---------- photos ----------
-  // item: { id, file, side (its Lightroom .xmp), raw, kind (image / raw / xmp), done, ok, error, tags (ExifTool's),
-  //         idx (tag name → entries), pv (embedded JPEG), hist, thumb (URL), rec (numbers for 整組統整),
-  //         look (how the finished picture looks), sheet (the cards) }
-  // A photo on screen is read whole (done); the others in a set only where their metadata is (rec), a batch at a time.
+  // item: { id, file, side (its Lightroom .xmp), raw, kind (image / raw / xmp / flickr), done, ok, error, tags
+  //         (ExifTool's), idx (tag name → entries), pv (embedded JPEG), hist, thumb (URL), sheet (the cards),
+  //         fk (a Flickr photo: what Flickr said), coll (the Flickr list it came from) }
+  // The photo on screen is read whole; the one after it next.
   const items = [];
-  let current = -1, nextId = 1, view = 'one', hintedSet = false;
+  let current = -1, nextId = 1, view = 'one';
   const cur = () => items[current];
 
   // where a file sits, so a RAW file and its .xmp pair up (a folder from the picker or from drag and drop)
@@ -103,7 +107,9 @@
   const stem = (f) => `${pathOf(f)}${f.name.replace(/\.[^.]+$/, '').toLowerCase()}`;
   function add(files, folder = false) {
     const list = [...files].filter((f) => !/^\._|^\.DS_Store$|^Thumbs\.db$|^desktop\.ini$/i.test(f.name));
-    const known = new Set(items.map((it) => `${pathOf(it.file)}${it.file.name}|${it.file.size}|${it.file.lastModified}`));
+    // an album's photos give way to your own (the album stays a click away, up top)
+    if (list.length && items.length && items[0].coll) clearItems();
+    const known = new Set(items.filter((it) => !it.fk).map((it) => `${pathOf(it.file)}${it.file.name}|${it.file.size}|${it.file.lastModified}`));
     const fresh = [], seen = new Set();
     // Lightroom keeps a RAW file's edit in a .xmp beside it (same name); an .xmp alone still tells how it was edited
     const sides = new Map(list.filter((f) => SIDECAR.test(f.name)).map((f) => [stem(f), f]));
@@ -125,67 +131,58 @@
     fresh.sort((a, b) => a.file.name.localeCompare(b.file.name, 'en', { numeric: true }));
     const first = items.length;
     items.push(...fresh);
-    $('#start').hidden = true;
-    if (items.length >= 2) {
-      for (const it of items) if (!it.rec && !scanQ.includes(it)) scanQ.push(it);
-      for (const it of items) wantLook(it);
-    }
-    showModes();
     current = first;
-    // a folder was chosen for the set; photos picked one by one open one at a time, with a word about the other view
-    setView(folder ? 'set' : 'one');
-    if (!folder && view === 'one' && items.length >= 6 && !hintedSet) { hintedSet = true; toast(`${items.length} 張照片：上面切到「整組統整」可以看整組的調色習慣、一致性和檢查`, 6000); }
-    renderThumbs();
-    pump();
+    loupeReset();
+    setView('one');
+    pumpThumbs();
+    if (folder && fresh.length > 1) toast(`${fresh.length} 張照片：用下面的縮圖或鍵盤的 ← → 一張一張看`);
   }
   // a photo out of the set (the × on its thumbnail); the last one gone: back to the start
   function removeItem(it) {
     const i = items.indexOf(it);
     if (i < 0) return;
     items.splice(i, 1);
-    for (const q of [fullQ, scanQ, lookQ]) { const j = q.indexOf(it); if (j >= 0) q.splice(j, 1); }
+    const j = fullQ.indexOf(it);
+    if (j >= 0) fullQ.splice(j, 1);
     if (views.has(it.id)) { release(views.get(it.id).img); views.delete(it.id); }
     setThumb(it, null);
-    if (!items.length) { reset(); return; }
+    if (!items.length) { if (coll || shelf) { current = -1; setView('browse'); } else reset(); return; }
     if (i < current) current--;
     else if (current >= items.length) current = items.length - 1;
     loupeReset();
-    if (view === 'set' && items.length < 2) view = 'one';
-    setView(view);
-    changed();
+    setView('one');
   }
-  // everything out: the start again
-  function reset() {
+  // the photos out (an album's, when your own come in; all of them for 清空)
+  function clearItems() {
     loupeReset();
     closeFull();
     for (const it of items) { setThumb(it, null); if (views.has(it.id)) { release(views.get(it.id).img); views.delete(it.id); } }
-    items.length = 0; fullQ.length = 0; scanQ.length = 0; lookQ.length = 0;
-    current = -1; moreOpen = false; checksOpen = false; lastSummary = null; hintedSet = false;
+    items.length = 0; fullQ.length = 0;
+    current = -1;
     $('#search').value = '';
-    $('#viewer').hidden = true;
-    $('#summary').hidden = true;
-    $('#start').hidden = false;
-    view = 'one';
-    showModes();
     renderThumbs();
   }
-  $('#clearAll').addEventListener('click', () => { if (items.length < 2 || confirm(`把這 ${items.length} 張照片都移除，重新開始？`)) reset(); });
+  // everything out, Flickr's lists too: the start again
+  function reset() {
+    clearItems();
+    moreOpen = false;
+    shelf = null; coll = null;
+    $('#viewer').hidden = true;
+    $('#browse').hidden = true;
+    $('#start').hidden = false;
+    view = 'one';
+    renderCrumbs();
+  }
+  $('#clearAll').addEventListener('click', () => {
+    const n = items.length;
+    if (n < 2 || items[0].coll || confirm(`把這 ${n} 張照片都移除，重新開始？`)) reset();
+  });
 
   // ---------- what the worker does next ----------
-  // One job at a time, picked when the last one ends: the photo on screen first (all of it), then the rest of a set
-  // a batch at a time (only their metadata), so a big folder never keeps the photo you clicked waiting long.
-  const fullQ = [], scanQ = [];
+  // One job at a time, picked when the last one ends: the photo on screen first, then the one after it (so the next
+  // click or → is instant).
+  const fullQ = [];
   let running = false;
-  // a batch at a time, so a photo you click gets its turn soon
-  const BATCH = 12;
-  function takeBatch() {
-    const out = [];
-    while (scanQ.length && out.length < BATCH) {
-      const it = scanQ.shift();
-      if (!it.rec && !it.done && !it.busy) out.push(it);
-    }
-    return out;
-  }
   function pump() {
     if (running) return;
     let job = null;
@@ -193,20 +190,18 @@
       const it = fullQ.shift();
       if (!it.done && !it.busy) job = () => process(it);
     }
-    if (!job && scanQ.length) {
-      const batch = takeBatch();
-      if (batch.length) job = () => scanBatch(batch);
-    }
-    if (!job) { showProgress(); return; }
+    if (!job) return;
     running = true;
     job().catch(() => {}).finally(() => { running = false; pump(); });
   }
-  // the one on screen: all of it, next
+  // the one on screen: all of it, next; then its neighbour
   function want(it) {
     if (!it || it.done || it.busy) return;
     const i = fullQ.indexOf(it);
     if (i >= 0) fullQ.splice(i, 1);
     fullQ.unshift(it);
+    const next = items[items.indexOf(it) + 1];
+    if (next && !next.fk && !next.done && !next.busy && !fullQ.includes(next)) fullQ.splice(1, 0, next);
     pump();
   }
 
@@ -223,6 +218,7 @@
   }
 
   async function process(it) {
+    if (it.fk) return readFlickr(it);
     it.busy = true;
     const r = JS_ONLY ? await readJs(it, true) : await ask({ file: it.file, preview: !SHOWABLE.test(it.file.name), side: it.side || null });
     it.reader = r.js ? 'js' : 'exiftool';
@@ -235,37 +231,11 @@
       it.groups = new Set(Object.keys(r.tags).map((k) => k.split(':')[0]));
       it.pv = r.preview;
       it.sheet = null;
-      const flat = {};
-      for (const [k, e] of Object.entries(r.tags)) if (e && typeof e === 'object' && k.includes(':')) flat[k] = e.num !== undefined ? e.num : e.val;
-      it.rec = recOf(it, flat);
       count(it);
-      wantLook(it);
-      changed();
     } else it.error = r.error;
     await prepareImage(it);
     renderThumbs();
     if (it === cur()) { renderInfo(); drawStage(); }
-  }
-
-  // a set: only where each file keeps its metadata, with meta.js (a few milliseconds a photo, in any browser)
-  async function scanBatch(batch) {
-    for (const it of batch) {
-      if (it.done) continue; // read whole meanwhile
-      it.busy = true;
-      const r = await readJs(it, false);
-      it.busy = false;
-      if (it.done) continue;
-      if (!r.ok) { it.scanFailed = true; continue; }
-      const flat = {};
-      for (const [k, e] of Object.entries(r.tags)) if (e && typeof e === 'object' && k.includes(':')) flat[k] = e.num !== undefined ? e.num : e.val;
-      it.rec = recOf(it, flat);
-      it.pvScan = r.preview;
-      it.exifThumb = r.thumb;
-      count(it);
-      wantLook(it);
-    }
-    changed();
-    renderThumbs();
   }
 
   function select(i) {
@@ -275,7 +245,8 @@
     renderThumbs();
     renderInfo();
     drawStage();
-    if (view === 'one') want(cur());
+    renderCrumbs();
+    want(cur());
   }
 
   // ---------- the tags ----------
@@ -891,10 +862,43 @@
     for (const name of it.idx.keys()) if (/^GPS/.test(name)) use(name);
     card('when', gps ? '時間與地點' : '時間', rows, gps ? { warn: '這張照片帶著拍攝地點，公開分享原檔前要留意', icon: 'place' } : {});
 
+    // ---- Flickr: where it is, whose, may it be used
+    const fk = it.fk;
+    if (fk) {
+      const out = (href, label) => el('a', { href, target: '_blank', rel: 'noopener noreferrer', text: label });
+      const lic = fk.license;
+      const cc = lic && /^(CC|公眾領域|沒有已知)/.test(lic.short);
+      const orig = (fk.sizes || []).find((x) => x.s === 'o');
+      const posted = fk.posted ? new Date(fk.posted * 1000) : null;
+      const tags = (fk.tags || []).slice(0, 16);
+      card('flickr', 'Flickr', [
+        R('標題', out(fk.page, fk.title || '（沒有標題）'), '', fk.title),
+        R('作者', fk.owner && fk.owner.name ? out(fk.owner.url, fk.owner.name) : '', '', fk.owner && fk.owner.name),
+        R(fk.from ? { album: '相簿', gallery: '藝廊', group: '群組', faves: '最愛', stream: '相片串流' }[fk.from.kind] || '來自' : '相簿', fk.from && fk.from.title ? out(fk.from.link || fk.page, fk.from.title) : '', '', fk.from && fk.from.title),
+        R('授權', lic ? (lic.url ? out(lic.url, lic.short) : lic.short) : '', cc ? '可以使用，但要照授權標註作者和出處（下面的「複製標註」）' : lic && lic.id === '0' ? '使用前要先取得作者同意' : '', lic && lic.short),
+        R('上傳', posted ? `${posted.getFullYear()}/${posted.getMonth() + 1}/${posted.getDate()}` : ''),
+        R('觀看', fk.views ? `${fk.views.toLocaleString('zh-TW')} 次` : ''),
+        R('地點', fk.location ? fk.location.place || `${fk.location.lat.toFixed(4)}, ${fk.location.lon.toFixed(4)}` : '', '作者放在 Flickr 地圖上的位置'),
+        C('標籤', tags.length ? { node: el('span', { class: 'chips' }, ...tags.map((t) => el('span', { class: 'chip', text: t }))), text: tags.join('・') } : null),
+        R('說明', fk.description ? fk.description.slice(0, 300) + (fk.description.length > 300 ? '…' : '') : ''),
+        R('連結', el('span', { class: 'fk-acts' },
+          out(fk.page, '在 Flickr 打開 ↗'),
+          el('button', { type: 'button', class: 'link-btn', onclick: () => copyCredit(it), text: '複製標註' }),
+          orig ? out(orig.src, `原檔 ${orig.w.toLocaleString('zh-TW')} × ${orig.h.toLocaleString('zh-TW')} ↗`) : null), '', ''),
+      ], { icon: 'flickr' });
+    }
+
     // ---- 影像與檔案
     const type = v('FileType') || extOf(it.file.name);
     const size = v('ImageSize', { groups: ['Composite'] });
-    const [iw, ih] = (size.match(/^(\d+)x(\d+)$/) || []).slice(1).map(Number);
+    let [iw, ih] = (size.match(/^(\d+)x(\d+)$/) || []).slice(1).map(Number);
+    // Flickr: the original's size (when it's shown), else what the camera wrote
+    if (fk && !iw) {
+      const o = (fk.sizes || []).find((x) => x.s === 'o');
+      const ew = n(['ExifImageWidth', 'ImageWidth']), eh = n(['ExifImageHeight', 'ImageHeight']);
+      if (o) [iw, ih] = [o.w, o.h];
+      else if (ew > 0 && eh > 0) [iw, ih] = [ew, eh];
+    }
     const mp = n('Megapixels', { groups: ['Composite'] });
     const ratio = (() => {
       if (!(iw > 0 && ih > 0)) return '';
@@ -915,7 +919,13 @@
       'RawImageFullSize', 'RawImageFullWidth', 'RawImageFullHeight', 'RawImageWidth', 'RawImageHeight', 'CompressedBitsPerPixel', 'XResolution', 'YResolution', 'ResolutionUnit',
       'YCbCrPositioning', 'ExifVersion', 'FlashpixVersion', 'ComponentsConfiguration', 'ExifByteOrder', 'InteropVersion', 'ImageUniqueID', 'SRAWQuality', 'MetaImageSize',
       'PrimaryItemReference', 'AvgBitrate', 'DirectoryNumber', 'FileNumber', 'FileIndex', 'FolderNumber', 'NumberOfImages', 'MemoryCardNumber');
-    card('file', '影像與檔案', [
+    if (fk) card('file', '影像', [
+      R('原始尺寸', iw ? `${iw.toLocaleString('zh-TW')} × ${ih.toLocaleString('zh-TW')}・${Math.round((iw * ih) / 1e4).toLocaleString('zh-TW')} 萬畫素` : ''),
+      R('原始格式', fk.format ? fk.format.toUpperCase() : ''),
+      R('長寬比', ratio),
+      R('這裡顯示的', fk.shown ? `${fk.shown.w.toLocaleString('zh-TW')} × ${fk.shown.h.toLocaleString('zh-TW')}（Flickr 上的版本）` : '', '左邊的照片和色階分佈用的是這個版本；Flickr 重新壓縮過，跟原檔會有一點差別'),
+    ]);
+    else card('file', '影像與檔案', [
       R('檔案', `${it.file.name}・${fmtBytes(it.file.size)}`),
       R('格式', [`${type}${it.raw ? '（RAW 原始檔）' : ''}`, ...rawKind].filter(Boolean).join('・')),
       R('尺寸', iw ? `${iw.toLocaleString('zh-TW')} × ${ih.toLocaleString('zh-TW')}${mp >= 0.01 ? `・${Math.round(mp * 100).toLocaleString('zh-TW')} 萬畫素` : ''}` : ''),
@@ -942,7 +952,7 @@
       R('地點名稱', place),
     ]);
 
-    const order = ['expo', 'focus', 'lens', 'color', 'grade', 'edit', 'phone', 'body', 'when', 'file', 'author'];
+    const order = ['flickr', 'expo', 'focus', 'lens', 'color', 'grade', 'edit', 'phone', 'body', 'when', 'file', 'author'];
     cards.sort((a, b) => order.indexOf(a.id) - order.indexOf(b.id));
     return { cards, other: leftovers(it, used), total: Object.keys(it.tags).filter((k) => k.includes(':')).length };
   }
@@ -1009,16 +1019,7 @@
     return /(Custom|Settings)$/.test(g) ? `${brand} 自訂功能` : `${brand} 原廠設定`;
   }
 
-  // ---------- 整組統整: each photo as numbers ----------
-  // From ExifTool's tags (a scan's plain numbers, or a full read's): the shot, the file, and Lightroom's sliders.
-  const SLIDERS = {
-    Exposure2012: ['曝光度', -2, 2, 2], Contrast2012: ['對比', -100, 100], Highlights2012: ['亮部', -100, 100], Shadows2012: ['陰影', -100, 100],
-    Whites2012: ['白色', -100, 100], Blacks2012: ['黑色', -100, 100], Texture: ['紋理', -100, 100], Clarity2012: ['清晰度', -100, 100],
-    Dehaze: ['去朦朧', -100, 100], Vibrance: ['細節飽和度', -100, 100], Saturation: ['飽和度', -100, 100],
-    Sharpness: ['銳利化', 0, 150], LuminanceSmoothing: ['雜訊減少', 0, 100], ColorNoiseReduction: ['顏色雜訊', 0, 100],
-    PostCropVignetteAmount: ['暈映', -100, 100], GrainAmount: ['顆粒', 0, 100],
-  };
-  const ZONES = [['Shadow', '陰影'], ['Midtone', '中間調'], ['Highlight', '亮部'], ['Global', '全域']];
+  // a camera's name for people: "Canon EOS R6", "Sony α7 IV"
   function camLabel(make, model) {
     if (/sony/i.test(make) && SONY[model]) model = SONY[model];
     model = model.replace(/^(NIKON|PENTAX|OLYMPUS|FUJIFILM|SAMSUNG|RICOH|LEICA|SIGMA|KODAK|CASIO|HASSELBLAD)\b/, (w) => w[0] + w.slice(1).toLowerCase());
@@ -1029,624 +1030,6 @@
     if (!clean || model.toLowerCase().includes(clean.toLowerCase().split(' ')[0]) || /^(canon|nikon|pentax|olympus|leica|hasselblad|sigma|kodak|ricoh|samsung|minolta|konica|casio|gopro|dji)\b/i.test(model)) return model;
     return `${clean} ${model}`;
   }
-  function recOf(it, flat) {
-    const by = new Map();
-    for (const [k, v] of Object.entries(flat)) {
-      const i = k.indexOf(':');
-      if (i < 0) continue;
-      const n = k.slice(i + 1);
-      if (!by.has(n)) by.set(n, []);
-      by.get(n).push([k.slice(0, i), v]);
-    }
-    const ok = (v) => v !== undefined && v !== null && v !== '' && !(typeof v === 'string' && /^(n\/a|unknown)$/i.test(v.trim()));
-    const get = (names, groups) => {
-      for (const n of [].concat(names)) {
-        const l = by.get(n);
-        if (!l) continue;
-        const c = groups ? groups.flatMap((g) => l.filter(([gg]) => gg === g || (g === '*maker' && rankOf(gg) === 5))) : l.filter(([g]) => g !== 'XMP-crs');
-        const x = c.find(([, v]) => ok(v));
-        if (x) return x[1];
-      }
-      return undefined;
-    };
-    const crs = (n) => { const l = by.get(n); const x = l && l.find(([g]) => g === 'XMP-crs'); return x ? x[1] : undefined; };
-    const N = (v) => { const n = typeof v === 'number' ? v : parseFloat(v); return Number.isFinite(n) ? n : null; };
-    const S = (v) => (v == null ? '' : String(Array.isArray(v) ? v.join(', ') : v).trim());
-    const make = S(get('Make')), lensModel = S(get('LensModel')), lensId = get('LensID', ['Composite']);
-    const size = S(get('ImageSize', ['Composite'])).match(/(\d+)\D+(\d+)/);
-    const space = (() => {
-      const p = S(get('ProfileDescription'));
-      if (p) return /^sRGB/i.test(p) ? 'sRGB' : /Display P3|^P3/i.test(p) ? 'Display P3' : /Adobe RGB/i.test(p) ? 'Adobe RGB' : /ProPhoto/i.test(p) ? 'ProPhoto RGB' : p;
-      const c = N(get('ColorSpace'));
-      return c === 1 ? 'sRGB' : c === 2 ? 'Adobe RGB' : '';
-    })();
-    const r = {
-      cam: camLabel(make, S(get(['Model', 'CameraModelName']))),
-      lens: lensModel || (typeof lensId === 'string' && !/^\d+$/.test(lensId) ? lensId : ''),
-      fl: N(get('FocalLength', ['ExifIFD', 'Composite', '*maker', 'XMP-exif'])),
-      fl35: N(get('FocalLengthIn35mmFormat')) || N(get('FocalLength35efl', ['Composite'])),
-      fn: N(get(['FNumber', 'Aperture'])),
-      exp: N(get(['ExposureTime', 'ShutterSpeed'])),
-      iso: N(get('ISO', ['ExifIFD', 'Composite', '*maker', 'XMP-exif'])),
-      date: S(get(['DateTimeOriginal', 'SubSecDateTimeOriginal', 'CreateDate', 'DateCreated'])),
-      orient: N(get('Orientation', ['IFD0', '*maker', 'XMP-tiff'])) || 1,
-      w: size ? +size[1] : N(get(['ImageWidth', 'ExifImageWidth'], ['File', 'IFD0', 'ExifIFD'])),
-      h: size ? +size[2] : N(get(['ImageHeight', 'ExifImageHeight'], ['File', 'IFD0', 'ExifIFD'])),
-      space,
-      software: S(get(['Software', 'CreatorTool'])),
-      rating: N(get('Rating')),
-      pick: N(get('Pick')),
-      phone: PHONE_MAKE.test(make) || /\b(back|front|rear)\b.*\bcamera\b/i.test(lensModel),
-      crs: null,
-    };
-    if (by.size && [...by.values()].some((l) => l.some(([g]) => g === 'XMP-crs')) && !/^false$/i.test(S(crs('HasSettings')) || 'true')) {
-      const s = {};
-      for (const k of Object.keys(SLIDERS)) s[k] = N(crs(k));
-      const pts = S(crs('ToneCurvePV2012')).split(/[,\s]+/).map(Number).filter(Number.isFinite);
-      const lift = pts.length >= 4 ? pts[1] : 0;
-      const curved = pts.length > 4 || (pts.length === 4 && (pts[1] !== 0 || pts[3] !== 255));
-      const rgbCurve = ['Red', 'Green', 'Blue'].some((c) => S(crs(`ToneCurvePV2012${c}`)).split(/[,\s]+/).length > 4);
-      const zone = (en) => {
-        let h = N(crs(`ColorGrade${en}Hue`)), sat = N(crs(`ColorGrade${en}Sat`));
-        if (!(sat > 0) && (en === 'Shadow' || en === 'Highlight')) { h = N(crs(`SplitToning${en}Hue`)); sat = N(crs(`SplitToning${en}Saturation`)); }
-        return sat > 0 ? [h || 0, sat] : [0, 0];
-      };
-      const kept = /^true$/i.test(S(crs('HasCrop'))) ? (N(crs('CropRight')) - N(crs('CropLeft'))) * (N(crs('CropBottom')) - N(crs('CropTop'))) : 1;
-      r.crs = {
-        s,
-        pv: N(crs('ProcessVersion')),
-        profile: S(crs('LookName')) || S(crs('CameraProfile')),
-        bw: /^true$/i.test(S(crs('ConvertToGrayscale'))),
-        wb: S(crs('WhiteBalance')),
-        temp: N(crs('ColorTemperature')), tint: N(crs('Tint')),
-        incTemp: N(crs('IncrementalTemperature')), incTint: N(crs('IncrementalTint')),
-        hsl: HSL.map(([en]) => [N(crs(`HueAdjustment${en}`)) || 0, N(crs(`SaturationAdjustment${en}`)) || 0, N(crs(`LuminanceAdjustment${en}`)) || 0]),
-        grade: ZONES.map(([en]) => zone(en)),
-        curved, lift, rgbCurve,
-        crop: Number.isFinite(kept) && kept > 0 && kept < 0.995 ? kept : 0,
-        angle: N(crs('CropAngle')) || 0,
-        lensProfile: N(crs('LensProfileEnable')) > 0,
-        ca: N(crs('AutoLateralCA')) > 0,
-        upright: N(crs('PerspectiveUpright')) > 0 || /^(Auto|Full|Level|Vertical|Guided)/i.test(S(crs('PerspectiveUpright'))),
-        masks: [...by.keys()].some((k) => /^(MaskGroupBased|GradientBased|PaintBased|CircularGradientBased)Corrections/.test(k)),
-        raw: N(crs('ColorTemperature')) > 0 || /\.(cr3|cr2|nef|arw|raf|orf|rw2|dng|pef|srw)$/i.test(S(crs('RawFileName'))),
-      };
-    }
-    return r;
-  }
-
-  // ---------- 整組統整: the set ----------
-  const med = (a) => { if (!a.length) return NaN; const s = [...a].sort((x, y) => x - y), m = s.length >> 1; return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2; };
-  const mean = (a) => (a.length ? a.reduce((x, y) => x + y, 0) / a.length : NaN);
-  const mad = (a) => { const m = med(a); return med(a.map((x) => Math.abs(x - m))) * 1.4826; };
-  const share = (n, d) => (d ? n / d : 0);
-  const pct = (x) => `${Math.round(x * 100)}%`;
-  const hueName = (h) => ['紅', '橙', '黃', '黃綠', '綠', '青綠', '青', '藍', '藍紫', '紫', '洋紅', '桃紅'][Math.round((((h % 360) + 360) % 360) / 30) % 12];
-  const circMean = (pairs) => { let x = 0, y = 0; for (const [h, w] of pairs) { x += Math.cos(h * Math.PI / 180) * w; y += Math.sin(h * Math.PI / 180) * w; } return ((Math.atan2(y, x) * 180 / Math.PI) + 360) % 360; };
-  const tally = (list) => { const m = new Map(); for (const x of list) if (x) m.set(x, (m.get(x) || 0) + 1); return [...m.entries()].sort((a, b) => b[1] - a[1]); };
-  // how far each finished picture is from the set: robust (median and MAD), with a floor so a very even set
-  // doesn't flag tiny differences — numbers in CIE Lab units
-  const LOOKS = [
-    ['L', '亮度', 0, 100, 5, (x) => trim0(x, 0)],
-    ['contrast', '對比', 0, 40, 3, (x) => trim0(x, 0)],
-    ['warm', '冷暖', -20, 40, 3.5, (x) => sg(x, 0)],
-    ['chroma', '色彩濃度', 0, 60, 4, (x) => trim0(x, 0)],
-  ];
-
-  function summarize() {
-    const all = items.filter((it) => it.rec);
-    const ed = all.filter((it) => it.rec.crs);
-    const fin = all.filter((it) => it.look && !it.look.camera);
-    const out = { n: items.length, read: all.length, ed, fin, all, failed: items.filter((it) => it.scanFailed && !it.rec).length };
-    // ---- the sliders
-    out.sliders = Object.entries(SLIDERS).map(([k, [label, lo, hi, d]]) => {
-      const pts = ed.map((it) => [it, it.rec.crs.s[k]]).filter(([, v]) => v !== null);
-      const vals = pts.map(([, v]) => v);
-      return { k, label, lo, hi, d: d || 0, pts, med: med(vals), used: vals.filter((v) => v !== 0).length, n: vals.length };
-    });
-    const S = Object.fromEntries(out.sliders.map((x) => [x.k, x]));
-    out.S = S;
-    // ---- white balance
-    out.temps = ed.filter((it) => it.rec.crs.temp > 1500).map((it) => [it, it.rec.crs.temp]);
-    out.tints = ed.filter((it) => it.rec.crs.tint !== null).map((it) => [it, it.rec.crs.tint]);
-    out.wbModes = tally(ed.map((it) => ({ 'As Shot': '原始設定', Custom: '自訂', Auto: '自動' }[it.rec.crs.wb] || it.rec.crs.wb)));
-    // ---- profile, HSL, colour grading, effects
-    out.profiles = tally(ed.map((it) => (it.rec.crs.bw ? `${it.rec.crs.profile || '黑白'}（黑白）` : it.rec.crs.profile || '沒有記錄')));
-    out.hsl = HSL.map(([en, zh], i) => ({ en, zh, ch: [0, 1, 2].map((j) => { const v = ed.map((it) => it.rec.crs.hsl[i][j]); return { mean: mean(v), used: v.filter((x) => x !== 0).length }; }) }));
-    out.grade = ZONES.map(([en, zh], i) => {
-      const on = ed.filter((it) => it.rec.crs.grade[i][1] > 0);
-      return { en, zh, used: on.length, hue: circMean(on.map((it) => it.rec.crs.grade[i])), sat: mean(on.map((it) => it.rec.crs.grade[i][1])) };
-    });
-    const count = (f) => ed.filter((it) => f(it.rec.crs)).length;
-    out.fx = {
-      curved: count((c) => c.curved), lift: count((c) => c.lift >= 8), rgbCurve: count((c) => c.rgbCurve), bw: count((c) => c.bw),
-      grain: count((c) => c.s.GrainAmount > 0), vignette: count((c) => c.s.PostCropVignetteAmount < 0), vignetteUp: count((c) => c.s.PostCropVignetteAmount > 0),
-      crop: count((c) => c.crop > 0), angle: count((c) => Math.abs(c.angle) >= 0.1), lens: count((c) => c.lensProfile), ca: count((c) => c.ca),
-      upright: count((c) => c.upright), masks: count((c) => c.masks),
-      cropKept: med(ed.filter((it) => it.rec.crs.crop > 0).map((it) => it.rec.crs.crop)),
-    };
-    // ---- the finished pictures (pixels)
-    out.looks = LOOKS.map(([k, label, lo, hi, tol, fmt]) => {
-      const pts = fin.map((it) => [it, it.look[k]]);
-      const vals = pts.map(([, v]) => v);
-      return { k, label, lo, hi, tol, fmt, pts, med: med(vals), mad: Math.max(tol, mad(vals)) };
-    });
-    // ---- the shots
-    out.cams = tally(all.map((it) => it.rec.cam));
-    out.lenses = tally(all.map((it) => it.rec.lens));
-    const bucket = (v, edges, labels) => { if (!(v > 0)) return null; const i = edges.findIndex((e) => v <= e); return labels[i < 0 ? labels.length - 1 : i]; };
-    const hist = (fn, labels) => { const t = new Map(labels.map((l) => [l, 0])); for (const it of all) { const b = fn(it.rec); if (b) t.set(b, t.get(b) + 1); } return [...t.entries()]; };
-    const eq = (r) => r.fl35 || r.fl;
-    const FOCAL = ['≤16', '24', '35', '50', '85', '135', '200', '300+'], APER = ['f/1.4', 'f/2', 'f/2.8', 'f/4', 'f/5.6', 'f/8', 'f/11+'], ISOS = ['≤200', '400', '800', '1600', '3200', '6400', '12800+'];
-    out.focal = hist((r) => bucket(eq(r), [18, 28, 40, 60, 100, 160, 250], FOCAL), FOCAL);
-    out.aperture = hist((r) => bucket(r.fn, [1.6, 2.2, 3.1, 4.4, 6.2, 8.8], APER), APER);
-    out.isos = hist((r) => bucket(r.iso, [200, 400, 800, 1600, 3200, 6400], ISOS), ISOS);
-    const dates = all.map((it) => it.rec.date.slice(0, 10)).filter((d) => /^\d{4}:\d\d:\d\d$/.test(d)).sort();
-    out.dates = dates.length ? [dates[0], dates[dates.length - 1]] : null;
-    out.style = styleOf(out);
-    out.method = methodOf(out);
-    out.lookSame = lookOf(out);
-    out.checks = checksOf(out);
-    out.odd = oddOnes(out);
-    return out;
-  }
-
-  // what the set's edits have in common, in words
-  function styleOf(o) {
-    const tags = [];
-    const n = o.ed.length;
-    const S = o.S;
-    const m = (k) => S[k].med;
-    const often = (k, f) => share(S[k].pts.filter(([, v]) => f(v)).length, S[k].n) >= 0.5;
-    if (n) {
-      if (m('Exposure2012') >= 0.3) tags.push(['整體提亮', `曝光度中位數 ${sg(m('Exposure2012'), 2)}`]);
-      else if (m('Exposure2012') <= -0.3) tags.push(['整體壓暗', `曝光度中位數 ${sg(m('Exposure2012'), 2)}`]);
-      if (m('Highlights2012') <= -40) tags.push(['亮部壓很多', `亮部中位數 ${sg(m('Highlights2012'))}`]);
-      else if (m('Highlights2012') <= -15) tags.push(['亮部壓低', `亮部中位數 ${sg(m('Highlights2012'))}`]);
-      if (m('Shadows2012') >= 40) tags.push(['暗部大幅提亮', `陰影中位數 ${sg(m('Shadows2012'))}`]);
-      else if (m('Shadows2012') >= 15) tags.push(['暗部提亮', `陰影中位數 ${sg(m('Shadows2012'))}`]);
-      if (m('Contrast2012') >= 15) tags.push(['高對比', `對比中位數 ${sg(m('Contrast2012'))}`]);
-      else if (m('Contrast2012') <= -15) tags.push(['低對比', `對比中位數 ${sg(m('Contrast2012'))}`]);
-      if (m('Blacks2012') <= -15) tags.push(['黑色壓深', `黑色中位數 ${sg(m('Blacks2012'))}`]);
-      if (share(o.fx.lift, n) >= 0.5) tags.push(['霧面黑', `${o.fx.lift} 張用色調曲線把最暗處提起來`]);
-      else if (m('Blacks2012') >= 15) tags.push(['黑色提起', `黑色中位數 ${sg(m('Blacks2012'))}`]);
-      if (m('Whites2012') >= 15) tags.push(['白色提亮', `白色中位數 ${sg(m('Whites2012'))}`]);
-      if (m('Clarity2012') >= 15) tags.push(['清晰度加強', `清晰度中位數 ${sg(m('Clarity2012'))}`]);
-      else if (m('Clarity2012') <= -10) tags.push(['柔和（清晰度降低）', `清晰度中位數 ${sg(m('Clarity2012'))}`]);
-      if (m('Texture') <= -15) tags.push(['肌理柔化', `紋理中位數 ${sg(m('Texture'))}`]);
-      if (m('Dehaze') >= 10) tags.push(['去朦朧', `去朦朧中位數 ${sg(m('Dehaze'))}`]);
-      else if (m('Dehaze') <= -10) tags.push(['加朦朧感', `去朦朧中位數 ${sg(m('Dehaze'))}`]);
-      const sat = m('Saturation') + m('Vibrance') / 2;
-      if (sat >= 12) tags.push(['顏色加濃', `飽和度 ${sg(m('Saturation'))}、細節飽和度 ${sg(m('Vibrance'))}（中位數）`]);
-      else if (sat <= -10) tags.push(['降飽和', `飽和度 ${sg(m('Saturation'))}、細節飽和度 ${sg(m('Vibrance'))}（中位數）`]);
-      // HSL habits: a colour moved the same way in at least half the photos
-      const h = Object.fromEntries(o.hsl.map((c) => [c.en, c]));
-      const habit = (en, j, f) => share(h[en].ch[j].used, n) >= 0.4 && f(h[en].ch[j].mean);
-      if (habit('Orange', 2, (v) => v >= 6)) tags.push(['膚色提亮', `橙色明亮度平均 ${sg(h.Orange.ch[2].mean)}`]);
-      if (habit('Orange', 1, (v) => v <= -6)) tags.push(['膚色降飽和', `橙色飽和度平均 ${sg(h.Orange.ch[1].mean)}`]);
-      if (habit('Green', 1, (v) => v <= -12)) tags.push(['綠色降飽和', `綠色飽和度平均 ${sg(h.Green.ch[1].mean)}`]);
-      if (habit('Green', 0, (v) => v <= -10)) tags.push(['綠色偏黃', `綠色色相平均 ${sg(h.Green.ch[0].mean)}`]);
-      if (habit('Blue', 2, (v) => v <= -10)) tags.push(['藍天壓暗', `藍色明亮度平均 ${sg(h.Blue.ch[2].mean)}`]);
-      if (habit('Blue', 1, (v) => v <= -12)) tags.push(['藍色降飽和', `藍色飽和度平均 ${sg(h.Blue.ch[1].mean)}`]);
-      if (habit('Blue', 0, (v) => v <= -10) || habit('Aqua', 0, (v) => v >= 10)) tags.push(['藍色偏青', `藍色色相平均 ${sg(h.Blue.ch[0].mean)}`]);
-      const [gs, , gh] = o.grade;
-      const tealOrange = share(gs.used, n) >= 0.4 && share(gh.used, n) >= 0.4 && gs.hue >= 160 && gs.hue <= 250 && gh.hue >= 15 && gh.hue <= 75;
-      if (tealOrange) tags.push(['青橙色調', `陰影偏${hueName(gs.hue)}、亮部偏${hueName(gh.hue)}（顏色分級）`]);
-      else for (const z of o.grade) if (share(z.used, n) >= 0.4 && z.sat >= 4) tags.push([`${z.zh}偏${hueName(z.hue)}`, `顏色分級：${z.zh} ${Math.round(z.hue)}°、飽和 ${Math.round(z.sat)}（${z.used} 張）`]);
-      if (share(o.fx.grain, n) >= 0.5) tags.push(['加顆粒', `${o.fx.grain} 張，顆粒中位數 ${trim0(med(o.ed.map((it) => it.rec.crs.s.GrainAmount).filter((v) => v > 0)), 0)}`]);
-      if (share(o.fx.vignette, n) >= 0.5) tags.push(['加暗角', `${o.fx.vignette} 張用了裁切後暈映`]);
-      if (share(o.fx.bw, n) >= 0.5) tags.push(['黑白', `${o.fx.bw} 張是黑白`]);
-    }
-    // what the finished pictures look like (works without Lightroom data too)
-    const L = Object.fromEntries(o.looks.map((x) => [x.k, x]));
-    if (o.fin.length >= 2) {
-      if (L.warm.med >= 14) tags.push(['畫面偏暖', `冷暖中位數 ${sg(L.warm.med, 0)}（正值偏黃橘）`]);
-      else if (L.warm.med <= 1) tags.push(['畫面偏冷', `冷暖中位數 ${sg(L.warm.med, 0)}（負值偏藍）`]);
-      if (L.chroma.med <= 12 && !tags.some(([t]) => /黑白/.test(t))) tags.push(['淡雅低彩', `色彩濃度中位數 ${trim0(L.chroma.med, 0)}`]);
-      else if (L.chroma.med >= 32) tags.push(['色彩濃郁', `色彩濃度中位數 ${trim0(L.chroma.med, 0)}`]);
-      if (L.L.med >= 62) tags.push(['明亮', `亮度中位數 ${trim0(L.L.med, 0)}`]);
-      else if (L.L.med <= 38) tags.push(['偏暗、低調', `亮度中位數 ${trim0(L.L.med, 0)}`]);
-    }
-    // a name people use for the combination, only when the pieces really are there
-    const has = (t) => tags.some(([x]) => x === t);
-    let like = '';
-    if (has('青橙色調')) like = '電影感的青橙色調';
-    else if ((has('霧面黑') || has('黑色提起')) && (has('加顆粒') || has('低對比'))) like = '底片感（霧面黑、低對比或顆粒）';
-    else if ((has('整體提亮') || has('明亮')) && (has('低對比') || has('暗部提亮')) && (has('降飽和') || has('淡雅低彩'))) like = '日系清透（提亮、低對比、淡色）';
-    else if (has('高對比') && (has('黑色壓深') || has('清晰度加強'))) like = '高對比、硬朗的街拍感';
-    return { tags, like, profile: o.profiles[0] && share(o.profiles[0][1], o.ed.length) >= 0.5 ? o.profiles[0][0] : '' };
-  }
-
-  // 調法: the parts of an edit a preset carries (profile, HSL, colour grading, look sliders, effects) — exposure and
-  // tone fixes differ photo to photo by nature, so they don't count against it
-  function methodOf(o) {
-    const ed = o.ed;
-    if (ed.length < 3) return null;
-    const vec = (c) => [
-      ...c.hsl.flat().map((v) => v / 10),
-      ...c.grade.flatMap(([h, s]) => [Math.cos(h * Math.PI / 180) * s / 6, Math.sin(h * Math.PI / 180) * s / 6]),
-      (c.s.Vibrance || 0) / 12, (c.s.Saturation || 0) / 12, (c.s.Clarity2012 || 0) / 12, (c.s.Texture || 0) / 12, (c.s.Dehaze || 0) / 10,
-      (c.s.GrainAmount || 0) / 10, (c.s.PostCropVignetteAmount || 0) / 12, c.lift / 10,
-    ];
-    const vs = ed.map((it) => vec(it.rec.crs));
-    const center = vs[0].map((_, i) => med(vs.map((v) => v[i])));
-    const profile = o.profiles[0] ? o.profiles[0][0] : '';
-    const bw = share(o.fx.bw, ed.length) >= 0.5;
-    const per = ed.map((it, i) => {
-      const c = it.rec.crs;
-      const why = [];
-      const d = Math.sqrt(vs[i].reduce((a, x, j) => a + (x - center[j]) ** 2, 0) / 4);
-      const p = c.bw ? `${c.profile || '黑白'}（黑白）` : c.profile || '沒有記錄';
-      if (p !== profile) why.push(`描述檔是 ${p}，這組多是 ${profile}`);
-      if (c.bw !== bw) why.push(c.bw ? '這張是黑白' : '這張是彩色，這組多是黑白');
-      if (d > 1.6) why.push('HSL、顏色分級或質感的調法和其他張不一樣');
-      return { it, d, why };
-    });
-    const same = per.filter((x) => !x.why.length).length;
-    return { same, n: ed.length, per };
-  }
-  // 成品: do the finished pictures look alike (brightness, contrast, warmth, colour)
-  function lookOf(o) {
-    if (o.fin.length < 3) return null;
-    const per = o.fin.map((it) => {
-      const why = [];
-      let z = 0;
-      for (const x of o.looks) {
-        const d = it.look[x.k] - x.med;
-        const zz = d / x.mad;
-        if (Math.abs(zz) >= 2.5) {
-          z = Math.max(z, Math.abs(zz));
-          why.push({ L: d > 0 ? '比其他張亮很多' : '比其他張暗很多', contrast: d > 0 ? '對比比其他張強' : '對比比其他張弱', warm: d > 0 ? '比其他張暖（偏黃橘）' : '比其他張冷（偏藍）', chroma: d > 0 ? '顏色比其他張濃' : '顏色比其他張淡' }[x.k]
-            + `（${x.label} ${x.fmt(it.look[x.k])}，這組大多在 ${x.fmt(x.med)} 左右）`);
-        }
-      }
-      return { it, z, why };
-    });
-    const same = per.filter((x) => !x.why.length).length;
-    const spread = o.looks.map((x) => ({ label: x.label, r: mad(x.pts.map(([, v]) => v)) / x.tol }));
-    return { same, n: o.fin.length, per, spread };
-  }
-  const level = (same, n) => (share(same, n) >= 0.9 ? ['很一致', 'good'] : share(same, n) >= 0.7 ? ['大致一致', 'ok'] : ['差異比較大', 'warn']);
-
-  // things worth a look, each with the photos it's about
-  function checksOf(o) {
-    const out = [];
-    const add = (lvl, title, why, list) => { if (list.length) out.push({ lvl, title, why, list }); };
-    add('warn', '亮部過曝', '最亮的地方變成全白，沒有細節了（超過 2% 的畫面）', o.fin.filter((it) => it.look.hi > 0.02));
-    add('warn', '暗部死黑', '最暗的地方變成全黑（超過 5% 的畫面）', o.fin.filter((it) => it.look.lo > 0.05));
-    add('warn', '高感光度但降噪很少', 'ISO 3200 以上、雜訊減少不到 10，放大看可能有雜訊', o.ed.filter((it) => it.rec.iso >= 3200 && it.rec.crs.raw && (it.rec.crs.s.LuminanceSmoothing || 0) < 10));
-    add('info', '亮部和陰影都拉很重', '亮部 −80 以下、陰影 +60 以上，容易出現不自然的 HDR 感或光暈', o.ed.filter((it) => (it.rec.crs.s.Highlights2012 || 0) <= -80 && (it.rec.crs.s.Shadows2012 || 0) >= 60));
-    add('info', '質感調得很重', '清晰度 +50、去朦朧 +40 或紋理 +60 以上，可能看起來太銳利、太硬', o.ed.filter((it) => { const s = it.rec.crs.s; return (s.Clarity2012 || 0) >= 50 || (s.Dehaze || 0) >= 40 || (s.Texture || 0) >= 60; }));
-    add('info', '顏色加得很濃', '飽和度 +40 或細節飽和度 +60 以上，膚色和天空容易過頭', o.ed.filter((it) => (it.rec.crs.s.Saturation || 0) >= 40 || (it.rec.crs.s.Vibrance || 0) >= 60));
-    const wide = o.all.filter((it) => it.kind !== 'xmp' && !it.raw && it.rec.space && it.rec.space !== 'sRGB');
-    add('info', '不是 sRGB', '上傳網路或社群前建議輸出成 sRGB，不然有些地方看起來會偏灰、偏淡', o.all.filter((it) => !it.raw && /Adobe RGB|ProPhoto/.test(it.rec.space)));
-    if (wide.length && wide.length < o.all.filter((it) => !it.raw && it.kind !== 'xmp').length) add('info', '色彩空間不一樣', `這組裡混了 ${tally(o.all.filter((it) => !it.raw && it.rec.space).map((it) => it.rec.space)).map(([k, v]) => `${k}（${v}）`).join('、')}`, wide);
-    const longs = o.all.filter((it) => !it.raw && it.kind === 'image' && it.rec.w > 0).map((it) => [it, Math.max(it.rec.w, it.rec.h)]);
-    const commonLong = tally(longs.map(([, l]) => l))[0];
-    if (commonLong && longs.length >= 3 && share(commonLong[1], longs.length) >= 0.5) add('info', '輸出尺寸不一樣', `這組大多長邊 ${commonLong[0].toLocaleString('zh-TW')} px，這幾張不同`, longs.filter(([, l]) => l !== commonLong[0]).map(([it]) => it));
-    if (o.ed.length >= 3 && share(o.fx.lens, o.ed.length) >= 0.6) add('info', '沒開鏡頭校正', '這組多數有開「啟用描述檔校正」，這幾張沒有', o.ed.filter((it) => !it.rec.crs.lensProfile));
-    const noData = o.all.filter((it) => !it.rec.crs && !it.raw && it.kind === 'image' && /lightroom|camera raw|photoshop/i.test(it.rec.software));
-    add('info', 'Lightroom 輸出，但沒帶調色參數', '輸出時「中繼資料」要選「全部」，調色參數才會一起存進照片', noData);
-    return out;
-  }
-  // the photos most unlike the rest, and why
-  function oddOnes(o) {
-    const m = new Map();
-    const put = (it, z, why) => { const x = m.get(it) || { it, z: 0, why: [] }; x.z = Math.max(x.z, z); x.why.push(...why); m.set(it, x); };
-    if (o.lookSame) for (const x of o.lookSame.per) if (x.why.length) put(x.it, x.z, x.why);
-    if (o.method) for (const x of o.method.per) if (x.why.length) put(x.it, 2 + x.d, x.why);
-    return [...m.values()].sort((a, b) => b.z - a.z).slice(0, 12);
-  }
-
-  // the summary as a few sentences, for the page and to copy
-  function verdict(o) {
-    const st = o.style;
-    const parts = [];
-    if (o.ed.length) {
-      const words = st.tags.map(([t]) => t);
-      parts.push(o.ed.length === o.read ? `${o.read} 張都帶著 Lightroom 的調色參數。` : `${o.read} 張裡有 ${o.ed.length} 張帶著 Lightroom 的調色參數。`);
-      if (words.length) parts.push(`${o.ed.length >= 3 ? '常用的調法' : '調法'}：${words.slice(0, 8).join('、')}${words.length > 8 ? '等' : ''}。`);
-      if (st.profile) parts.push(`描述檔多用 ${st.profile}。`);
-      if (st.like) parts.push(`整體接近「${st.like}」。`);
-    } else {
-      parts.push(o.read ? `這 ${o.read} 張沒有 Lightroom 的調色參數，下面用照片本身的亮度、冷暖和色彩來比。` : '');
-      const words = st.tags.map(([t]) => t);
-      if (words.length) parts.push(`看起來：${words.join('、')}。`);
-    }
-    return parts.filter(Boolean).join('');
-  }
-
-  // ---------- 整組統整: the page ----------
-  const byId = (id) => items.find((it) => it.id === +id);
-  const SWATCH = { Red: '#e5484d', Orange: '#f08a24', Yellow: '#f2c21b', Green: '#46a758', Aqua: '#12a594', Blue: '#3e63dd', Purple: '#8e4ec6', Magenta: '#d6409f' };
-  const jitter = (it) => ((it.id * 2654435761) % 997) / 997; // the same small offset every time, so dots don't jump
-  let ink = null;
-  function paintStrip(track, hot, size) {
-    const P = track.plot;
-    if (!P) return;
-    if (size) track.size = size;
-    const [W, H] = track.size || [track.clientWidth, track.clientHeight], D = Math.min(2, window.devicePixelRatio || 1);
-    const cv = track.firstChild;
-    if (!W || !H) return;
-    if (cv.width !== Math.round(W * D)) { cv.width = Math.round(W * D); cv.height = Math.round(H * D); }
-    if (!ink) { const cs = getComputedStyle(document.documentElement); ink = { dot: cs.getPropertyValue('--accent').trim() || '#c48a06', hot: cs.getPropertyValue('--accent-strong').trim() || '#8f6408', line: cs.getPropertyValue('--ink').trim() || '#17202c', zero: cs.getPropertyValue('--line-strong').trim() || '#dbcfb7', ring: '#fff' }; }
-    const c = cv.getContext('2d');
-    c.setTransform(D, 0, 0, D, 0, 0);
-    c.clearRect(0, 0, W, H);
-    const pad = 6, x = (v) => pad + ((Math.min(P.hi, Math.max(P.lo, v)) - P.lo) / (P.hi - P.lo)) * (W - 2 * pad);
-    if (P.lo < 0 && P.hi > 0) { c.fillStyle = ink.zero; c.fillRect(Math.round(x(0)), 3, 1, H - 6); }
-    track.hits = P.pts.map(([it, v]) => ({ it, x: x(v), y: H * (0.2 + jitter(it) * 0.6), text: `${P.label} ${P.fmt(v)}` }));
-    const r = TOUCH ? 5.5 : 4.5;
-    for (const h of track.hits) {
-      c.beginPath(); c.arc(h.x, h.y, r + 1.5, 0, 7); c.fillStyle = ink.ring; c.fill();
-      c.beginPath(); c.arc(h.x, h.y, r, 0, 7); c.fillStyle = h === hot ? ink.hot : ink.dot; c.globalAlpha = h === hot ? 1 : 0.82; c.fill(); c.globalAlpha = 1;
-    }
-    if (hot) { c.beginPath(); c.arc(hot.x, hot.y, r + 2.5, 0, 7); c.strokeStyle = ink.hot; c.lineWidth = 1.5; c.stroke(); }
-    if (P.pts.length) { c.fillStyle = ink.line; c.fillRect(Math.round(x(P.m)) - 1, 1, 2, H - 2); }
-  }
-  // the dot nearest the pointer, if close enough
-  function hitAt(track, e) {
-    const r = track.getBoundingClientRect(), px = e.clientX - r.left, py = e.clientY - r.top;
-    let best = null, bd = TOUCH ? 22 : 12;
-    for (const h of track.hits || []) { const d = Math.hypot(h.x - px, (h.y - py) * 0.6); if (d < bd) { bd = d; best = h; } }
-    return best;
-  }
-  // one row of a strip plot: each photo a dot on the slider's scale, the median a line. The dots are drawn on a
-  // canvas (paintStrip, once the row has its width): hundreds of photos × twenty rows as elements took the page
-  // a second or more to lay out each time the summary changed.
-  function strip(label, pts, lo, hi, fmt, note) {
-    const vals = pts.map(([, v]) => v);
-    const m = med(vals);
-    const track = el('div', { class: 'st-track', role: 'img', 'aria-label': `${label}：${pts.length} 張，中位數 ${vals.length ? fmt(m) : '—'}` }, el('canvas'));
-    track.plot = { pts, lo, hi, fmt, label, m };
-    return el('div', { class: 'st' },
-      el('span', { class: 'st-k' }, label, note ? el('small', { text: note }) : null),
-      track,
-      el('span', { class: 'st-v', title: '中位數' }, vals.length ? fmt(m) : '—'));
-  }
-  const fmtS = (d) => (v) => (d === 2 ? `${v > 0 ? '+' : v < 0 ? '−' : ''}${Math.abs(v).toFixed(2)}` : sg(v, d));
-  const usedNote = (x) => (x.n ? (x.used === x.n ? '每張都調' : x.used ? `${x.used}/${x.n} 張` : '都沒調') : '');
-  function bars(entries, unit = '張') {
-    const max = Math.max(1, ...entries.map(([, n]) => n));
-    return el('div', { class: 'bars' }, ...entries.map(([k, n]) => el('div', { class: `bar${n ? '' : ' zero'}`, title: `${k}：${n} ${unit}` },
-      el('span', { class: 'bar-n', text: n ? String(n) : '' }),
-      el('span', { class: 'bar-col' }, el('span', { class: 'bar-fill', style: `height:${Math.max(n ? 4 : 0, (n / max) * 100)}%` })),
-      el('span', { class: 'bar-k', text: k }))));
-  }
-  function tallyList(list, total, max = 5) {
-    const top = list.slice(0, max), rest = list.slice(max).reduce((a, [, n]) => a + n, 0);
-    return el('ul', { class: 'tally' }, ...[...top, ...(rest ? [['其他', rest]] : [])].map(([k, n]) => el('li', {},
-      el('span', { class: 'ta-k', text: k }), el('span', { class: 'ta-bar' }, el('span', { style: `width:${(n / Math.max(1, total)) * 100}%` })), el('span', { class: 'ta-n', text: `${n}` }))));
-  }
-  const thumbBtn = (it, cls = 'mini') => el('button', { type: 'button', class: cls, 'data-id': it.id, title: it.file.name, 'aria-label': `打開 ${it.file.name}` },
-    it.thumb ? el('img', { src: it.thumb, alt: '', loading: 'lazy' }) : el('span', { text: extOf(it.file.name) || 'XMP' }));
-  function thumbRow(list, max = 6) {
-    return el('div', { class: 'minis' }, ...list.slice(0, max).map((it) => thumbBtn(it)), list.length > max ? el('span', { class: 'more-n', text: `+${list.length - max}` }) : null);
-  }
-  const scard = (id, title, sub, ...kids) => el('section', { class: `card s-card c-${id}` }, el('h3', {}, icon(id), el('span', { text: title }), sub ? el('small', { text: sub }) : null), ...kids);
-  const row = (k, v, note) => (v ? el('div', { class: 'fx' }, el('span', { class: 'fx-k', text: k }), el('span', { class: 'fx-v', text: v }), note ? el('small', { text: note }) : null) : null);
-
-  let lastSummary = null, checksOpen = false;
-  function renderSummary() {
-    summaryDirty = false;
-    const o = summarize();
-    lastSummary = o;
-    const keep = [$('#sMain').scrollTop, $('#sCards').scrollTop];
-    const reading = items.filter((it) => !it.rec && !it.scanFailed && !(it.done && !it.ok)).length;
-    const lookLeft = lookQ.length + looking;
-    // ---- left: the verdict
-    const left = [];
-    const fmtD = (d) => d.replace(/^(\d{4}):(\d\d):(\d\d)$/, (_, y, m, dd) => `${y}/${+m}/${+dd}`);
-    left.push(el('div', { class: 's-head' },
-      el('h2', {}, '這組照片', el('span', { class: 's-n', text: `${o.n} 張` })),
-      el('p', { class: 's-meta', text: [o.dates ? (o.dates[0] === o.dates[1] ? fmtD(o.dates[0]) : `${fmtD(o.dates[0])} – ${fmtD(o.dates[1])}`) : '', o.ed.length ? `${o.ed.length} 張有 Lightroom 調色參數` : ''].filter(Boolean).join('・') })));
-    if (reading || lookLeft) {
-      const done = o.n - reading;
-      left.push(el('div', { class: 's-prog', role: 'status' },
-        el('span', { class: 'spinner' }),
-        el('span', { text: reading ? `讀取中 ${done} / ${o.n}` : `正在看每張照片的亮度和色彩，還有 ${lookLeft} 張` }),
-        el('span', { class: 's-prog-bar' }, el('span', { style: `width:${(reading ? done / o.n : 1 - lookLeft / Math.max(1, o.n)) * 100}%` }))));
-    }
-    const words = verdict(o);
-    if (words || o.style.tags.length) {
-      left.push(el('section', { class: 's-block s-style' },
-        el('h3', { text: o.ed.length ? '調色風格' : '成品風格' }),
-        o.style.tags.length ? el('ul', { class: 'chips s-chips' }, ...o.style.tags.map(([t, why]) => el('li', { class: 'chip', title: why }, t))) : null,
-        el('p', { class: 's-words', text: words })));
-    }
-    const meters = [];
-    const meter = (title, x, unit, hint) => {
-      const [w, cls] = level(x.same, x.n);
-      return el('div', { class: `meter m-${cls}` },
-        el('div', { class: 'm-top' }, el('b', { text: title }), el('span', { class: 'm-word', text: w })),
-        el('span', { class: 'm-bar' }, el('span', { style: `width:${share(x.same, x.n) * 100}%` })),
-        el('p', { class: 'm-note', text: `${x.same} / ${x.n} 張${unit}` }), hint ? el('p', { class: 'm-hint', text: hint }) : null);
-    };
-    if (o.method) meters.push(meter('調法一致', o.method, '用同一套調法', '比的是描述檔、HSL、顏色分級、質感和效果；曝光、亮部、陰影本來就會每張不同，不算在內'));
-    if (o.lookSame) meters.push(meter('成品一致', o.lookSame, '的亮度、對比、冷暖和色彩接近', '直接量每張照片的成品，沒有 Lightroom 資料也能比'));
-    if (meters.length) left.push(el('section', { class: 's-block' }, el('h3', { text: '一致性' }), ...meters));
-    if (o.checks.length) {
-      // the first few (problems before notes); the rest a tap away, so a phone reaches the charts
-      const shown = checksOpen ? o.checks : o.checks.slice(0, 3);
-      left.push(el('section', { class: 's-block' }, el('h3', { text: '檢查與建議' }),
-        el('ul', { class: 'checks' }, ...shown.map((c) => el('li', { class: `ck ck-${c.lvl}` },
-          el('div', { class: 'ck-top' }, el('b', { text: c.title }), el('span', { class: 'ck-n', text: `${c.list.length} 張` })),
-          el('p', { text: c.why }), thumbRow(c.list)))),
-        o.checks.length > 3 ? el('button', { type: 'button', class: 'link-btn ck-more', onclick: () => { checksOpen = !checksOpen; renderSummary(); } }, checksOpen ? '收起來' : `還有 ${o.checks.length - 3} 項`) : null));
-    }
-    if (o.odd.length) {
-      left.push(el('section', { class: 's-block' }, el('h3', { text: '和其他張最不一樣' }),
-        el('ul', { class: 'odd' }, ...o.odd.slice(0, 8).map((x) => el('li', {},
-          thumbBtn(x.it, 'mini odd-t'),
-          el('div', {}, el('b', { text: x.it.file.name }), ...x.why.slice(0, 3).map((w) => el('p', { text: w }))))))));
-    }
-    left.push(el('div', { class: 's-acts' },
-      el('button', { type: 'button', class: 'btn small', onclick: copySummary }, '複製總結'),
-      el('button', { type: 'button', class: 'btn small', onclick: () => saveSet(o) }, '存成表格'),
-      el('button', { type: 'button', class: 'btn small', onclick: () => $('#moreInput').click() }, '加照片'),
-      el('button', { type: 'button', class: 'link-btn clear-btn', onclick: () => $('#clearAll').click() }, '清空')));
-
-    // ---- right: the details
-    const cards = [];
-    const S = o.S;
-    if (o.ed.length) {
-      const sl = (k) => strip(S[k].label, S[k].pts, S[k].lo, S[k].hi, fmtS(S[k].d), usedNote(S[k]));
-      cards.push(scard('grade', '基本調整', '每個點是一張照片，直線是中位數', ...['Exposure2012', 'Contrast2012', 'Highlights2012', 'Shadows2012', 'Whites2012', 'Blacks2012'].map(sl)));
-      cards.push(scard('color', '外觀與色彩', '', ...['Texture', 'Clarity2012', 'Dehaze', 'Vibrance', 'Saturation'].map(sl)));
-      const wb = [];
-      if (o.temps.length) wb.push(strip('色溫', o.temps, 2000, 10000, (v) => `${Math.round(v)} K`, `${o.temps.length} 張`));
-      if (o.tints.length) wb.push(strip('色調', o.tints, -60, 60, (v) => sg(v), ''));
-      const inc = o.ed.filter((it) => it.rec.crs.incTemp !== null).map((it) => [it, it.rec.crs.incTemp]);
-      if (inc.length) wb.push(strip('色溫（JPEG）', inc, -100, 100, (v) => sg(v), `${inc.length} 張`));
-      cards.push(scard('when', '白平衡', o.wbModes.map(([k, n]) => `${k} ${n}`).join('・'), ...wb));
-      cards.push(scard('lens', '描述檔', '', tallyList(o.profiles, o.ed.length)));
-      cards.push(scard('color', 'HSL', '平均調了多少', el('div', { class: 'hsl' },
-        el('span'), el('span', { class: 'hsl-h', text: '色相' }), el('span', { class: 'hsl-h', text: '飽和度' }), el('span', { class: 'hsl-h', text: '明亮度' }),
-        ...o.hsl.flatMap((c) => [
-          el('span', { class: 'hsl-c' }, el('i', { style: `background:${SWATCH[c.en]}` }), c.zh),
-          ...c.ch.map((x) => el('span', { class: `hsl-v${x.used ? '' : ' none'}`, title: x.used ? `${x.used} 張有調，平均 ${sg(x.mean, 1)}` : '都沒調' },
-            el('span', { class: 'hsl-bar' }, el('span', { class: x.mean < 0 ? 'neg' : 'pos', style: `width:${Math.min(50, (Math.abs(x.mean) / 30) * 50)}%` })),
-            el('small', { text: x.used ? sg(x.mean, 0) : '' }))),
-        ]))));
-      cards.push(scard('grade', '顏色分級', '', el('ul', { class: 'zones' }, ...o.grade.map((z) => el('li', { class: z.used ? '' : 'none' },
-        el('i', { style: z.used ? `background:hsl(${Math.round(z.hue)} ${Math.min(90, 30 + z.sat * 2)}% 55%)` : '' }),
-        el('b', { text: z.zh }),
-        el('span', { text: z.used ? `偏${hueName(z.hue)}（${Math.round(z.hue)}°）・飽和 ${trim0(z.sat, 0)}・${z.used} 張` : '沒有用' }))))));
-      cards.push(scard('focus', '細節', '', ...['Sharpness', 'LuminanceSmoothing', 'ColorNoiseReduction'].map(sl)));
-      const n = o.ed.length, f = o.fx;
-      const of = (x) => (x ? `${x} 張（${pct(share(x, n))}）` : '');
-      cards.push(scard('edit', '效果與校正', '', sl('PostCropVignetteAmount'), sl('GrainAmount'),
-        el('div', { class: 'fxs' },
-          row('色調曲線', of(f.curved)), row('霧面黑', of(f.lift), '曲線把最暗處提起來'), row('RGB 曲線', of(f.rgbCurve)), row('黑白', of(f.bw)),
-          row('裁切', of(f.crop), f.crop ? `留下約 ${pct(f.cropKept)}` : ''), row('拉直', of(f.angle)),
-          row('鏡頭描述檔校正', of(f.lens)), row('移除色差', of(f.ca)), row('自動變形校正', of(f.upright)), row('局部調整（遮色片）', of(f.masks)))));
-    } else {
-      cards.push(scard('grade', '沒有讀到 Lightroom 的調色參數', '', el('ul', { class: 'tips' },
-        el('li', { text: 'Lightroom 輸出 JPEG 時，「中繼資料」選「全部」，調色參數才會跟著存進照片。' }),
-        el('li', { text: 'RAW 檔的調色存在 Lightroom 的目錄裡：在圖庫選取照片按 Ctrl+S（Mac 是 ⌘S）寫出 .xmp 檔，再連同 RAW 一起放進來。' }),
-        el('li', { text: '社群網站和通訊軟體傳過的照片，這些資料通常都被拿掉了。' }))));
-    }
-    if (o.fin.length) {
-      cards.push(scard('expo', '成品看起來', `量 ${o.fin.length} 張成品的像素`, ...o.looks.map((x) => strip(x.label, x.pts, x.lo, x.hi, x.fmt, ''))));
-    }
-    const shots = o.all.filter((it) => it.rec.fn || it.rec.fl || it.rec.iso).length;
-    if (shots) {
-      cards.push(scard('body', '拍攝概況', `${shots} 張有拍攝資料`,
-        el('h4', { text: '焦段（等效）' }), bars(o.focal),
-        el('h4', { text: '光圈' }), bars(o.aperture),
-        el('h4', { text: 'ISO' }), bars(o.isos),
-        o.cams.length ? el('h4', { text: '相機' }) : null, o.cams.length ? tallyList(o.cams, o.all.length) : null,
-        o.lenses.length ? el('h4', { text: '鏡頭' }) : null, o.lenses.length ? tallyList(o.lenses, o.all.length) : null));
-    }
-    cards.push(scard('file', '所有照片', '點一張看它的參數', el('div', { class: 'grid' }, ...items.map((it) => thumbBtn(it, `gthumb${it.rec && it.rec.crs ? ' has-crs' : ''}`)))));
-    fill($('#sMain'), ...left);
-    // columns of my own, each card into the shortest so far (CSS columns re-balance hundreds of dots very slowly)
-    const box = $('#sCards');
-    const n = Math.max(1, Math.floor((box.clientWidth - 36 + 12) / (330 + 12)));
-    const cols = Array.from({ length: n }, () => el('div', { class: 's-col' }));
-    fill(box, el('div', { class: 's-cols', style: `grid-template-columns:repeat(${n}, minmax(0, 1fr))` }, ...cols));
-    // measure them all at once in the first column (one layout), then deal them out
-    cols[0].append(...cards);
-    const hs = cards.map((c) => c.offsetHeight), sums = cols.map(() => 0);
-    cards.forEach((c, i) => { const j = sums.indexOf(Math.min(...sums)); cols[j].append(c); sums[j] += hs[i] + 12; });
-    // all the sizes first, then the drawing (reading a size after a canvas changed lays the page out again)
-    const tracks = $$('.st-track', box), sizes = tracks.map((t) => [t.clientWidth, t.clientHeight]);
-    tracks.forEach((t, i) => paintStrip(t, null, sizes[i]));
-    [$('#sMain').scrollTop, box.scrollTop] = keep;
-    showModes();
-  }
-
-  // dots and thumbnails: hover for which photo it is, click to open it
-  const tip = $('#tip');
-  function showTip(target, hit) {
-    const it = hit ? hit.it : byId(target.dataset.id);
-    if (!it) return;
-    const text = hit ? hit.text : target.dataset.v;
-    fill(tip, it.thumb ? el('img', { src: it.thumb, alt: '' }) : null, el('b', { text: it.file.name }), text ? el('span', { text }) : null,
-      TOUCH ? el('button', { type: 'button', class: 'btn small', onclick: () => openItem(it) }, '看這張') : null);
-    tip.hidden = false;
-    const tr = target.getBoundingClientRect();
-    const r = hit ? { left: tr.left + hit.x - 6, top: tr.top + hit.y - 6, width: 12, height: 12, bottom: tr.top + hit.y + 6 } : tr, t = tip.getBoundingClientRect();
-    let x = r.left + r.width / 2 - t.width / 2, y = r.top - t.height - 8;
-    if (y < 8) y = r.bottom + 8;
-    x = Math.max(8, Math.min(innerWidth - t.width - 8, x));
-    tip.style.left = `${x}px`;
-    tip.style.top = `${y}px`;
-  }
-  let hotTrack = null, hot = null;
-  const cool = () => { if (hotTrack) { const t = hotTrack; hotTrack = hot = null; paintStrip(t); } };
-  $('#summary').addEventListener('pointermove', (e) => {
-    if (e.pointerType !== 'mouse') return;
-    const t = e.target.closest('.st-track');
-    if (t) {
-      const h = hitAt(t, e);
-      if (h !== hot || t !== hotTrack) { cool(); if (h) { hotTrack = t; hot = h; paintStrip(t, h); showTip(t, h); } else tip.hidden = true; }
-      t.style.cursor = h ? 'pointer' : '';
-      return;
-    }
-    if (hotTrack) { cool(); tip.hidden = true; }
-  });
-  $('#summary').addEventListener('pointerover', (e) => { const d = e.target.closest('.mini, .gthumb'); if (d && e.pointerType === 'mouse') showTip(d); });
-  $('#summary').addEventListener('pointerout', (e) => { if (e.pointerType === 'mouse' && e.target.closest('.mini, .gthumb')) tip.hidden = true; });
-  $('#summary').addEventListener('click', (e) => {
-    const t = e.target.closest('.st-track');
-    if (t) {
-      const h = hitAt(t, e);
-      if (!h) { tip.hidden = true; cool(); return; }
-      // a finger on a little dot: first say which photo, the button in the tip opens it
-      if (TOUCH) { cool(); hotTrack = t; hot = h; paintStrip(t, h); showTip(t, h); return; }
-      openItem(h.it);
-      return;
-    }
-    const d = e.target.closest('.mini, .gthumb');
-    if (!d) { tip.hidden = true; cool(); return; }
-    const it = byId(d.dataset.id);
-    if (it) openItem(it);
-  });
-  // a new width: the columns and the dots again
-  let sumW = 0, sumT = 0;
-  new ResizeObserver(() => { const w = $('#sCards').clientWidth; if (view === 'set' && Math.abs(w - sumW) > 8) { sumW = w; clearTimeout(sumT); sumT = setTimeout(renderSummary, 120); } }).observe($('#sCards'));
-  $('#sCards').addEventListener('scroll', () => { tip.hidden = true; }, { passive: true });
-  $('#sMain').addEventListener('scroll', () => { tip.hidden = true; }, { passive: true });
-  function openItem(it) {
-    tip.hidden = true;
-    const i = items.indexOf(it);
-    if (i < 0) return;
-    setView('one');
-    select(i);
-  }
-
-  function copySummary() {
-    const o = lastSummary || summarize();
-    const lines = [`這組照片 ${o.n} 張`, verdict(o)];
-    if (o.method) lines.push(`調法一致：${level(o.method.same, o.method.n)[0]}（${o.method.same}/${o.method.n} 張）`);
-    if (o.lookSame) lines.push(`成品一致：${level(o.lookSame.same, o.lookSame.n)[0]}（${o.lookSame.same}/${o.lookSame.n} 張）`);
-    for (const c of o.checks) lines.push(`・${c.title}：${c.list.length} 張（${c.list.slice(0, 5).map((it) => it.file.name).join('、')}${c.list.length > 5 ? '…' : ''}）`);
-    const text = lines.filter(Boolean).join('\n');
-    navigator.clipboard.writeText(text).then(() => toast('已複製總結'), () => toast('沒辦法自動複製', 4000));
-  }
-  function saveSet(o) {
-    const q = (x) => `"${String(x ?? '').replace(/"/g, '""')}"`;
-    const keys = Object.keys(SLIDERS);
-    const head = ['檔名', '相機', '鏡頭', '焦距', '等效焦距', '光圈', '快門', 'ISO', '拍攝時間', '描述檔', '白平衡', '色溫', '色調', ...keys.map((k) => SLIDERS[k][0]), '黑白', '色調曲線', '裁切留下', '拉直', '局部調整', '成品亮度', '成品對比', '成品冷暖', '成品色彩濃度', '過曝比例', '死黑比例'];
-    const lines = [head.map(q).join(',')];
-    for (const it of items) {
-      const r = it.rec || {}, c = r.crs, l = it.look && !it.look.camera ? it.look : null;
-      const n1 = (x, d = 1) => (x == null || !Number.isFinite(x) ? '' : trim0(x, d));
-      lines.push([
-        it.file.name, r.cam, r.lens, n1(r.fl), n1(r.fl35, 0), r.fn ? `f/${fNum(r.fn)}` : '', r.exp ? (r.exp < 1 ? `1/${Math.round(1 / r.exp)}` : `${trim0(r.exp, 1)}`) : '', n1(r.iso, 0), (r.date || '').replace(/^(\d{4}):(\d\d):(\d\d)/, '$1/$2/$3'),
-        c ? c.profile : '', c ? c.wb : '', c && c.temp ? Math.round(c.temp) : '', c && c.tint !== null ? c.tint : '',
-        ...keys.map((k) => (c && c.s[k] !== null ? c.s[k] : '')),
-        c ? (c.bw ? '是' : '') : '', c ? (c.curved ? '有' : '') : '', c && c.crop ? pct(c.crop) : '', c && c.angle ? trim0(c.angle, 2) : '', c ? (c.masks ? '有' : '') : '',
-        l ? trim0(l.L, 1) : '', l ? trim0(l.contrast, 1) : '', l ? trim0(l.warm, 1) : '', l ? trim0(l.chroma, 1) : '', l ? pct(l.hi) : '', l ? pct(l.lo) : '',
-      ].map(q).join(','));
-    }
-    const blob = new Blob(['﻿' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8' });
-    const a = el('a', { href: URL.createObjectURL(blob), download: `整組統整_${o.n}張.csv` });
-    document.body.append(a); a.click(); a.remove();
-    setTimeout(() => URL.revokeObjectURL(a.href), 4000);
-  }
-
   // ---------- page ----------
   const ICONS = {
     expo: '<circle cx="12" cy="12" r="4"/><path d="M12 2.5v2.5M12 19v2.5M4.6 4.6l1.8 1.8M17.6 17.6l1.8 1.8M2.5 12H5M19 12h2.5M4.6 19.4l1.8-1.8M17.6 6.4l1.8-1.8"/>',
@@ -1661,6 +1044,7 @@
     place: '<path d="M12 21s-7-6.2-7-11.5a7 7 0 0 1 14 0C19 14.8 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.5"/>',
     file: '<path d="M14 3H6.5A2 2 0 0 0 4.5 5v14a2 2 0 0 0 2 2h11a2 2 0 0 0 2-2V8.5z"/><path d="M14 3v5.5h5.5"/>',
     author: '<circle cx="12" cy="8" r="4"/><path d="M4.5 21c1.4-3.8 4.2-5.8 7.5-5.8s6.1 2 7.5 5.8"/>',
+    flickr: '<circle cx="7" cy="12" r="4"/><circle cx="17" cy="12" r="4"/>',
     more: '<path d="M9 6h11M9 12h11M9 18h11"/><circle cx="4.5" cy="6" r="1"/><circle cx="4.5" cy="12" r="1"/><circle cx="4.5" cy="18" r="1"/>',
   };
   const icon = (id) => {
@@ -1682,11 +1066,13 @@
       $('#copyLine').disabled = true;
       $('#saveAll').disabled = true;
     };
-    if (!it.done) { busy([el('span', { class: 'spinner' }), ' 讀取中…'], engine.state === 'ready' ? it.file.name : $('#engine').textContent.trim()); return; }
-    if (!it.ok) { busy(['讀不到這個檔案'], engine.state === 'error' ? '解析程式沒有載入成功，請重新整理頁面再試一次' : '檔案可能壞了，或不是照片'); return; }
+    if (!it.done) { busy([el('span', { class: 'spinner' }), it.fk ? ' 正在向 Flickr 查詢…' : ' 讀取中…'], it.fk ? nameOf(it) : engine.state === 'ready' ? it.file.name : $('#engine').textContent.trim()); return; }
+    if (!it.ok) { busy([it.fk ? 'Flickr 讀不到這張照片' : '讀不到這個檔案'], it.fk ? fkMsg(it.error) : engine.state === 'error' ? '解析程式沒有載入成功，請重新整理頁面再試一次' : '檔案可能壞了，或不是照片'); return; }
     const noCamera = !val(it, ['Make', 'Model']) && !val(it, ['ExposureTime', 'FNumber']);
-    $('#camName').textContent = noCamera ? '沒有相機資訊' : cameraName(it) || '不知道是哪台相機';
-    $('#camLens').textContent = noCamera ? `拍攝資料被拿掉了：截圖、修圖 App 輸出、傳過通訊軟體或社群網站的照片常常這樣。要看參數，請用相機或手機裡的原始檔。${IOS ? ' iPhone 從「照片」選的時候，請選「實際大小」，縮小過的參數會不見。' : ''}`
+    $('#camName').textContent = noCamera ? (it.fk && it.fk.exifHidden ? '作者沒有公開拍攝參數' : '沒有相機資訊') : cameraName(it) || '不知道是哪台相機';
+    $('#camLens').textContent = noCamera ? (it.fk ? (it.fk.exifHidden ? '這張照片的作者在 Flickr 設定不公開 EXIF，只看得到照片和 Flickr 上的資訊。'
+      : 'Flickr 上這張照片沒有拍攝參數：上傳的檔案本身就沒有，例如截圖，或輸出時拿掉了。')
+      : `拍攝資料被拿掉了：截圖、修圖 App 輸出、傳過通訊軟體或社群網站的照片常常這樣。要看參數，請用相機或手機裡的原始檔。${IOS ? ' iPhone 從「照片」選的時候，請選「實際大小」，縮小過的參數會不見。' : ''}`)
       : lensName(it) || (/mm$/.test(val(it, 'Lens', { groups: ['Composite'] })) ? `鏡頭 ${metres(val(it, 'Lens', { groups: ['Composite'] }))}` : '鏡頭沒有記錄');
     $('#copyLine').disabled = noCamera;
     $('#saveAll').disabled = false;
@@ -1730,9 +1116,10 @@
     }
     // meta.js reads the standard parts; a camera maker's own notes need ExifTool (not in Safari)
     const notes = [];
+    if (!q && it.fk && it.fk.exif && it.fk.exif.length) notes.push('參數是 Flickr 從作者上傳的原檔讀出來的；相機原廠的細部資料 Flickr 只留一部分。');
     if (!q && it.reader === 'js' && !isPhone(it) && (it.raw || val(it, 'Make'))) notes.push('Safari 只讀得到標準的 EXIF、GPS 和 XMP；相機原廠的細部資料（快門次數、對焦設定、機身溫度等）請用 Chrome、Edge 或 Firefox 開這個網頁。');
     // iOS gives a web page a JPEG it makes from the photo in 照片 (a HEIC never arrives as itself), minus the location
-    if (!q && IOS && !it.raw && /\.jpe?g$/i.test(it.file.name) && (/apple/i.test(val(it, 'Make')) || /^image\.jpe?g$/i.test(it.file.name))) notes.push('從「照片」選進來的照片，iPhone 會先轉成 JPG 再交給網頁（HEIC 原檔不會直接送進來）：拍攝參數大多還在，但位置會被拿掉，Live Photo、Apple HDR 這些也看不到。想看原檔：選照片時點「選擇檔案」，從「檔案」App 裡挑（先在「照片」用分享 → 儲存到檔案），或傳到電腦再看。');
+    if (!q && IOS && !it.fk && !it.raw && /\.jpe?g$/i.test(it.file.name) && (/apple/i.test(val(it, 'Make')) || /^image\.jpe?g$/i.test(it.file.name))) notes.push('從「照片」選進來的照片，iPhone 會先轉成 JPG 再交給網頁（HEIC 原檔不會直接送進來）：拍攝參數大多還在，但位置會被拿掉，Live Photo、Apple HDR 這些也看不到。想看原檔：選照片時點「選擇檔案」，從「檔案」App 裡挑（先在「照片」用分享 → 儲存到檔案），或傳到電腦再看。');
     fill($('#sheet'),
       cards.length ? el('div', { class: 'cards' }, ...cards) : null,
       ...notes.map((t) => el('p', { class: 'reader-note', text: t })),
@@ -1761,7 +1148,7 @@
     for (const r of s.other) lines.push([`其他・${r.fam}`, r.label, r.val, `${r.g}:${r.name}`].map(q).join(','));
     // the BOM lets Excel read it as UTF-8
     const blob = new Blob(['﻿' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8' });
-    const a = el('a', { href: URL.createObjectURL(blob), download: `${it.file.name.replace(/\.[^.]+$/, '')}_參數.csv` });
+    const a = el('a', { href: URL.createObjectURL(blob), download: `${(it.fk ? nameOf(it) : it.file.name.replace(/\.[^.]+$/, '')).replace(/[\\/:*?"<>|]+/g, '_')}_參數.csv` });
     document.body.append(a); a.click(); a.remove();
     setTimeout(() => URL.revokeObjectURL(a.href), 4000);
   });
@@ -2014,7 +1401,7 @@
   async function loadFull(it) {
     if (fullLoading === it.id) return;
     fullLoading = it.id;
-    const f = await decodeBlob(blobOf(it), FULL_MAX);
+    const f = await decodeBlob(it.fk ? await bigOf(it) : blobOf(it), FULL_MAX);
     fullLoading = 0;
     if (!f) return;
     // still wanted?
@@ -2056,6 +1443,7 @@
       const heic = /\.(heic|heif|hif)$/i.test(it.file.name), tiff = /\.tiff?$/i.test(it.file.name);
       fill(msg, el('b', { text: it.kind === 'xmp' ? '這是 Lightroom 的 .xmp 檔' : '這裡沒辦法顯示這張照片' }), el('span', {
         text: it.kind === 'xmp' ? '裡面只有調色設定和拍攝資料，沒有影像。把它的 RAW 檔一起放進來就看得到照片。'
+          : it.fk ? '從 Flickr 下載照片沒有成功。參數不受影響。'
           : heic ? '這個瀏覽器看不懂 HEIC，用 Safari 就看得到。參數不受影響。'
             : tiff ? '這個瀏覽器看不懂 TIFF，用 Safari 就看得到。參數不受影響。'
               : it.raw ? '這個 RAW 檔裡沒有放預覽圖。參數不受影響。' : '參數還是看得到。',
@@ -2082,7 +1470,7 @@
   async function showFull() {
     const it = cur();
     if ($('#full').hidden || !it) return;
-    $('#fullName').textContent = `${it.file.name}　${current + 1} / ${items.length}`;
+    $('#fullName').textContent = `${nameOf(it)}　${current + 1} / ${items.length}`;
     $('#fullPrev').disabled = current <= 0;
     $('#fullNext').disabled = current >= items.length - 1;
     if (!it.done || it.noPicture) { fullLoupe.set(it, null); return; }
@@ -2162,13 +1550,13 @@
       const ul = $('#thumbs');
       fill(ul, ...items.map((it, i) => el('li', {},
         el('button', {
-          type: 'button', class: `thumb${i === current ? ' on' : ''}${it.done && !it.ok ? ' bad' : ''}`, title: it.file.name,
-          'aria-label': it.file.name, 'aria-current': i === current ? 'true' : null, onclick: () => select(i),
+          type: 'button', class: `thumb${i === current ? ' on' : ''}${it.done && !it.ok ? ' bad' : ''}`, title: nameOf(it),
+          'aria-label': nameOf(it), 'aria-current': i === current ? 'true' : null, onclick: () => select(i),
         },
         it.thumb ? el('img', { src: it.thumb, alt: '', loading: 'lazy' }) : el('span', { class: 'th-ext', text: it.kind === 'xmp' ? 'XMP' : extOf(it.file.name) }),
-        it.busy && !it.rec ? el('span', { class: 'th-busy' }, el('span', { class: 'spinner' })) : null),
-        // the one on screen can be taken out
-        i === current ? el('button', { type: 'button', class: 'th-x', title: '移除這張', 'aria-label': `移除 ${it.file.name}`, onclick: () => removeItem(it) }, '×') : null)));
+        it.busy ? el('span', { class: 'th-busy' }, el('span', { class: 'spinner' })) : null),
+        // the one on screen can be taken out (not out of a Flickr album: that's the album)
+        i === current && !it.coll ? el('button', { type: 'button', class: 'th-x', title: '移除這張', 'aria-label': `移除 ${nameOf(it)}`, onclick: () => removeItem(it) }, '×') : null)));
       $('.strip').classList.toggle('one', items.length < 2);
       // keep the chosen one in view by scrolling the strip only (scrollIntoView would also move the page on a phone)
       const on = ul.querySelector('.on');
@@ -2183,118 +1571,436 @@
     it.thumb = url;
   }
 
-  // ---------- the look worker: each photo small, for its thumbnail and how it looks (only for a set) ----------
-  let lookWorker = null, looking = 0;
-  const lookQ = [], lookWait = new Map();
-  function lookSource(it) {
-    if (it.kind === 'xmp') return null;
-    // Safari: a JPEG's own little thumbnail is enough to measure and to show, and costs no full-size decode
-    // (it is stored as the camera held it: the photo's orientation turns it)
-    if (WEBKIT && it.exifThumb) return { blob: it.file.slice(it.exifThumb.start, it.exifThumb.end, 'image/jpeg'), orient: (it.rec && it.rec.orient) || 1, camera: false, small: true };
-    const pv = it.pv || it.pvScan;
-    // a RAW file: the camera's JPEG inside (how it looked straight from the camera, not after editing)
-    if (pv) return { blob: it.file.slice(pv.start, pv.end, 'image/jpeg'), orient: pv.orient ? 1 : (it.rec && it.rec.orient) || 1, camera: true };
-    if (it.raw) return null;
-    return { blob: it.file, orient: 1, camera: false };
+  // ---------- the strip's thumbnails for the photos not opened yet: one at a time, nearest first, after the reading ----------
+  // From the little JPEG a camera keeps in the EXIF (no decoding the photo), a RAW file's preview, or else the
+  // picture made small (not on a phone: a full-size decode each is too much there). A Flickr photo has Flickr's.
+  let thumbing = false;
+  async function pumpThumbs() {
+    if (thumbing) return;
+    thumbing = true;
+    try {
+      for (;;) {
+        const todo = items.filter((it) => !it.fk && !it.thumb && !it.thumbTried && !it.busy && it.kind !== 'xmp');
+        if (!todo.length) break;
+        if (running) { await new Promise((r) => setTimeout(r, 250)); continue; } // the photo being read goes first
+        const at = (it) => Math.abs(items.indexOf(it) - current);
+        const it = todo.reduce((a, b) => (at(b) < at(a) ? b : a));
+        it.thumbTried = true;
+        const url = await smallOf(it);
+        if (url && items.includes(it) && !it.thumb) { setThumb(it, url); renderThumbs(); }
+        await new Promise((r) => setTimeout(r, 16));
+      }
+    } finally { thumbing = false; }
   }
-  function wantLook(it) {
-    if (items.length < 2 || it.look || it.lookFailed || it.lookQueued) return;
-    // a RAW file waits for its scan, which finds the preview inside it
-    if (it.raw && !it.pv && !it.pvScan) { if (it.rec || it.done) it.lookFailed = true; return; }
-    if (WEBKIT) { it.lookQueued = true; lookQ.push(it); pumpLookHere(); return; }
-    if (!lookWorker) {
-      try { lookWorker = new Worker('assets/look.js'); } catch { it.lookFailed = true; return; }
-      lookWorker.onmessage = (e) => { const done = lookWait.get(e.data.id); if (done) { lookWait.delete(e.data.id); done(e.data); } };
-      lookWorker.onerror = () => { for (const [, done] of lookWait) done({ ok: false }); lookWait.clear(); };
-    }
-    it.lookQueued = true;
-    lookQ.push(it);
-    pumpLook();
-  }
-  function pumpLook() {
-    // two in flight: the worker always has the next one ready
-    while (looking < 2 && lookQ.length) {
-      const it = lookQ.shift();
-      const src = lookSource(it);
-      if (!src) { it.lookFailed = true; continue; }
-      looking++;
-      const id = String(it.id);
-      new Promise((resolve) => { lookWait.set(id, resolve); lookWorker.postMessage({ id, blob: src.blob, orient: src.orient }); }).then((d) => {
-        looking--;
-        if (d.ok) {
-          it.look = { ...d.look, camera: src.camera };
-          if (!it.thumb || !it.done) setThumb(it, URL.createObjectURL(d.thumb));
-        } else it.lookFailed = true;
-        renderThumbs();
-        changed();
-        pumpLook();
-      });
-    }
+  async function smallOf(it) {
+    try {
+      const r = await ZMeta.read(it.file, { head: it.raw ? 2 << 20 : 262144, preview: it.raw });
+      const turn = r && r.tags['IFD0:Orientation'] ? +(r.tags['IFD0:Orientation'].num ?? r.tags['IFD0:Orientation'].val) || 1 : 1;
+      let blob = null, o = 1;
+      if (r && r.thumb) { blob = it.file.slice(r.thumb.start, r.thumb.end, 'image/jpeg'); o = turn; }
+      else if (r && r.preview) { blob = it.file.slice(r.preview.start, r.preview.end, 'image/jpeg'); o = r.preview.orient ? 1 : turn; }
+      else if (!it.raw && SHOWABLE.test(it.file.name) && (!SMALL_DEVICE || it.file.size < 4e6)) blob = it.file;
+      if (!blob) return null;
+      const v = await decodeBlob(blob, 264);
+      if (!v) return null;
+      const [w, h] = oriented(...sizeOf(v.img), o >= 1 && o <= 8 ? o : 1);
+      const k = Math.min(1, 132 / Math.max(w, h));
+      const c = canvas(Math.max(1, Math.round(w * k)), Math.max(1, Math.round(h * k)));
+      const x = c.getContext('2d');
+      x.imageSmoothingQuality = 'high';
+      drawOriented(x, v.img, o >= 1 && o <= 8 ? o : 1, c.width, c.height);
+      release(v.img);
+      const url = c.toDataURL('image/jpeg', 0.8);
+      release(c);
+      return url;
+    } catch { return null; }
   }
 
-  // Safari: the same, here, one photo at a time (see decodeBlob)
-  async function pumpLookHere() {
-    if (looking) return;
-    looking = 1;
-    while (lookQ.length) {
-      // a full-size decode only while 整組統整 is open (a phone has little memory to spare); thumbnails any time
-      const i = view === 'set' ? 0 : lookQ.findIndex((x) => { const sx = lookSource(x); return !sx || sx.small; });
-      if (i < 0) break;
-      const it = lookQ.splice(i, 1)[0];
-      const src = lookSource(it);
-      if (!src) { it.lookFailed = true; continue; }
-      const im = await viaImg(src.blob);
-      if (!im) { it.lookFailed = true; continue; }
-      const o = src.orient >= 1 && src.orient <= 8 ? src.orient : 1;
-      const [w0, h0] = oriented(im.naturalWidth, im.naturalHeight, o);
-      const make = (side) => { const k = Math.min(1, side / Math.max(w0, h0)); const c = canvas(Math.max(1, Math.round(w0 * k)), Math.max(1, Math.round(h0 * k))); drawOriented(c.getContext('2d'), im, o, c.width, c.height); return c; };
-      const m = make(ZLook.SIDE), t = make(ZLook.THUMB);
-      im.src = '';
-      it.look = { ...ZLook.measure(m.getContext('2d').getImageData(0, 0, m.width, m.height).data), camera: src.camera };
-      if (!it.thumb || !it.done) setThumb(it, t.toDataURL('image/jpeg', 0.8));
-      release(m); release(t);
-      renderThumbs();
-      changed();
-      await new Promise((r) => setTimeout(r, 30)); // let the page breathe between photos
-    }
-    looking = 0;
-    changed();
+  // ---------- Flickr ----------
+  // A link to a photo, an album, someone's albums or galleries, a gallery, a photostream, favourites, a group's pool
+  // or a collection; assets/flickr.js asks Flickr from here (the link never goes to this site's server). A photo is
+  // an item like a file: its EXIF as Flickr read it from the original at upload, its picture Flickr's size that fits
+  // the screen (the biggest one for 100 %). A list
+  // opens as a grid first (#browse); someone's albums or galleries as covers. Up top, where you are: 月太 的藝廊 ›
+  // SITCON 2026 › 3 / 174, each a way back.
+  let fkReady = false;
+  let shelf = null; // someone's albums or galleries: { view: 'sets', kind, user, title, owner, link, total, page, pages, sets }
+  let coll = null; // the list of photos: { view: 'photos', kind, id, title, owner, link, description, total, page, pages, photos }
+  let level = 'photos'; // what #browse shows: 'sets' (shelf) or 'photos' (coll)
+  const KIND_WORD = { album: '相簿', gallery: '藝廊', stream: '相片串流', faves: '最愛', group: '群組' };
+  const FK_ERR = {
+    nokey: '這個網站的 Flickr 查詢暫時不能用',
+    badurl: '看不懂這個連結，請貼 Flickr 照片、相簿或藝廊的網址',
+    notflickr: '這不是 Flickr 的連結',
+    short: '這種短網址還看不懂：請在瀏覽器打開它，再複製網址列裡的完整網址',
+    unknown: '這種 Flickr 頁面還看不懂：可以貼照片、相簿、相簿列表、藝廊、藝廊列表、相片串流、最愛或群組的網址',
+    notfound: '找不到：可能已經刪除、網址不完整，或只有作者的朋友看得到',
+    private: '這是不公開的內容，只有作者允許的人看得到',
+    busy: '查詢太頻繁了，請過幾分鐘再試',
+    flickr: 'Flickr 暫時沒有回應，請稍後再試',
+    net: '連不上網路，請檢查連線後再試',
+  };
+  const fkMsg = (code) => FK_ERR[code && code.message ? code.message : code] || FK_ERR.flickr;
+  const fkGet = (params) => (self.ZFlickr ? ZFlickr.get(params) : Promise.reject(new Error('nokey')));
+  const FK_URL = /(?:https?:\/\/)?(?:(?:www|m|secure)\.)?(?:flickr\.com|flic\.kr|(?:live|farm\d+)\.staticflickr\.com)\/\S+/i;
+
+  // a photo as an item (its picture comes when it's read)
+  function itemOf(p, from) {
+    const it = { id: nextId++, file: new File([], `${p.id}.jpg`), side: null, raw: false, kind: 'flickr', done: false, fk: { ...p, sizes: p.sizes || [] } };
+    if (from) { it.coll = from; it.fk.from = { kind: from.kind, title: from.title, link: from.link }; }
+    setThumb(it, p.thumb || null);
+    return it;
   }
 
-  // ---------- 逐張 / 整組 ----------
-  let summaryDirty = false, summaryTimer = 0;
-  function changed() {
-    summaryDirty = true;
-    if (view !== 'set' || summaryTimer) return;
-    // while photos keep arriving, redraw a couple of times a second, not for each
-    summaryTimer = setTimeout(() => { summaryTimer = 0; if (view === 'set') renderSummary(); }, running || looking ? (items.length > 150 ? 1500 : 700) : 80);
+  // Flickr's sizes: for the screen the smallest that fills it (the original only when nothing else is big enough,
+  // it can be huge), for 100 % the biggest (the original on a computer; on a phone the biggest up to 4096 px)
+  const longOf = (x) => Math.max(x.w, x.h);
+  function sizesOf(it) {
+    const list = (it.fk.sizes || []).filter((x) => x.src && x.w > 0 && x.h > 0 && !/^(sq|q|t|s)$/.test(x.s)).sort((a, b) => longOf(a) - longOf(b));
+    const plain = list.filter((x) => x.s !== 'o');
+    const show = plain.find((x) => longOf(x) >= Math.min(SCREEN, 2048) * 0.95) || plain[plain.length - 1] || list[0] || null;
+    const big = (SMALL_DEVICE ? list.filter((x) => longOf(x) <= FULL_MAX).pop() : list[list.length - 1]) || show;
+    return { show, big };
   }
-  function showModes() {
-    const m = $('#modes');
-    m.hidden = items.length < 2;
-    if (m.hidden) return;
-    const left = items.filter((it) => !it.rec && !it.scanFailed && !(it.done && !it.ok)).length + lookQ.length + looking;
-    fill($('#setCount'), left ? el('span', { class: 'spinner' }) : null, ` ${items.length} 張`);
-    for (const b of $$('button', m)) b.setAttribute('aria-selected', String(b.dataset.mode === view));
+  // pictures from Flickr's own server, the last few kept (the next one is fetched ahead)
+  const pics = new Map();
+  function picture(src) {
+    if (pics.has(src)) return pics.get(src);
+    const p = fetch(src, { mode: 'cors', credentials: 'omit' }).then((r) => { if (!r.ok) throw new Error(String(r.status)); return r.blob(); });
+    pics.set(src, p);
+    p.catch(() => pics.delete(src));
+    while (pics.size > 4) pics.delete(pics.keys().next().value);
+    return p;
   }
-  const showProgress = () => { showModes(); if (view === 'set' && summaryDirty) changed(); };
+  async function bigOf(it) {
+    const { big, show } = sizesOf(it);
+    if (!big || big === show) return it.file;
+    try { return await picture(big.src); } catch { return it.file; }
+  }
+
+  // Flickr's EXIF: ExifTool's names in ExifTool's groups, values as ExifTool prints them — the shape the cards read
+  // (an older answer had numbers for tags and TIFF / EXIF for groups: its labels say which tag)
+  const OLD_LABEL = {
+    Manufacturer: 'Make', Make: 'Make', Model: 'Model', Aperture: 'FNumber', Exposure: 'ExposureTime', 'ISO Speed': 'ISO', 'Focal Length': 'FocalLength',
+    'Exposure Bias': 'ExposureCompensation', Flash: 'Flash', Lens: 'LensModel', 'Lens Model': 'LensModel', 'Date and Time (Original)': 'DateTimeOriginal',
+    'Date and Time (Digitized)': 'CreateDate', Software: 'Software', 'White Balance': 'WhiteBalance', 'Exposure Program': 'ExposureProgram',
+    'Metering Mode': 'MeteringMode', Latitude: 'GPSLatitude', Longitude: 'GPSLongitude', 'Color Space': 'ColorSpace', Orientation: 'Orientation',
+  };
+  const OLD_SPACE = { TIFF: 'IFD0', EXIF: 'ExifIFD', GPS: 'GPS' };
+  // "25 deg 2' 32.40\" N" → 25.0423
+  const degrees = (s) => {
+    const m = String(s).match(/(-?\d+(?:\.\d+)?)\s*(?:deg|°)?\s*(?:(\d+(?:\.\d+)?)\s*['′])?\s*(?:(\d+(?:\.\d+)?)\s*["″])?/);
+    return m ? +m[1] + (+m[2] || 0) / 60 + (+m[3] || 0) / 3600 : NaN;
+  };
+  function flickrTags(fk) {
+    const t = {};
+    const put = (g, name, value, desc, num) => {
+      if (value == null || String(value).trim() === '' || t[`${g}:${name}`]) return;
+      t[`${g}:${name}`] = { desc: desc || name, val: String(value) };
+      if (num !== undefined && Number.isFinite(num)) t[`${g}:${name}`].num = num;
+    };
+    for (const e of fk.exif || []) {
+      const g = OLD_SPACE[e.g] || e.g || 'EXIF';
+      let name = e.t;
+      if (!name || /^\d+$/.test(name)) name = OLD_LABEL[e.l] || String(e.l || '').replace(/[^A-Za-z0-9]/g, '');
+      if (!name) continue;
+      let n;
+      if (/^GPS(Latitude|Longitude)$/.test(name)) {
+        n = degrees(e.r);
+        const h = String(e.r).match(/([NSEW])\s*$/);
+        if (h) {
+          if (g === 'GPS') put(g, `${name}Ref`, { N: 'North', S: 'South', E: 'East', W: 'West' }[h[1]]);
+          else if (/[SW]/.test(h[1])) n = -Math.abs(n);
+        }
+      }
+      put(g, name, e.r, e.l, n);
+    }
+    const has = (name) => Object.keys(t).some((k) => k.endsWith(`:${name}`));
+    // what Flickr knows besides: when (if the file doesn't say), where (if it's on Flickr's map), the 35 mm focal length
+    if (fk.taken && !has('DateTimeOriginal') && !has('CreateDate')) put('Flickr', 'DateTimeOriginal', fk.taken.replace(/^(\d{4})-(\d\d)-(\d\d)/, '$1:$2:$3'), '拍攝時間（Flickr）');
+    if (fk.location && !has('GPSLatitude')) {
+      put('Composite', 'GPSLatitude', fk.location.lat.toFixed(6), 'GPS Latitude', fk.location.lat);
+      put('Composite', 'GPSLongitude', fk.location.lon.toFixed(6), 'GPS Longitude', fk.location.lon);
+    }
+    const f35 = Object.entries(t).find(([k]) => k.endsWith(':FocalLengthIn35mmFormat'));
+    if (f35 && !has('FocalLength35efl')) put('Composite', 'FocalLength35efl', f35[1].val, 'Focal Length 35efl', parseFloat(f35[1].val));
+    return t;
+  }
+
+  // one photo: what Flickr says about it, then its picture
+  async function readFlickr(it) {
+    it.busy = true;
+    renderThumbs();
+    let d = null;
+    try {
+      d = await fkGet({ photo: it.fk.id, secret: it.fk.secret || '', sizes: it.fk.sizes.length ? '0' : '1' });
+    } catch (e) { it.error = e.message; }
+    if (d) {
+      it.fk = { ...it.fk, ...d, sizes: d.sizes || it.fk.sizes, from: it.fk.from };
+      it.tags = flickrTags(it.fk);
+      it.idx = indexTags(it.tags);
+      it.groups = new Set(Object.keys(it.tags).map((k) => k.split(':')[0]));
+      it.sheet = null;
+      it.reader = 'flickr';
+      it.ok = true;
+      const { show } = sizesOf(it);
+      if (show) {
+        try {
+          const blob = await picture(show.src);
+          it.file = new File([blob], `${it.fk.id}.jpg`, { type: blob.type || 'image/jpeg' });
+          it.fk.shown = show;
+        } catch {}
+      }
+      count(it);
+    }
+    it.busy = false;
+    it.done = true;
+    if (it.ok && it.file.size) await prepareImage(it); else it.noPicture = true;
+    renderThumbs();
+    if (it === cur()) { renderInfo(); drawStage(); renderCrumbs(); }
+    // the next one's picture, ahead (its sizes came with the album)
+    const next = items[items.indexOf(it) + 1];
+    if (it === cur() && next && next.fk && !next.done && next.fk.sizes.length) { const s = sizesOf(next).show; if (s) picture(s.src).catch(() => {}); }
+  }
+
+  // a credit line to paste under the photo where it's used: title, author, licence, link
+  async function copyCredit(it) {
+    const f = it.fk, lic = f.license;
+    const text = lic && lic.id !== '0'
+      ? `「${f.title || '照片'}」by ${f.owner.name}，${lic.short}${/^CC/.test(lic.short) ? ' 授權' : ''}，${f.short || f.page}`
+      : `「${f.title || '照片'}」© ${f.owner.name}，${f.short || f.page}`;
+    try { await navigator.clipboard.writeText(text); toast(`已複製：${text}${lic && lic.id === '0' ? '　這張照片保留所有權利，使用前要先取得作者同意' : ''}`, 6000); } catch { toast(`沒辦法自動複製，請手動選取：${text}`, 9000); }
+  }
+
+  // ---------- a link in ----------
+  let asking = false;
+  async function openFlickr(link, say) {
+    if (asking) return;
+    asking = true;
+    say([el('span', { class: 'spinner' }), ' 正在向 Flickr 查詢…']);
+    try {
+      const r = await fkGet({ url: link });
+      say(null);
+      closePop();
+      if (r.view === 'photo') openOne(r.photo);
+      else if (r.view === 'sets') { shelf = r; coll = null; showBrowse('sets'); }
+      else {
+        if (!shelf || !sameOwner(shelf, r)) shelf = null;
+        coll = r;
+        const i = r.focus ? r.photos.findIndex((p) => p.id === r.focus) : -1;
+        if (i >= 0) openColl(i);
+        else if (r.focus) { showBrowse('photos'); openOne({ id: r.focus, sizes: [] }); }
+        else showBrowse('photos');
+      }
+    } catch (e) { say(fkMsg(e), true); }
+    asking = false;
+  }
+  const sameOwner = (a, b) => !!(a && b && a.owner && b.owner && a.owner.id && a.owner.id === b.owner.id);
+  // one photo from a link: with your other photos (not into an album's)
+  function openOne(p) {
+    if (items.length && items[0].coll) clearItems();
+    const had = items.find((x) => x.fk && x.fk.id === p.id);
+    current = had ? items.indexOf(had) : items.push(itemOf(p)) - 1;
+    loupeReset();
+    setView('one');
+  }
+  // a photo of the grid: the list's photos become the strip
+  function openColl(i) {
+    if (!(items.length && items[0].coll === coll)) {
+      clearItems();
+      for (const p of coll.photos) items.push(itemOf(p, coll));
+    }
+    current = Math.max(0, Math.min(items.length - 1, i));
+    loupeReset();
+    setView('one');
+  }
+  // the next page of a list (500 at a time); an album's photos already in the strip get the new ones too
+  let paging = false;
+  async function more(src) {
+    if (paging || !src || src.page >= src.pages) return;
+    paging = true;
+    renderMore();
+    try {
+      const r = src.view === 'sets' ? await fkGet({ sets: src.kind, user: src.user, page: src.page + 1 }) : await fkGet({ list: src.kind, id: src.id, page: src.page + 1 });
+      src.page = r.page;
+      src.pages = r.pages;
+      if (src.view === 'sets') src.sets.push(...r.sets);
+      else {
+        src.photos.push(...r.photos);
+        src.videos = (src.videos || 0) + (r.videos || 0);
+        if (items.length && items[0].coll === src) { for (const p of r.photos) items.push(itemOf(p, src)); renderThumbs(); }
+      }
+      paging = false;
+      if (view === 'browse') renderBrowse(true);
+    } catch (e) { paging = false; toast(fkMsg(e)); renderMore(); }
+  }
+
+  // ---------- the grid ----------
+  let gridKey = '';
+  function showBrowse(l) {
+    level = l === 'sets' && shelf ? 'sets' : coll ? 'photos' : 'sets';
+    $('#bFilter').value = '';
+    gridKey = '';
+    setView('browse');
+  }
+  const ymd = (s) => { const m = String(s).match(/^(\d{4})-(\d\d)-(\d\d)/); return m ? [+m[1], +m[2], +m[3]] : null; };
+  function dateSpan(list) {
+    const ds = list.map((p) => ymd(p.taken)).filter(Boolean).sort((a, b) => a[0] - b[0] || a[1] - b[1] || a[2] - b[2]);
+    if (!ds.length) return '';
+    const [a, b] = [ds[0], ds[ds.length - 1]];
+    const one = (d) => `${d[0]}/${d[1]}/${d[2]}`;
+    if (a.join() === b.join()) return one(a);
+    return a[0] === b[0] ? `${one(a)} – ${b[1]}/${b[2]}` : `${one(a)} – ${one(b)}`;
+  }
+  function renderBrowse(keep = false) {
+    const src = level === 'sets' ? shelf : coll;
+    if (!src) return;
+    const q = $('#bFilter').value.trim().toLowerCase();
+    const n = (x) => x.toLocaleString('zh-TW');
+    $('#bTitle').textContent = src.title || (level === 'sets' ? 'Flickr' : KIND_WORD[src.kind]);
+    $('#bOpen').href = src.link || 'https://www.flickr.com/';
+    let meta;
+    if (level === 'sets') {
+      meta = [src.owner.name, `${n(src.total)} ${src.kind === 'galleries' ? '個藝廊' : '本相簿'}`];
+    } else {
+      const lics = new Map();
+      for (const p of src.photos) if (p.license) lics.set(p.license, (lics.get(p.license) || 0) + 1);
+      const top = [...lics.entries()].sort((a, b) => b[1] - a[1]);
+      const owners = new Set(src.photos.map((p) => p.owner).filter(Boolean));
+      meta = [
+        src.kind === 'album' || src.kind === 'stream' ? src.owner.name : src.kind === 'gallery' ? `${src.owner.name} 選的` : '',
+        `${n(src.total)} 張${src.videos ? `（${src.videos} 部影片沒有列出）` : ''}`,
+        src.kind !== 'album' && src.kind !== 'stream' && owners.size > 1 ? `${owners.size} 位作者` : '',
+        dateSpan(src.photos) ? `拍攝 ${dateSpan(src.photos)}` : '',
+        top.length ? (top.length === 1 ? top[0][0] : `${top[0][0]} 等 ${top.length} 種授權`) : '',
+        src.views ? `${n(src.views)} 次觀看` : '',
+      ];
+    }
+    $('#bMeta').textContent = meta.filter(Boolean).join('・');
+    $('#bDesc').textContent = src.description || '';
+    $('#bDesc').hidden = !src.description;
+    $('#bFilter').placeholder = level === 'sets' ? (src.kind === 'galleries' ? '找藝廊名稱' : '找相簿名稱') : '篩選標題或作者，例如攝影師的名字';
+    const key = `${level}|${src.link}|${q}|${(src.sets || src.photos).length}`;
+    if (key !== gridKey) {
+      gridKey = key;
+      const grid = $('#bGrid');
+      if (level === 'sets') {
+        const list = src.sets.filter((x) => !q || x.title.toLowerCase().includes(q));
+        grid.className = 'b-grid sets';
+        fill(grid, ...list.map((x) => el('li', {}, el('button', { type: 'button', class: 'b-set', onclick: () => openSet(x) },
+          el('span', { class: 'b-cover' }, x.cover ? el('img', { src: x.cover, alt: '', loading: 'lazy', onerror: (e) => e.target.remove() }) : null),
+          el('b', { text: x.title || '（沒有名稱）' }),
+          el('small', { text: `${n(x.count)} 張` })))));
+        $('#bCount').textContent = q ? `${list.length} / ${src.sets.length}` : '';
+      } else {
+        const opened = items.length && items[0].coll === src ? items[current] : null;
+        const list = src.photos.map((p, i) => [p, i]).filter(([p]) => !q || p.title.toLowerCase().includes(q) || (p.owner || '').toLowerCase().includes(q));
+        grid.className = 'b-grid photos';
+        fill(grid, ...list.map(([p, i]) => {
+          const small = (p.sizes || []).find((x) => x.s === 'n');
+          return el('li', {}, el('button', { type: 'button', class: `b-photo${opened && opened.fk.id === p.id ? ' on' : ''}`, title: p.title, onclick: () => openColl(i) },
+            el('img', { src: small ? small.src : p.thumb, alt: '', loading: 'lazy' }),
+            el('span', { class: 'b-cap', text: p.title || ' ' })));
+        }));
+        $('#bCount').textContent = q ? `${list.length} / ${src.photos.length}${src.page < src.pages ? '（已載入的）' : ''}` : '';
+      }
+      if (!keep) $('#bScroll').scrollTop = 0;
+      const on = $('.b-photo.on', grid);
+      if (on && !keep) on.scrollIntoView({ block: 'center' });
+    }
+    renderMore();
+  }
+  function renderMore() {
+    const src = level === 'sets' ? shelf : coll;
+    const box = $('#bMore');
+    if (!src || src.page >= src.pages) { fill(box); return; }
+    const loaded = level === 'sets' ? src.sets.length : src.photos.length;
+    fill(box, paging ? el('span', { class: 'b-loading' }, el('span', { class: 'spinner' }), ' 載入中…')
+      : el('button', { type: 'button', class: 'btn small', onclick: () => more(src), text: `再載入（已載入 ${loaded.toLocaleString('zh-TW')} / ${src.total.toLocaleString('zh-TW')}）` }));
+  }
+  // scrolled to the end: the next page by itself
+  new IntersectionObserver((es) => { if (es.some((e) => e.isIntersecting) && view === 'browse') more(level === 'sets' ? shelf : coll); }, { rootMargin: '600px' }).observe($('#bMore'));
+  let filterTimer;
+  $('#bFilter').addEventListener('input', () => { clearTimeout(filterTimer); filterTimer = setTimeout(() => renderBrowse(), 120); });
+  async function openSet(x) {
+    if (asking) return;
+    asking = true;
+    toast(`正在打開「${x.title}」…`, 20000);
+    try {
+      coll = await fkGet({ list: x.kind, id: x.id });
+      $('#toast').hidden = true;
+      showBrowse('photos');
+    } catch (e) { toast(fkMsg(e)); }
+    asking = false;
+  }
+
+  // ---------- where you are: the Flickr lists up top ----------
+  function renderCrumbs() {
+    const nav = $('#crumbs');
+    const inColl = view === 'one' && cur() && cur().coll;
+    const parts = [];
+    if (shelf) parts.push(view === 'browse' && level === 'sets' ? el('b', { text: shelf.title }) : el('button', { type: 'button', onclick: () => showBrowse('sets'), text: shelf.title }));
+    if (coll) parts.push(view === 'browse' && level === 'photos' ? el('b', { text: coll.title || KIND_WORD[coll.kind] }) : el('button', { type: 'button', onclick: () => showBrowse('photos'), text: `${coll.title || KIND_WORD[coll.kind]}` }));
+    if (inColl && coll === cur().coll) parts.push(el('span', { class: 'cr-n', text: `${current + 1} / ${coll.total.toLocaleString('zh-TW')}` }));
+    nav.hidden = !parts.length;
+    fill(nav, el('span', { class: 'flk-dots', 'aria-hidden': 'true' }, el('i'), el('i')),
+      ...parts.flatMap((x, i) => (i ? [el('span', { class: 'cr-sep', 'aria-hidden': 'true', text: '›' }), x] : [x])));
+  }
+
+  // ---------- the two views ----------
   function setView(v) {
-    view = v === 'set' && items.length >= 2 ? 'set' : 'one';
+    view = v === 'browse' && (coll || shelf) ? 'browse' : 'one';
+    if (view === 'one' && !items.length) { if (coll || shelf) view = 'browse'; else { reset(); return; } }
+    $('#start').hidden = true;
     $('#viewer').hidden = view !== 'one';
-    $('#summary').hidden = view !== 'set';
-    tip.hidden = true;
-    showModes();
+    $('#browse').hidden = view !== 'browse';
+    closePop();
+    renderCrumbs();
     if (view === 'one') {
       renderThumbs();
       renderInfo();
       drawStage();
       want(cur());
-    } else {
-      renderSummary();
-      if (WEBKIT) pumpLookHere();
-    }
+    } else renderBrowse();
   }
-  for (const b of $$('#modes button')) b.addEventListener('click', () => setView(b.dataset.mode));
+
+  // ---------- the Flickr box: on the start page; in a little panel from 加照片's neighbour, the grid and the top ----------
+  const pop = $('#flkPop');
+  function openPop(from) {
+    pop.hidden = false;
+    $('#flkPopMsg').textContent = '';
+    const r = from.getBoundingClientRect();
+    pop.style.top = `${Math.round(Math.min(window.innerHeight - 120, r.bottom + 8))}px`;
+    pop.style.left = `${Math.round(Math.max(8, Math.min(window.innerWidth - pop.offsetWidth - 8, r.left)))}px`;
+    $('#flkPopUrl').focus();
+  }
+  function closePop() { pop.hidden = true; }
+  const sayIn = (node) => (msg, bad = false) => { fill(node, ...(msg == null ? [] : [].concat(msg))); node.classList.toggle('bad', !!bad); };
+  $('#flkForm').addEventListener('submit', (e) => { e.preventDefault(); const u = $('#flkUrl').value.trim(); if (u) openFlickr(u, sayIn($('#flkMsg'))); });
+  pop.addEventListener('submit', (e) => { e.preventDefault(); const u = $('#flkPopUrl').value.trim(); if (u) openFlickr(u, sayIn($('#flkPopMsg'))); });
+  $('#flkPopClose').addEventListener('click', closePop);
+  for (const id of ['#flkAdd', '#bNew']) $(id).addEventListener('click', (e) => { e.stopPropagation(); if (pop.hidden) openPop(e.currentTarget); else closePop(); });
+  document.addEventListener('pointerdown', (e) => { if (!pop.hidden && !pop.contains(e.target) && !e.target.closest('#flkAdd, #bNew')) closePop(); });
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !pop.hidden) { e.stopImmediatePropagation(); closePop(); } }, true);
+  // a Flickr link pasted anywhere (not into a box) opens
+  document.addEventListener('paste', (e) => {
+    if (!fkReady || (e.target.closest && e.target.closest('input, textarea'))) return;
+    const t = (e.clipboardData && e.clipboardData.getData('text')) || '';
+    const m = t.match(FK_URL);
+    if (!m) return;
+    e.preventDefault();
+    if ($('#start').hidden) openFlickr(m[0], (msg, bad) => { if (msg == null) $('#toast').hidden = true; else toast(typeof msg === 'string' ? msg : '正在向 Flickr 查詢…', bad ? 6000 : 20000); });
+    else { $('#flkUrl').value = m[0]; openFlickr(m[0], sayIn($('#flkMsg'))); }
+  });
+  // the box shows only with a Flickr key (flickr.json); /exif?flickr=<link> opens one
+  if (self.ZFlickr) {
+    ZFlickr.ready.then((ok) => {
+      fkReady = ok;
+      document.documentElement.classList.toggle('fk-on', fkReady);
+      const link = new URLSearchParams(location.search).get('flickr');
+      if (fkReady && link) { $('#flkUrl').value = link; openFlickr(link, sayIn($('#flkMsg'))); }
+    });
+  }
 
   // ---------- input ----------
   $('#fileInput').addEventListener('change', (e) => { add(e.target.files); e.target.value = ''; });
@@ -2343,7 +2049,7 @@
     if ((e.target.closest && e.target.closest('input, textarea, select')) || e.altKey || e.ctrlKey || e.metaKey) return;
     const full = !$('#full').hidden;
     if (e.key === 'Escape' && full) { if (fullLoupe.zoomed) fullLoupe.fit(); else closeFull(); return; }
-    if (view !== 'one') return;
+    if (view !== 'one' || !items.length) return;
     const L = full ? fullLoupe : stageLoupe;
     if (e.key === 'z' || e.key === 'Z' || (e.key === ' ' && !e.target.closest('button'))) { e.preventDefault(); L.toggle(); return; }
     if (e.key === 'f' || e.key === 'F') { if (full) closeFull(); else openFull(); return; }
