@@ -26,11 +26,26 @@
     try { if (location.pathname === '/photo' || (location.pathname === '/' && localStorage.getItem('zt-world') === 'photo')) w = 'photo'; } catch (e) {}
     document.documentElement.dataset.world = w;
     // a big screen at 100 % gets the page larger (home.js keeps this up to date)
-    document.documentElement.style.setProperty('--z', Math.max(1, Math.min(innerWidth / 1500, innerHeight / 880, 1.8)).toFixed(3));
+    document.documentElement.style.setProperty('--z', (matchMedia('(horizontal-viewport-segments: 2)').matches ? 1 : Math.max(1, Math.min(innerWidth / 1500, innerHeight / 880, 2.2))).toFixed(3));
   })();
 </script>
 </head>
 <body>
+<svg class="defs" width="0" height="0" aria-hidden="true" focusable="false">
+  <defs>
+    <linearGradient id="ph-sky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#6b5236"/><stop offset=".6" stop-color="#3a2d21"/><stop offset="1" stop-color="#1c1713"/></linearGradient>
+    <clipPath id="ph-round"><rect width="100" height="75" rx="7"/></clipPath>
+    <!-- a photo from an event: someone in front of stage lights -->
+    <symbol id="ph-shot" viewBox="0 0 100 75">
+      <g clip-path="url(#ph-round)">
+        <rect width="100" height="75" fill="url(#ph-sky)"/>
+        <circle cx="18" cy="16" r="10" fill="#f0a43a" opacity=".35"/><circle cx="84" cy="12" r="7" fill="#f1ede6" opacity=".18"/><circle cx="70" cy="27" r="5" fill="#f0a43a" opacity=".28"/><circle cx="34" cy="30" r="4" fill="#f1ede6" opacity=".14"/>
+        <circle cx="52" cy="35" r="11.5" fill="#e3d6c3"/>
+        <path d="M28 75c2.5-15 12-23 24-23s21.5 8 24 23z" fill="#e3d6c3"/>
+      </g>
+    </symbol>
+  </defs>
+</svg>
 <div class="app">
   <header class="top">
     <a class="brand" id="brand" href="/" data-local="index.html"><img src="assets/logo.svg" alt="" width="40" height="40"><span class="brand-text"><span class="wordmark">ZhuyuanTools</span><span class="tagline">小小ㄉ工具箱</span></span></a>
@@ -38,11 +53,11 @@
       <span class="switch-thumb" aria-hidden="true"></span>
       <button type="button" role="tab" id="tabDaily" data-world="daily" aria-controls="daily">
         <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3.5" y="3.5" width="7" height="7" rx="1.8"/><rect x="13.5" y="3.5" width="7" height="7" rx="1.8"/><rect x="3.5" y="13.5" width="7" height="7" rx="1.8"/><rect x="13.5" y="13.5" width="7" height="7" rx="1.8"/></svg>
-        <span>日常</span>
+        <span>日常</span><small class="sw-n">5</small>
       </button>
       <button type="button" role="tab" id="tabPhoto" data-world="photo" aria-controls="photo">
         <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 8.5A2.5 2.5 0 0 1 6.5 6h1.6l1.4-2h5l1.4 2h1.6A2.5 2.5 0 0 1 20 8.5v8a2.5 2.5 0 0 1-2.5 2.5h-11A2.5 2.5 0 0 1 4 16.5z"/><circle cx="12" cy="12.4" r="3.6"/></svg>
-        <span>拍攝</span>
+        <span>拍攝</span><small class="sw-n">4</small>
       </button>
     </div>
   </header>
@@ -52,15 +67,15 @@
     <section class="world" id="daily" role="tabpanel" aria-labelledby="tabDaily">
       <div class="lead">
         <div class="lead-text">
-          <h1 class="in" style="--i:0"><span>工具在這裡，</span><span class="soft">檔案留在你的電腦。</span></h1>
+          <h1 class="in" style="--i:0"><span>工具在這裡，</span><span class="soft">檔案留在你的<span class="on-pc">電腦</span><span class="on-pad">平板</span><span class="on-phone">手機</span>。</span></h1>
           <p class="sub in" style="--i:1"><span>影片、PDF、頭貼，</span><span>全在你的瀏覽器處理，不會上傳</span></p>
-          <p class="nums in" style="--i:2">已處理 <b data-stat="video.files">0</b> 部影片・<b data-stat="pdf.files">0</b> 份 PDF・<b data-stat="avatar.files">0</b> 個頭貼</p>
+          <p class="nums in" style="--i:2" hidden>已處理 <span class="n-c"><b data-stat="video.files">0</b> 部影片</span><span class="n-c"><b data-stat="pdf.files">0</b> 份 PDF</span><span class="n-c"><b data-stat="avatar.files">0</b> 個頭貼</span></p>
         </div>
         <div class="drop in" style="--i:1" id="drop" data-zone="daily" role="button" tabindex="0" aria-label="選擇影片或 PDF，會帶你到對的工具">
-          <span class="stack" aria-hidden="true"><img src="assets/tool-video.svg" alt=""><img src="assets/tool-pdf.svg" alt=""><img src="assets/tool-avatar.svg" alt=""></span>
+          <span class="stack" aria-hidden="true"><img src="assets/tool-video.svg" alt=""><img src="assets/tool-pdf.svg" alt=""></span>
           <b class="drop-title"><span class="d-desk">把影片或 PDF 拖進這裡</span><span class="d-mob">選擇影片或 PDF</span></b>
-          <span class="drop-hint"><span class="d-desk">會帶你到對的工具・也可以直接拖到下面的工具上</span><span class="d-mob">會帶你到對的工具</span></span>
-          <span class="drop-formats">MP4・MOV・MTS・PDF・照片會轉到「拍攝」</span>
+          <span class="drop-hint"><span class="d-desk">會帶你到對的工具・也可以直接拖到工具卡上</span><span class="d-mob">會帶你到對的工具</span></span>
+          <span class="drop-formats">MP4・MOV・MTS・PDF<i class="sep">｜</i>照片會轉到「拍攝」</span>
         </div>
       </div>
 
@@ -142,29 +157,29 @@
       <div class="lead">
         <div class="lead-text">
           <h1 class="in" style="--i:0"><span>拍完照，</span><span class="soft">剩下的交給這裡。</span></h1>
-          <p class="sub in" style="--i:1"><span>挑照片、改檔名、壓縮、看參數，</span><span>照片都不會離開你的電腦</span></p>
-          <p class="nums in" style="--i:2">已處理 <b data-stat="photo.files">0</b> 張照片</p>
+          <p class="sub in" style="--i:1"><span>挑照片、改檔名、壓縮、看參數，</span><span>照片都不會離開你的<span class="on-pc">電腦</span><span class="on-pad">平板</span><span class="on-phone">手機</span></span></p>
+          <p class="nums in" style="--i:2" hidden>已處理 <span class="n-c"><b data-stat="photo.files">0</b> 張照片</span></p>
         </div>
         <div class="vf in" style="--i:1" id="vf" data-zone="photo" role="button" tabindex="0" aria-label="選擇照片，再選要做什麼">
           <span class="vf-c tl" aria-hidden="true"></span><span class="vf-c tr" aria-hidden="true"></span><span class="vf-c bl" aria-hidden="true"></span><span class="vf-c br" aria-hidden="true"></span>
           <span class="vf-af" aria-hidden="true"></span>
-          <span class="vf-read" aria-hidden="true"><span>1/250</span><span>F2.8</span><span>ISO 400</span><i class="vf-dot"></i></span>
+          <span class="vf-read" aria-hidden="true"><span>JPG</span><span>HEIC</span><span>RAW</span><span>ZIP</span><i class="vf-dot"></i></span>
           <b class="vf-title"><span class="d-desk">把照片拖進觀景窗</span><span class="d-mob">選擇照片</span></b>
-          <span class="vf-hint"><span class="d-desk">或點一下選照片・</span>ZIP、整個資料夾也可以</span>
+          <span class="vf-hint"><span class="d-desk">或點一下選照片・ZIP、整個資料夾也可以</span><span class="d-mob">一次選很多張・ZIP 也可以</span></span>
         </div>
       </div>
 
       <div class="film">
-        <p class="film-edge in" style="--i:2" aria-hidden="true"><span>ZHUYUAN 400</span><span>挑 → 改名 → 壓縮・參數隨時看</span></p>
+        <p class="film-edge in" style="--i:2" aria-hidden="true"><span>ZHUYUAN 400</span></p>
         <nav class="strip" aria-label="拍攝工具">
           <a class="frame pick in" style="--i:3" href="/pick" data-local="../picktools/index.html" data-tool="pick">
             <img class="ico" src="/pick/assets/logo.svg" alt="" width="40" height="40">
             <span class="f-no">01</span>
             <span class="f-art" aria-hidden="true">
               <svg viewBox="0 0 300 150">
-                <g class="f-dim"><rect x="8" y="42" width="78" height="58" rx="7" class="f-ph"/><path d="M18 92l18-20 12 12 8-8 22 16z" class="f-hill"/><path d="M37 60l20 20M57 60l-20 20" class="f-x"/></g>
-                <g><rect x="102" y="22" width="98" height="74" rx="8" class="f-ph f-hi"/><circle cx="124" cy="42" r="7" class="f-sun"/><path d="M110 88l24-26 16 16 11-11 31 21z" class="f-hill f-hi"/><circle cx="198" cy="24" r="14" class="f-ok-bg"/><path d="M191.5 24.5l4.5 4.5 8-9" class="f-ok"/></g>
-                <g class="f-dim"><rect x="214" y="42" width="78" height="58" rx="7" class="f-ph"/><path d="M224 92l18-20 12 12 8-8 22 16z" class="f-hill"/><path d="M243 60l20 20M263 60l-20 20" class="f-x"/></g>
+                <g class="f-dim"><svg x="8" y="42" width="78" height="58" viewBox="0 0 100 75"><use href="#ph-shot"/></svg><rect x="8" y="42" width="78" height="58" rx="6" class="f-edge"/><path d="M37 61l20 20M57 61l-20 20" class="f-x"/></g>
+                <g><svg x="102" y="20" width="98" height="74" viewBox="0 0 100 75"><use href="#ph-shot"/></svg><rect x="102" y="20" width="98" height="74" rx="7" class="f-edge f-hi"/><circle cx="198" cy="22" r="14" class="f-ok-bg"/><path d="M191.5 22.5l4.5 4.5 8-9" class="f-ok"/></g>
+                <g class="f-dim"><svg x="214" y="42" width="78" height="58" viewBox="0 0 100 75"><use href="#ph-shot"/></svg><rect x="214" y="42" width="78" height="58" rx="6" class="f-edge"/><path d="M243 61l20 20M263 61l-20 20" class="f-x"/></g>
                 <text x="150" y="134" class="f-cap"><tspan class="f-acc">P</tspan> 留　<tspan class="f-acc">X</tspan> 不要</text>
               </svg>
             </span>
@@ -175,21 +190,21 @@
             <span class="f-no">02</span>
             <span class="f-art" aria-hidden="true">
               <svg viewBox="0 0 300 150">
-                <g class="f-dim"><rect x="8" y="18" width="118" height="30" rx="8" class="f-tag"/><text x="67" y="38" class="f-file">IMG_4678.CR3</text><rect x="8" y="58" width="118" height="30" rx="8" class="f-tag"/><text x="67" y="78" class="f-file">IMG_4679.CR3</text><rect x="8" y="98" width="118" height="30" rx="8" class="f-tag"/><text x="67" y="118" class="f-file">IMG_4680.CR3</text></g>
+                <g class="f-dim"><rect x="8" y="18" width="118" height="30" rx="8" class="f-tag"/><path class="f-bar" d="M29 33H105"/><text x="67" y="38" class="f-file">IMG_4678.CR3</text><rect x="8" y="58" width="118" height="30" rx="8" class="f-tag"/><path class="f-bar" d="M29 73H105"/><text x="67" y="78" class="f-file">IMG_4679.CR3</text><rect x="8" y="98" width="118" height="30" rx="8" class="f-tag"/><path class="f-bar" d="M29 113H105"/><text x="67" y="118" class="f-file">IMG_4680.CR3</text></g>
                 <g class="f-arrow"><path d="M138 73h26"/><path d="M156 64l9 9-9 9"/></g>
-                <g><rect x="176" y="18" width="116" height="30" rx="8" class="f-tag f-hi"/><text x="234" y="38" class="f-file f-on"><tspan class="f-acc">竺原</tspan>-4678</text><rect x="176" y="58" width="116" height="30" rx="8" class="f-tag f-hi"/><text x="234" y="78" class="f-file f-on"><tspan class="f-acc">竺原</tspan>-4679</text><rect x="176" y="98" width="116" height="30" rx="8" class="f-tag f-hi"/><text x="234" y="118" class="f-file f-on"><tspan class="f-acc">竺原</tspan>-4680</text></g>
+                <g><rect x="176" y="18" width="116" height="30" rx="8" class="f-tag f-hi"/><path class="f-bar f-on" d="M197 33H271"/><text x="234" y="38" class="f-file f-on"><tspan class="f-acc">竺原</tspan>-4678</text><rect x="176" y="58" width="116" height="30" rx="8" class="f-tag f-hi"/><path class="f-bar f-on" d="M197 73H271"/><text x="234" y="78" class="f-file f-on"><tspan class="f-acc">竺原</tspan>-4679</text><rect x="176" y="98" width="116" height="30" rx="8" class="f-tag f-hi"/><path class="f-bar f-on" d="M197 113H271"/><text x="234" y="118" class="f-file f-on"><tspan class="f-acc">竺原</tspan>-4680</text></g>
               </svg>
             </span>
-            <span class="f-text"><b class="f-name">照片批次改檔名</b><span class="f-desc">IMG_4678 → 竺原-4678</span></span>
+            <span class="f-text"><b class="f-name">照片批次改檔名</b><span class="f-desc">整批改名，RAW 和 JPG 一起</span></span>
           </a>
           <a class="frame image in" style="--i:5" href="/image" data-local="../imagetools/index.html" data-tool="image">
             <img class="ico" src="/image/assets/logo.svg" alt="" width="40" height="40">
             <span class="f-no">03</span>
             <span class="f-art" aria-hidden="true">
               <svg viewBox="0 0 300 150">
-                <g class="f-dim"><rect x="8" y="10" width="124" height="94" rx="10" class="f-ph"/><circle cx="36" cy="36" r="9" class="f-sun"/><path d="M18 96l34-38 22 22 16-16 34 32z" class="f-hill"/><text x="70" y="134" class="f-size">13 MB</text></g>
-                <g class="f-arrow"><path d="M142 62h28"/><path d="M162 53l9 9-9 9"/></g>
-                <g><rect x="188" y="26" width="96" height="72" rx="9" class="f-ph f-hi"/><circle cx="208" cy="44" r="7" class="f-sun"/><path d="M196 92l24-27 16 16 11-11 29 22z" class="f-hill f-hi"/><circle cx="282" cy="28" r="14" class="f-ok-bg"/><path d="M275.5 28.5l4.5 4.5 8-9" class="f-ok"/><text x="236" y="134" class="f-size f-acc">9.8 MB</text></g>
+                <g class="f-dim"><svg x="8" y="10" width="124" height="93" viewBox="0 0 100 75"><use href="#ph-shot"/></svg><rect x="8" y="10" width="124" height="93" rx="9" class="f-edge"/><text x="70" y="134" class="f-size">13 MB</text></g>
+                <g class="f-arrow"><path d="M142 58h28"/><path d="M162 49l9 9-9 9"/></g>
+                <g><svg x="188" y="22" width="96" height="72" viewBox="0 0 100 75"><use href="#ph-shot"/></svg><rect x="188" y="22" width="96" height="72" rx="8" class="f-edge f-hi"/><circle cx="282" cy="24" r="14" class="f-ok-bg"/><path d="M275.5 24.5l4.5 4.5 8-9" class="f-ok"/><text x="236" y="134" class="f-size f-acc">9.8 MB</text></g>
               </svg>
             </span>
             <span class="f-text"><b class="f-name">圖片壓縮</b><span class="f-desc">照片太大？壓到上限內</span></span>
@@ -199,8 +214,8 @@
             <span class="f-no">04</span>
             <span class="f-art" aria-hidden="true">
               <svg viewBox="0 0 300 150">
-                <g><circle cx="70" cy="72" r="58" class="f-ring"/><circle cx="70" cy="72" r="42" class="f-ring2"/><path d="M70 30l17 30M112 72l-33 3M91 108l-15-29M49 108l16-30M28 72h34M49 36l16 29" class="f-blade"/><circle cx="70" cy="72" r="10" class="f-iris"/></g>
-                <g><rect x="148" y="16" width="66" height="32" rx="8" class="f-tag f-hi"/><text x="181" y="37" class="f-read f-on">f/2.8</text><rect x="222" y="16" width="70" height="32" rx="8" class="f-tag f-hi"/><text x="257" y="37" class="f-read f-on">1/250</text><rect x="148" y="56" width="82" height="32" rx="8" class="f-tag f-hi"/><text x="189" y="77" class="f-read f-on">ISO 400</text><rect x="238" y="56" width="54" height="32" rx="8" class="f-tag f-hi"/><text x="265" y="77" class="f-read f-on">85mm</text><rect x="148" y="96" width="144" height="32" rx="8" class="f-tag"/><text x="220" y="117" class="f-read">Canon EOS R6</text></g>
+                <g><circle cx="70" cy="72" r="60" class="f-ring"/><circle cx="70" cy="72" r="52" class="f-ring2"/><path d="M70.0 55.0L84.7 63.5L84.7 80.5L70.0 89.0L55.3 80.5L55.3 63.5z" class="f-iris"/><path d="M70.0 55.0L120.6 84.2 M84.7 63.5L84.7 121.9 M84.7 80.5L34.2 109.7 M70.0 89.0L19.4 59.8 M55.3 80.5L55.3 22.1 M55.3 63.5L105.8 34.3" class="f-blade"/></g>
+                <g><rect x="148" y="16" width="66" height="32" rx="8" class="f-tag f-hi"/><path class="f-bar f-on" d="M160 32H202"/><text x="181" y="37" class="f-read f-on">f/2.8</text><rect x="222" y="16" width="70" height="32" rx="8" class="f-tag f-hi"/><path class="f-bar f-on" d="M235 32H279"/><text x="257" y="37" class="f-read f-on">1/250</text><rect x="148" y="56" width="82" height="32" rx="8" class="f-tag f-hi"/><path class="f-bar f-on" d="M163 72H215"/><text x="189" y="77" class="f-read f-on">ISO 400</text><rect x="238" y="56" width="54" height="32" rx="8" class="f-tag f-hi"/><path class="f-bar f-on" d="M248 72H282"/><text x="265" y="77" class="f-read f-on">85mm</text><rect x="148" y="96" width="144" height="32" rx="8" class="f-tag"/><path class="f-bar" d="M174 112H266"/><text x="220" y="117" class="f-read">Canon EOS R6</text></g>
               </svg>
             </span>
             <span class="f-text"><b class="f-name">照片參數查看</b><span class="f-desc">焦距、光圈、快門一次看</span></span>

@@ -24,8 +24,9 @@
 
   // ---------- big screens: the same page, larger ----------
   // Laid out for about 1500 × 880; a 2K or 4K screen at 100 % gets it scaled up (CSS zoom), as far as its height allows.
+  // Not across two screens: the hinge's position (env()) isn't zoomed.
   function fitZoom() {
-    const z = Math.max(1, Math.min(innerWidth / 1500, innerHeight / 880, 1.8));
+    const z = matchMedia('(horizontal-viewport-segments: 2)').matches ? 1 : Math.max(1, Math.min(innerWidth / 1500, innerHeight / 880, 2.2));
     root.style.setProperty('--z', z.toFixed(3));
   }
   fitZoom();
@@ -177,11 +178,19 @@
       .then((r) => (r.ok ? r.json() : null))
       .then((st) => {
         const f = (k) => ((st && st[k]) || {}).files || 0;
-        const set = (key, n) => { for (const node of $$(`[data-stat="${key}"]`)) countUp(node, n); };
+        // a count of 0 isn't shown (「0 部影片」 says nothing); a line with nothing left stays hidden
+        const set = (key, n) => {
+          for (const node of $$(`[data-stat="${key}"]`)) {
+            const part = node.closest('.n-c');
+            if (part) part.hidden = !n;
+            if (n) countUp(node, n);
+          }
+        };
         set('video.files', f('video'));
         set('pdf.files', f('pdf') + f('watermark'));      // compressed + watermarked
         set('avatar.files', f('avatar') + f('crop'));     // looked up + cropped
         set('photo.files', f('image') + f('exif') + f('pick'));   // compressed + read + picked
+        for (const p of $$('.nums')) p.hidden = !$$('.n-c:not([hidden])', p).length;
       })
       .catch(() => {});
   }
