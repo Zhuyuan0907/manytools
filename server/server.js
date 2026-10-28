@@ -62,6 +62,7 @@ const LEGACY = [
   [/^\/exiftools(\/(index\.html)?)?$/, '/exif'],
   [/^\/renametools(\/(index\.html)?)?$/, '/rename'],
   [/^\/picktools(\/(index\.html)?)?$/, '/pick'],
+  [/^\/photo\/$/, '/photo'],
 ];
 
 const FIELDS = { video: ['files', 'seconds', 'savedBytes'], pdf: ['files', 'pages', 'savedBytes'], avatar: ['files'], image: ['files', 'savedBytes'], crop: ['files'], watermark: ['files'], exif: ['files'], rename: ['files'], pick: ['files'] };
@@ -143,7 +144,17 @@ function versioned(html, pageDir) {
   });
 }
 
-function serveFile(req, res, file, base, immutable) {
+// the 拍攝 side of the home page, shared as a link: its own title, words and picture
+const PHOTO_DESC = '拍完照，剩下的交給這裡：照片挑選、批次改檔名、圖片壓縮、參數查看。照片只在你的電腦裡處理，不會上傳。';
+const photoSide = (html) => html
+  .replace(/<title>[^<]*<\/title>/, '<title>ZhuyuanTools・拍攝</title>')
+  .replace(/(<meta property="og:title" content=")[^"]*/, '$1ZhuyuanTools・拍攝')
+  .replace(/(<meta (?:name="description"|property="og:description") content=")[^"]*/g, `$1${PHOTO_DESC}`)
+  .replace(/(<meta property="og:url" content=")[^"]*/, '$1https://tools.zhuyuan.tw/photo')
+  .replace(/(<meta property="og:image" content=")[^"]*/, '$1https://tools.zhuyuan.tw/assets/og-photo.png')
+  .replace(/(<meta name="theme-color" content=")[^"]*/, '$1#121110');
+
+function serveFile(req, res, file, base, immutable, edit) {
   fs.stat(file, (err, st) => {
     if (err || !st.isFile()) return send(res, 404, 'not found', 'text/plain; charset=utf-8');
     const type = TYPES[path.extname(file).toLowerCase()] || 'application/octet-stream';
@@ -153,6 +164,7 @@ function serveFile(req, res, file, base, immutable) {
         if (e) return send(res, 500, 'error', 'text/plain');
         // a tool's own index.html, served at /video: point its relative paths into /video/
         if (base) html = html.replace(/<head>/i, `<head>\n<base href="${base}">`);
+        if (edit) html = edit(html);
         const out = Buffer.from(versioned(html, path.dirname(file)));
         res.writeHead(200, { ...head, 'Content-Length': out.length });
         res.end(req.method === 'HEAD' ? undefined : out);
@@ -169,7 +181,7 @@ function route(req, res, url) {
   try { p = decodeURIComponent(url); } catch { return send(res, 400, 'bad path', 'text/plain'); }
   for (const [re, to] of LEGACY) if (re.test(p)) return redirect(res, to);
   // the home page's 拍攝 side has its own address
-  if (p === '/photo') return serveFile(req, res, path.join(ROOT, 'home', 'index.html'));
+  if (p === '/photo') return serveFile(req, res, path.join(ROOT, 'home', 'index.html'), null, false, photoSide);
   for (const { route: r, dir, tool, immutable } of MOUNTS) {
     if (tool) {
       if (p === r) return serveFile(req, res, path.join(dir, 'index.html'), `${r}/`);
