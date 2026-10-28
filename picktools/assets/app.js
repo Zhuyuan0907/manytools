@@ -1,7 +1,8 @@
 /* ZhuyuanLovePick — culling thousands of photos in the browser: what a photo team gets from Google Drive, picked by
-   keyboard. Three steps: 1 ZIPs (Drive's download, as it is), folders or photos in → 2 one photo at a time, P 留,
-   X 不要, ← →, Z for 100 % (it stays on while you go through a burst), G for a grid → 3 the kept ones saved into a
-   folder (Chrome, Edge) or a ZIP, one photo as itself.
+   keyboard. Three steps: 1 ZIPs (Drive's download, as it is), folders or photos in → 2 one photo at a time, the way
+   Lightroom Classic's Library does it: P 留用, X 排除, U takes the flag off, ← →, Z for 100 % (it stays on while you
+   go through a burst), G for a grid, I for the photo's details in the corner → 3 the kept ones saved into a folder
+   (Chrome, Edge) or a ZIP, one photo as itself.
    A ZIP is read where it lies: its directory, then each photo's first part for the time, camera and the little
    thumbnail the camera put in it. A photo is unpacked only to be shown or saved. Photos are sorted by when they were
    taken, everyone's together. The marks are kept in this browser (IndexedDB) by name and size, so the same photos
@@ -112,8 +113,9 @@
 
   // ---------- the photos ----------
   // it: { key, name, path, dir, size, mod, src (its source), file | z, heic, t (when taken, wall clock as UTC ms),
-  //       when (text), cam, exp, orient, w, h (as shown), thumb (Blob | null: none in the file | undefined: not read),
-  //       turn (the thumbnail still needs the photo's orientation), n (place in the sorted list) }
+  //       when (text), cam, lens, ss, fn, iso, fl (the exposure, as text), orient, w, h (as shown),
+  //       thumb (Blob | null: none in the file | undefined: not read), turn (the thumbnail still needs the photo's
+  //       orientation), n (place in the sorted list) }
   let items = [];
   const byKey = new Map();
   let sources = [];   // { id, name, kind: 'zip' | 'folder' | 'files', n }
@@ -132,7 +134,7 @@
     if (!PHOTO.test(name)) { if (RAW.test(name)) skipped.raw++; else if (!/^(thumbs\.db|desktop\.ini|\.ds_store)$/i.test(name)) skipped.other++; return; }
     const key = keyOf(name, size);
     if (byKey.has(key) || found.has(key)) { skipped.same++; return; }
-    found.set(key, { key, name, path, dir: '', size, mod, src, file: file || null, z: z || null, heic: HEIC.test(name), t: null, when: '', cam: '', exp: '', orient: 1, w: 0, h: 0, thumb: undefined, turn: 1, n: 0 });
+    found.set(key, { key, name, path, dir: '', size, mod, src, file: file || null, z: z || null, heic: HEIC.test(name), t: null, when: '', cam: '', lens: '', ss: '', fn: '', iso: '', fl: '', orient: 1, w: 0, h: 0, thumb: undefined, turn: 1, n: 0 });
   }
   // a dropped folder, walked
   function walk(entry, found, src) {
@@ -296,12 +298,14 @@
       it.when = `${d.getMonth() + 1}/${d.getDate()} ${pad2(d.getHours())}:${pad2(d.getMinutes())}:${pad2(d.getSeconds())}（檔案時間）`;
     }
     it.cam = String(valOf(m.Model) || '').replace(/\s+/g, ' ').trim();
-    const ex = [];
-    if (m.ExposureTime) ex.push(`${String(m.ExposureTime.val).replace(/ ?s$/, '')}s`);
-    if (m.FNumber) ex.push(`f/${m.FNumber.val}`);
-    if (m.ISO) ex.push(`ISO ${valOf(m.ISO)}`);
-    if (m.FocalLength) ex.push(String(m.FocalLength.val).replace(/\.0 mm$/, ' mm'));
-    it.exp = ex.join('・');
+    it.lens = String(valOf(m.LensModel) || valOf(m.Lens) || '').replace(/\s+/g, ' ').trim();
+    // as Lightroom writes them: 1/250 秒 (ƒ / 4.0)，ISO 2500 / 85 mm
+    if (m.ExposureTime) it.ss = String(m.ExposureTime.val).replace(/ ?s$/, '');
+    const fn = m.FNumber ? +valOf(m.FNumber) : 0;
+    if (fn > 0) it.fn = fn >= 10 ? String(Math.round(fn)) : fn.toFixed(1);
+    if (m.ISO) it.iso = String(valOf(m.ISO));
+    const fl = m.FocalLength ? +valOf(m.FocalLength) : 0;
+    if (fl > 0) it.fl = `${+fl.toFixed(1)} mm`;
     it.orient = clamp(+valOf(m.Orientation) || 1, 1, 8);
     const w = +valOf(m.ExifImageWidth) || +valOf(m.ImageWidth) || 0, h = +valOf(m.ExifImageHeight) || +valOf(m.ImageHeight) || 0;
     if (w > 0 && h > 0) { const side = it.orient >= 5; it.w = side ? h : w; it.h = side ? w : h; }
@@ -329,7 +333,7 @@
   }
 
   // ---------- marks, kept in this browser ----------
-  const marks = new Map();   // key → 1 留 | -1 不要
+  const marks = new Map();   // key → 1 留用 | -1 排除
   const db = (() => {
     let p = null;
     const open = () => p || (p = new Promise((res, rej) => {
@@ -357,7 +361,7 @@
   let kept = true;
   const markReady = db.load().catch(() => { kept = false; });
   function save(list) {
-    db.put(list).catch(() => { if (kept) { kept = false; toast('這個瀏覽器記不住標記（可能是無痕模式），關掉前記得存好', 6000); } });
+    db.put(list).catch(() => { if (kept) { kept = false; toast('這個瀏覽器記不住旗標（可能是無痕模式），關掉前記得存好', 6000); } });
   }
   const flagOf = (it) => marks.get(it.key) || 0;
 
@@ -372,7 +376,7 @@
       for (const c of ch) if (c.to) marks.set(c.it.key, c.to); else marks.delete(c.it.key);
       save(ch.map((c) => [c.it.key, c.to]));
     }
-    flash(f);
+    flash(f, list.length);
     if (advance && list.length === 1) {
       if (pos < view.length - 1 || !matches(view[pos])) go(1);
       else toast('這是最後一張了');
@@ -396,9 +400,9 @@
 
   // ---------- what's shown: the filter, the folder, the order ----------
   const SAVED = 'zt-pick';
-  const S = { step: 1, filter: 'all', folder: '', sort: 'time', auto: true, grid: false, take: 'keep', lay: 'flat' };
-  try { const o = JSON.parse(localStorage.getItem(SAVED)) || {}; for (const k of ['sort', 'auto', 'lay']) if (k in o) S[k] = o[k]; } catch {}
-  const remember = () => { try { localStorage.setItem(SAVED, JSON.stringify({ sort: S.sort, auto: S.auto, lay: S.lay })); } catch {} };
+  const S = { step: 1, filter: 'all', folder: '', sort: 'time', auto: true, info: true, grid: false, take: 'keep', lay: 'flat' };
+  try { const o = JSON.parse(localStorage.getItem(SAVED)) || {}; for (const k of ['sort', 'auto', 'info', 'lay']) if (k in o) S[k] = o[k]; } catch {}
+  const remember = () => { try { localStorage.setItem(SAVED, JSON.stringify({ sort: S.sort, auto: S.auto, info: S.info, lay: S.lay })); } catch {} };
   let view = [];   // the photos shown, in order
   let pos = 0;
   const sel = new Set();   // the grid's selection (beside the current one)
@@ -483,13 +487,13 @@
       el('button', { type: 'button', class: 'icon-btn src-x', 'aria-label': `拿掉 ${s.name || '這些照片'}`, title: '拿掉', onclick: () => removeSource(s), text: '×' }))));
     const done = c.keep + c.drop;
     fill($('#srcSum'), '共 ', el('b', { text: num(n) }), ' 張照片', done ? el('span', {}, '・已經標了 ', el('b', { text: num(done) }), ' 張，會接著挑・') : null,
-      done ? el('button', { type: 'button', class: 'link-btn', onclick: clearMarks, text: '清掉這些照片的標記' }) : null);
+      done ? el('button', { type: 'button', class: 'link-btn', onclick: clearMarks, text: '清掉這些照片的旗標' }) : null);
     $('#drop .drop-title .d-desk').textContent = n ? '再加 ZIP 或資料夾：拖進這裡' : '把 ZIP 或資料夾拖進這裡';
     $('#note1').replaceChildren(...(!n ? ['還沒有放入照片。'] : ['共 ', el('b', { text: num(n) }), ` 張・${sources.length} 個來源`]));
     $('#next1').disabled = !allowed(2);
     $('#next1').textContent = done ? '接著挑 →' : '開始挑 →';
     renderFolders();
-    for (const r of $$('input[name="sort"]')) r.checked = r.value === S.sort;
+    $('#sort').value = S.sort;
   }
   function removeSource(s) {
     if (loading) return;
@@ -502,14 +506,14 @@
   }
   function clearMarks() {
     const c = counts();
-    if (!confirm(`清掉這 ${num(items.length)} 張照片的標記（留 ${num(c.keep)}、不要 ${num(c.drop)}）？`)) return;
+    if (!confirm(`清掉這 ${num(items.length)} 張照片的旗標（留用 ${num(c.keep)}、排除 ${num(c.drop)}）？`)) return;
     const ch = items.filter(flagOf).map((it) => ({ it, from: flagOf(it), to: 0 }));
     for (const x of ch) marks.delete(x.it.key);
     save(ch.map((x) => [x.it.key, 0]));
     undo.push({ ch, at: null });
     rebuildView(items[0]);
     renderStep1();
-    toast('標記清掉了（挑照片時按 ⌘Z 可以復原）');
+    toast('旗標清掉了（挑照片時按 ⌘Z 可以復原）');
   }
   const drop = $('#drop');
   const pickFiles = () => $('#fileInput').click();
@@ -678,7 +682,7 @@
     $('#stEmpty').hidden = !!it;
     if (!it) {
       frame.replaceChildren();
-      $('#stEmpty').textContent = !items.length ? '還沒有照片' : S.filter === 'none' ? '這裡的照片都決定好了' : '這裡沒有照片';
+      $('#stEmpty').textContent = !items.length ? '還沒有照片' : S.filter === 'none' ? '這裡的照片都標好了' : '這裡沒有照片';
       info(null);
       drawStrip(); drawGrid();
       return;
@@ -718,28 +722,40 @@
       }
     }, p.ok ? 60 : 160);
   }
+  // the photo's details in the top-left corner, as Lightroom's info overlay: name, exposure, lens, then when and whose
+  function details(it) {
+    const exp = [it.ss ? `${it.ss} 秒` : '', it.fn ? `(ƒ / ${it.fn})` : ''].filter(Boolean).join(' ');
+    return [
+      el('b', { text: it.name }),
+      exp || it.iso ? el('span', { text: [exp, it.iso ? `ISO ${it.iso}` : ''].filter(Boolean).join('，') }) : null,
+      it.fl || it.lens ? el('span', { text: it.fl && it.lens ? `${it.fl} (${it.lens})` : it.fl || it.lens }) : null,
+      el('span', { text: [it.when, it.cam, it.dir].filter(Boolean).join('・') }),
+    ];
+  }
   function info(it) {
     const f = it ? flagOf(it) : 0;
-    $('#stPos').textContent = it ? `${num(pos + 1)} / ${num(view.length)}` : '';
-    const fl = $('#stFlag');
-    fl.className = `st-flag${f === 1 ? ' is-keep' : f === -1 ? ' is-drop' : ''}`;
-    fl.textContent = f === 1 ? '✓ 留' : f === -1 ? '✕ 不要' : '';
-    stage.classList.toggle('is-drop', f === -1);
-    stage.classList.toggle('is-keep', f === 1);
-    $('#bKeep').classList.toggle('on', f === 1);
-    $('#bDrop').classList.toggle('on', f === -1);
-    $('#bKeep').disabled = $('#bDrop').disabled = !it;
-    if (!it) { fill($('#info')); return; }
-    const row = (k, v) => (v ? [el('dt', { text: k }), el('dd', { text: v, title: v })] : []);
-    fill($('#info'), ...row('檔名', it.name), ...row('資料夾', it.dir), ...row('時間', it.when), ...row('相機', it.cam), ...row('曝光', it.exp));
+    $('#ovFlag').className = `ov-flag${f === 1 ? ' is-keep' : f === -1 ? ' is-drop' : ''}`;
+    for (const [b, on] of [[$('#bKeep'), f === 1], [$('#bDrop'), f === -1]]) { b.classList.toggle('on', on); b.setAttribute('aria-pressed', String(on)); b.disabled = !it; }
+    if (it) fill($('#ov'), ...details(it)); else fill($('#ov'));
+    fill($('#stPos'), ...(it ? [el('b', { text: `第 ${num(pos + 1)}／${num(view.length)} 張` }), `・${it.name}`] : []));
   }
-  function flash(f) {
-    const p = $('#stPop');
-    p.className = 'st-pop';
-    void p.offsetWidth;
-    p.textContent = f === 1 ? '✓' : f === -1 ? '✕' : '';
-    if (f && !S.grid) p.className = `st-pop ${f === 1 ? 'is-keep' : 'is-drop'} on`;
+  // "標示為留用", Lightroom's word for it, in the middle for a moment
+  const SAID = { 1: '標示為留用', '-1': '設為排除', 0: '取消旗標' };
+  function flash(f, n = 1) {
+    const m = $('#stMsg');
+    m.className = 'st-msg';
+    void m.offsetWidth;
+    fill(m, el('i', { 'aria-hidden': 'true' }), n > 1 ? `${num(n)} 張${SAID[f]}` : SAID[f]);
+    m.className = `st-msg ${f === 1 ? 'is-keep' : f === -1 ? 'is-drop' : 'is-none'} on`;
   }
+  function setInfo(on) {
+    S.info = on;
+    remember();
+    $('#step2').classList.toggle('no-info', !on);
+    $('#bInfo').classList.toggle('on', on);
+    $('#bInfo').setAttribute('aria-pressed', String(on));
+  }
+  setInfo(S.info);
 
   // ---------- thumbnails: the camera's own, else made from the photo (one at a time, the ones on screen first) ----------
   function thumbUrl(it) {
@@ -878,17 +894,17 @@
     $('#grid').hidden = !on;
     stage.hidden = on;
     strip.hidden = on;
-    $('#bGrid span').textContent = on ? '大圖' : '格狀';
-    $('#bGrid').title = on ? '回到大圖（Enter 或 G）' : '一次看很多張（G）';
+    $('#bGrid').classList.toggle('on', on);
+    $('#bLoupe').classList.toggle('on', !on);
     $('#bZoom').hidden = on;
-    $('#viewer').classList.toggle('gridded', on);
     stripPos = gridPos = -1;
     requestAnimationFrame(() => { if (on) { drawGrid(); grid.focus({ preventScroll: true }); } else { layout(); show(); } refresh(); });
   }
-  $('#bGrid').addEventListener('click', () => setGrid(!S.grid));
+  $('#bGrid').addEventListener('click', () => setGrid(true));
+  $('#bLoupe').addEventListener('click', () => setGrid(false));
   const targets = () => (sel.size > 1 ? view.filter((it) => sel.has(it)) : current() ? [current()] : []);
 
-  // ---------- the side: counts, filter, folder, order ----------
+  // ---------- the filmstrip's header: counts, filter, folder, order ----------
   function refresh() {
     if (S.step !== 2) return;
     const c = counts();
@@ -901,7 +917,7 @@
     $('#next2').textContent = n ? `存下 ${num(n)} 張 →` : '存下來 →';
     if (S.grid) drawGrid(); else drawStrip();
     info(current());
-    if (S.grid && sel.size > 1) { $('#stPos').textContent = `選了 ${num(sel.size)} 張`; $('#bKeep').disabled = $('#bDrop').disabled = false; }
+    if (S.grid && sel.size > 1) { fill($('#stPos'), el('b', { text: `選了 ${num(sel.size)} 張` }), '・P、X、U 一起標'); $('#bKeep').disabled = $('#bDrop').disabled = false; }
   }
   $('#tally').addEventListener('click', (e) => {
     const b = e.target.closest('.tl');
@@ -930,9 +946,9 @@
   document.addEventListener('change', (e) => {
     const r = e.target;
     if (r.type !== 'radio') return;
-    if (r.name === 'sort') { S.sort = r.value; remember(); const at = current(); sortItems(); rebuildView(at); stripPos = gridPos = -1; show(); refresh(); r.blur(); }
     if (r.name === 'take' || r.name === 'lay') { S[r.name] = r.value; if (r.name === 'lay') remember(); renderStep3(); }
   });
+  $('#sort').addEventListener('change', (e) => { S.sort = e.target.value; remember(); const at = current(); sortItems(); rebuildView(at); stripPos = gridPos = -1; show(); refresh(); e.target.blur(); });
   $('#auto').checked = S.auto;
   $('#auto').addEventListener('change', (e) => { S.auto = e.target.checked; remember(); e.target.blur(); });
   $('#bKeep').addEventListener('click', () => mark(targets(), flagOf(current()) === 1 && sel.size <= 1 ? 0 : 1, S.auto));
@@ -941,6 +957,7 @@
   $('#stPrev').addEventListener('click', () => go(-1));
   $('#stNext').addEventListener('click', () => go(1));
   $('#bKeys').addEventListener('click', () => $('#keys').showModal());
+  $('#bInfo').addEventListener('click', () => setInfo(!S.info));
   // a mouse click leaves focus on a button, and the next Space or arrow would go to it
   $('#step2').addEventListener('click', (e) => { const b = e.target.closest('button'); if (b && e.detail > 0) b.blur(); });
 
@@ -1007,8 +1024,8 @@
     const k = e.key, mod = e.metaKey || e.ctrlKey;
     if (mod && !e.altKey && (k === 'z' || k === 'Z') && !e.shiftKey) { e.preventDefault(); doUndo(); return; }
     if (mod || e.altKey) return;
-    if (!view.length && !/^[gG?]$/.test(k)) return;
-    const advance = S.auto !== e.shiftKey;
+    if (!view.length && !/^[gGiI?]$/.test(k)) return;
+    const advance = S.auto || e.shiftKey || (e.getModifierState && e.getModifierState('CapsLock'));
     const one = () => (sel.size > 1 && S.grid ? targets() : [current()]);
     let done = true;
     switch (k) {
@@ -1018,7 +1035,9 @@
       case 'ArrowDown': if (S.grid) { if (e.shiftKey) extend(cols); else go(cols); } else mark(one(), -1, advance); break;
       case 'p': case 'P': mark(one(), 1, advance); break;
       case 'x': case 'X': case 'Delete': case 'Backspace': mark(one(), -1, advance); break;
-      case 'u': case 'U': case '0': mark(one(), 0, false); break;
+      case 'u': case 'U': case '0': mark(one(), 0, advance); break;
+      case '`': mark(one(), flagOf(current()) === 1 && one().length === 1 ? 0 : 1, advance); break;
+      case 'i': case 'I': setInfo(!S.info); break;
       case 'z': case 'Z': case ' ': if (S.grid) setGrid(false); else toggleZoom(); break;
       case 'g': case 'G': setGrid(!S.grid); break;
       case 'e': case 'E': case 'Enter': if (S.grid) setGrid(false); else done = false; break;
@@ -1062,8 +1081,8 @@
   function renderStep3() {
     if (export_.busy) return;
     const c = counts(), list = takeList(), bytes = list.reduce((a, it) => a + it.size, 0);
-    $('#takeKeep').textContent = `標「留」的 ${num(c.keep)} 張`;
-    $('#takeNot').textContent = `沒標「不要」的 ${num(c.keep + c.none)} 張`;
+    $('#takeKeep').textContent = `標「留用」的 ${num(c.keep)} 張`;
+    $('#takeNot').textContent = `沒標「排除」的 ${num(c.keep + c.none)} 張`;
     for (const [name, v] of [['take', S.take], ['lay', S.lay]]) { const r = $(`input[name="${name}"][value="${v}"]`); if (r) r.checked = true; }
     const dirs = new Set(list.map((it) => it.dir));
     $$('input[name="lay"]').forEach((r) => { r.disabled = dirs.size < 2; });
@@ -1076,7 +1095,7 @@
     go.disabled = !list.length;
     go.textContent = list.length === 1 ? '下載這張 →' : CAN_DIR ? '選資料夾，存進去 →' : `下載 ZIP（${num(list.length)} 張）→`;
     $('#goZip').hidden = !(CAN_DIR && list.length > 1);
-    $('#note3').textContent = !list.length ? (S.take === 'keep' ? '還沒有標「留」的照片' : '每一張都標了「不要」') : '';
+    $('#note3').textContent = !list.length ? (S.take === 'keep' ? '還沒有標「留用」的照片' : '每一張都標了「排除」') : '';
   }
   $('#go').addEventListener('click', () => { const list = takeList(); if (list.length === 1) saveOne(list[0]); else if (CAN_DIR) saveDir(list); else saveZip(list); });
   $('#goZip').addEventListener('click', () => saveZip(takeList()));

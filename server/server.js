@@ -145,7 +145,7 @@ function versioned(html, pageDir) {
 }
 
 // the 拍攝 side of the home page, shared as a link: its own title, words and picture
-const PHOTO_DESC = '拍完照，剩下的交給這裡：照片挑選、批次改檔名、圖片壓縮、參數查看。照片只在你的電腦裡處理，不會上傳。';
+const PHOTO_DESC = '拍完照，剩下的交給這裡：照片挑選、改名稱、圖片壓縮、參數查看。照片只在你的電腦裡處理，不會上傳。';
 const photoSide = (html) => html
   .replace(/<title>[^<]*<\/title>/, '<title>ZhuyuanTools・拍攝</title>')
   .replace(/(<meta property="og:title" content=")[^"]*/, '$1ZhuyuanTools・拍攝')

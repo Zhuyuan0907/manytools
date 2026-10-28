@@ -179,7 +179,7 @@
     avatar: ['/avatar', '../avatartools/index.html'], crop: ['/crop', '../croptools/index.html'], image: ['/image', '../imagetools/index.html'],
     exif: ['/exif', '../exiftools/index.html'], rename: ['/rename', '../renametools/index.html'], pick: ['/pick', '../picktools/index.html'],
   };
-  const TOOL_NAME = { video: '影片碼率壓縮', pdf: 'PDF 壓縮・拆分', watermark: 'PDF 浮水印', avatar: 'Gravatar 頭貼查詢', crop: '頭貼裁切', image: '圖片壓縮', exif: '照片參數查看', rename: '照片批次改檔名', pick: '照片挑選' };
+  const TOOL_NAME = { video: '影片碼率壓縮', pdf: 'PDF 壓縮・拆分', watermark: 'PDF 浮水印', avatar: 'Gravatar 頭貼查詢', crop: '頭貼裁切', image: '圖片壓縮', exif: '照片參數查看', rename: '照片改名稱', pick: '照片挑選' };
   const RAW = /\.(cr3|cr2|crw|nef|nrw|arw|srf|sr2|raf|orf|ori|rw2|rwl|dng|pef|ptx|srw|3fr|fff|iiq|erf|kdc|dcr|mef|mos|mrw|x3f|gpr)$/i;
   const kindOf = (name, type) => (/\.zip$/i.test(name) || /zip/.test(type || '') ? 'zip'
     : RAW.test(name) ? 'raw'
@@ -306,7 +306,7 @@
       b.classList.toggle('best', b.dataset.tool === best);
     }
     $('#askWhy').textContent = best === 'pick' ? (zips ? 'ZIP 只有照片挑選可以直接讀' : '這麼多張，通常先挑出要的')
-      : raw === n ? '只有 RAW 檔：可以看參數或改檔名，不能壓縮'
+      : raw === n ? '只有 RAW 檔：可以看參數或改名稱，不能壓縮'
       : n <= 3 ? '幾張照片：看看參數，或壓到上限內' : '';
     dlg.showModal();
     $('.opt.best', dlg).focus();
