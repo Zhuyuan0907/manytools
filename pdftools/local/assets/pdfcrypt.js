@@ -3,7 +3,9 @@
    without this, the engine could not copy their pages and had to turn every page into a picture.
    Standard security handler only: RC4 40–128 bit and AES-128 (revisions 2–4), AES-256 (revisions 5–6).
    PdfCrypt.load(bytes, password) → a PDFDocument with every string and stream decrypted and no /Encrypt.
-   Throws when the file uses something else (certificates, unknown crypt filters) or the password is wrong. */
+   Throws when the file uses something else (certificates, unknown crypt filters) or the password is wrong.
+   PdfCrypt.lock(bytes, password) → the same file that opens only with that password (AES-256, revision 6, the
+   password is also the owner password and nothing is restricted). */
 (function () {
   'use strict';
   const N = (n) => PDFLib.PDFName.of(n);
@@ -192,8 +194,11 @@
     // most protected files open with the empty password; the one the person typed comes first
     for (const pw of [...new Set([password || '', ''])]) {
       if (R >= 5) {
-        const key = await keyR6(new TextEncoder().encode(pw.normalize('NFKC')).subarray(0, 127), E);
-        if (key) { E.key = key; return E; }
+        // the standard wants the password normalised (full-width ＡＢＣ is ABC); not every writer does it
+        for (const form of new Set([pw.normalize('NFKC'), pw])) {
+          const key = await keyR6(new TextEncoder().encode(form).subarray(0, 127), E);
+          if (key) { E.key = key; return E; }
+        }
       } else {
         const raw = Uint8Array.from(pw, (c) => c.charCodeAt(0) & 255);
         let key = keyR4(raw, E);
@@ -304,5 +309,128 @@
     return run;
   }
 
-  window.PdfCrypt = { load, md5, rc4 };
+  // ---------- locking: a file that opens only with a password ----------
+  // AES-256 (revision 6, what Acrobat X and later write). The password is the owner password too, so whoever
+  // opens the file may also take the password off again; nothing is restricted.
+  // The file is written here rather than by pdf-lib: objects inside an object stream must keep their strings as
+  // they are (the object stream is encrypted as a whole), and only the writer knows which objects those are.
+  const rand = (n) => crypto.getRandomValues(new Uint8Array(n));
+  const latin1 = (s) => Uint8Array.from(s, (c) => c.charCodeAt(0) & 255);
+  async function security(password) {
+    const pw = new TextEncoder().encode(password.normalize('NFKC')).subarray(0, 127);
+    const key = rand(32), zero = new Uint8Array(16);
+    const uv = rand(8), uk = rand(8), ov = rand(8), ok = rand(8);
+    const U = cat(await hashR6(pw, uv, EMPTY, 6), uv, uk);                         // algorithm 8
+    const UE = await aesEncryptRaw(await hashR6(pw, uk, EMPTY, 6), zero, key);
+    const O = cat(await hashR6(pw, ov, U, 6), ov, ok);                             // algorithm 9
+    const OE = await aesEncryptRaw(await hashR6(pw, ok, U, 6), zero, key);
+    const P = -4;                                                                  // everything allowed
+    const perms = cat(new Uint8Array(4), new Uint8Array([255, 255, 255, 255]), latin1('Tadb'), rand(4));   // algorithm 10
+    new DataView(perms.buffer).setInt32(0, P, true);
+    const Perms = await aesEncryptRaw(key, zero, perms);   // one block: CBC with a zero IV is ECB
+    return { key, U, UE, O, OE, P, Perms };
+  }
+
+  async function lock(bytes, password) {
+    const { PDFDict, PDFArray, PDFStream, PDFRef, PDFHexString, PDFNumber, PDFInvalidObject } = PDFLib;
+    const doc = await PDFLib.PDFDocument.load(bytes, { updateMetadata: false });
+    const ctx = doc.context;
+    const sec = await security(password);
+    const aes = await subtle().importKey('raw', sec.key, 'AES-CBC', false, ['encrypt']);
+    const encrypt = async (data) => { const iv = rand(16); return cat(iv, new Uint8Array(await subtle().encrypt({ name: 'AES-CBC', iv }, aes, data))); };
+    const isText = (v) => v instanceof PDFLib.PDFString || v instanceof PDFHexString;
+    const text = async (v) => PDFHexString.of(hex(await encrypt(v.asBytes())));
+    const walk = async (o) => {   // every string in it encrypted (signature values never are)
+      if (o instanceof PDFDict) {
+        const sig = o.get(N('Type')) === N('Sig') || o.has(N('ByteRange'));
+        for (const [k, v] of o.entries()) {
+          if (sig && k === N('Contents')) continue;
+          if (isText(v)) o.set(k, await text(v)); else await walk(v);
+        }
+      } else if (o instanceof PDFArray) {
+        for (let i = 0; i < o.size(); i++) { const v = o.get(i); if (isText(v)) o.set(i, await text(v)); else await walk(v); }
+      }
+    };
+    const raw = (o) => { const b = new Uint8Array(o.sizeInBytes()); o.copyBytesInto(b, 0); return b; };
+
+    // PDF 1.7 with Adobe's extension level 8 is how revision 6 is declared
+    const catalog = ctx.lookup(ctx.trailerInfo.Root);
+    if (catalog instanceof PDFDict) {
+      const ext = catalog.lookup(N('Extensions')) instanceof PDFDict ? catalog.lookup(N('Extensions')) : ctx.obj({});
+      ext.set(N('ADBE'), ctx.obj({ BaseVersion: N('1.7'), ExtensionLevel: 8 }));
+      catalog.set(N('Extensions'), ext);
+    }
+
+    const chunks = [], offsets = new Map(), packed = new Map();
+    let size = 0;
+    const put = (b) => { chunks.push(b); size += b.length; };
+    const writeObject = (num, gen, body) => { offsets.set(num, [size, gen]); put(latin1(`${num} ${gen} obj\n`)); put(body); put(latin1('\nendobj\n')); };
+    const writeStream = (num, gen, dict, data) => {
+      dict.set(N('Length'), PDFNumber.of(data.length));
+      offsets.set(num, [size, gen]);
+      put(latin1(`${num} ${gen} obj\n`)); put(raw(dict)); put(latin1('\nstream\n')); put(data); put(latin1('\nendstream\nendobj\n'));
+    };
+    put(latin1('%PDF-1.7\n%\xE2\xE3\xCF\xD3\n'));
+
+    // streams on their own, encrypted; plain objects into object streams, which are encrypted as a whole
+    // (objects of a later generation can't go there: they are written on their own with their strings encrypted)
+    let next = ctx.largestObjectNumber + 1;
+    const loose = [];
+    for (const [ref, obj] of ctx.enumerateIndirectObjects()) {
+      const num = ref.objectNumber, gen = ref.generationNumber;
+      if (obj instanceof PDFStream) {
+        const type = obj.dict.get(N('Type'));
+        if (type === N('XRef') || type === N('ObjStm')) continue;   // left over from the file as it was read
+        await walk(obj.dict);
+        writeStream(num, gen, obj.dict, await encrypt(obj.getContents()));
+      } else if (obj instanceof PDFInvalidObject) writeObject(num, gen, raw(obj));
+      else if (gen === 0) loose.push([num, obj]);
+      else if (isText(obj)) writeObject(num, gen, raw(await text(obj)));
+      else { await walk(obj); writeObject(num, gen, raw(obj)); }
+    }
+    for (let i = 0; i < loose.length; i += 100) {
+      const group = loose.slice(i, i + 100), bodies = group.map(([, o]) => raw(o));
+      let at = 0;
+      const head = group.map(([num], k) => { const s = `${num} ${at}`; at += bodies[k].length + 1; return s; }).join(' ') + '\n';
+      const content = cat(latin1(head), ...bodies.flatMap((b) => [b, latin1('\n')]));
+      const num = next++;
+      group.forEach(([n], k) => packed.set(n, [num, k]));
+      writeStream(num, 0, ctx.obj({ Type: 'ObjStm', N: group.length, First: head.length, Filter: 'FlateDecode' }), await encrypt(pako.deflate(content)));
+    }
+
+    // the encryption dictionary itself is never encrypted
+    const encNum = next++;
+    const hx = (b) => PDFHexString.of(hex(b));
+    const cf = ctx.obj({ StdCF: { AuthEvent: 'DocOpen', CFM: 'AESV3', Length: 32 } });
+    const encDict = ctx.obj({ Filter: 'Standard', V: 5, R: 6, Length: 256, CF: cf, StmF: 'StdCF', StrF: 'StdCF', P: sec.P, EncryptMetadata: true });
+    for (const k of ['O', 'U', 'OE', 'UE', 'Perms']) encDict.set(N(k), hx(sec[k]));
+    writeObject(encNum, 0, raw(encDict));
+
+    // cross-reference stream (never encrypted): type, offset or object stream, generation or index
+    const xrefNum = next++;
+    const xrefAt = size;
+    offsets.set(xrefNum, [xrefAt, 0]);
+    const count = xrefNum + 1, rows = new Uint8Array(count * 7), dv = new DataView(rows.buffer);
+    for (let n = 0; n < count; n++) {
+      const o = n * 7;
+      if (offsets.has(n)) { const [at, gen] = offsets.get(n); rows[o] = 1; dv.setUint32(o + 1, at); dv.setUint16(o + 5, gen); }
+      else if (packed.has(n)) { const [s, k] = packed.get(n); rows[o] = 2; dv.setUint32(o + 1, s); dv.setUint16(o + 5, k); }
+      else if (n === 0) dv.setUint16(o + 5, 65535);
+    }
+    const oldId = ctx.trailerInfo.ID instanceof PDFArray && ctx.trailerInfo.ID.size() === 2 ? ctx.trailerInfo.ID : null;
+    const id = oldId || ctx.obj([hx(rand(16)), hx(rand(16))]);
+    const xref = ctx.obj({ Type: 'XRef', Size: count, W: [1, 4, 2], Filter: 'FlateDecode' });
+    xref.set(N('Root'), ctx.trailerInfo.Root);
+    if (ctx.trailerInfo.Info instanceof PDFRef) xref.set(N('Info'), ctx.trailerInfo.Info);
+    xref.set(N('ID'), id);
+    xref.set(N('Encrypt'), PDFRef.of(encNum, 0));
+    writeStream(xrefNum, 0, xref, pako.deflate(rows));
+    put(latin1(`startxref\n${xrefAt}\n%%EOF\n`));
+    const out = new Uint8Array(size);   // not cat(...chunks): tens of thousands of arguments
+    let o = 0;
+    for (const c of chunks) { out.set(c, o); o += c.length; }
+    return out;
+  }
+
+  window.PdfCrypt = { load, lock, md5, rc4 };
 })();

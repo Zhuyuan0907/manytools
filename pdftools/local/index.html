@@ -92,7 +92,7 @@
         </label>
         
         <ol class="how" aria-label="怎麼用">
-          <li><span class="how-no">1</span><b>放入 PDF</b><span>可以一次放好幾個</span></li>
+          <li><span class="how-no">1</span><b>放入 PDF</b><span>好幾個、有密碼都行</span></li>
           <li><span class="how-no">2</span><b>選一份或多份</b><span>學校要分項就拆開</span></li>
           <li><span class="how-no">3</span><b>設定上限並下載</b><span>自動壓到剛剛好</span></li>
         </ol>
@@ -198,14 +198,23 @@
                 <span class="custom-mb" id="customWrap" hidden>
                   <input type="number" id="customMB" min="0.2" max="500" step="0.1" value="6" inputmode="decimal" aria-label="自訂上限（MB）"><span>MB</span>
                 </span>
+                <label class="chip"><input type="radio" name="target" value="none"><span>不壓縮</span></label>
               </div>
-              <p class="help">保守計算，上傳系統一定收得下。</p>
+              <p class="help" id="targetHelp">保守計算，上傳系統一定收得下。</p>
             </div>
-            <div class="set">
+            <div class="set compress-only">
               <label class="switch"><input type="checkbox" id="keepOriginal" checked><span class="track" aria-hidden="true"></span><span class="sw-text"><b>優先保留文字（最清楚）</b><span class="help">放不下才把頁面轉成圖片</span></span></label>
             </div>
-            <div class="set">
+            <div class="set compress-only">
               <label class="switch"><input type="checkbox" id="gray"><span class="track" aria-hidden="true"></span><span class="sw-text"><b>轉成灰階</b><span class="help">更小，但照片會變黑白</span></span></label>
+            </div>
+            <div class="set">
+              <label class="switch"><input type="checkbox" id="lockOut"><span class="track" aria-hidden="true"></span><span class="sw-text"><b>加上開啟密碼</b><span class="help">打開檔案要先輸入密碼</span></span></label>
+              <div class="pw-set" id="pwSet" hidden>
+                <input type="text" id="outPw" class="pw-in" placeholder="要設定的密碼" autocomplete="off" spellcheck="false" autocapitalize="off" maxlength="64" aria-label="要設定的開啟密碼">
+                <button type="button" class="icon-btn pw-eye" id="outPwEye" aria-pressed="true" aria-label="顯示密碼" title="隱藏密碼"></button>
+              </div>
+              <p class="help" id="pwHelp" hidden></p>
             </div>
           </div>
           <details class="set-col adv" id="adv" open>

@@ -404,6 +404,7 @@ main { min-height: 0; display: flex; flex-direction: column; }
 .src-pw .text-in { flex: 1 1 auto; max-width: 220px; height: 32px; }
 .text-in { height: 38px; padding: 0 12px; border: 1.5px solid var(--line-strong); border-radius: 9px; background: var(--surface); min-width: 0; }
 .text-in:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent); }
+.text-in[aria-invalid="true"] { border-color: var(--bad); background: #fff5f4; }
 .hero-art .ha-fold { fill: none; stroke: var(--line-strong); stroke-width: 2; }
 .hero-art .ha-small .ha-fold { stroke: color-mix(in srgb, var(--accent) 55%, #fff); }
 .hero-art .ha-lines { fill: none; stroke: var(--line); stroke-width: 6; stroke-linecap: round; }

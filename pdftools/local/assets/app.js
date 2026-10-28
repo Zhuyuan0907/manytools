@@ -14,7 +14,7 @@
 
   const state = {
     step: 1,
-    sources: [],                 // { id, file, name, status, error, pdf, numPages, password, offset }
+    sources: [],                 // { id, file, name, status, error, pdf, numPages, password, offset, draft, wrong, perms }
     splitMode: 'single',
     modeChosen: false,           // has the student picked one/many files in step 2 yet
     parts: [],                   // split editor: output files { id, name, custom, text (page ranges) }
@@ -47,35 +47,94 @@
   }
 
   // ======================= sources (step 1) =======================
+  // src.password: the one it opened with; src.draft: what is typed in its box (kept while the list is redrawn);
+  // src.perms: pdf.js's permission flags when the file is protected at all (null when it isn't).
   function addFiles(list) {
     const files = [...list];
     if (!files.length) return;
     for (const file of files) {
-      const src = { id: ++seq, file, name: file.name, status: 'loading', error: '', pdf: null, numPages: 0, password: '' };
+      const src = { id: ++seq, file, name: file.name, status: 'loading', error: '', pdf: null, numPages: 0, password: '', draft: '', wrong: false, perms: null };
       state.sources.push(src);
       loadSource(src);
     }
     sourcesChanged();
   }
 
-  async function loadSource(src) {
-    src.status = 'loading';
-    renderSources();
+  // passwords that opened a file here already: a file added later may well share one
+  const knownPasswords = () => state.sources.map((s) => s.password).filter(Boolean);
+
+  async function loadSource(src, passwords = ['', ...knownPasswords()]) {
     try {
       const bytes = new Uint8Array(await src.file.arrayBuffer());
       if (!Core.isPdfHeader(bytes)) throw Object.assign(new Error('這不是 PDF 檔'), { friendly: true });
-      const pdf = await Core.openPdf(bytes, src.password).promise;
-      if (!state.sources.includes(src)) { pdf.destroy(); return; }
-      src.pdf = pdf; src.numPages = pdf.numPages; src.status = 'ready'; src.error = '';
+      const { pdf, password } = await Core.openWithPasswords(bytes, passwords);
+      if (!state.sources.includes(src)) { pdf.destroy(); return false; }
+      src.pdf = pdf; src.numPages = pdf.numPages; src.status = 'ready'; src.error = ''; src.password = password; src.wrong = false;
+      src.perms = await pdf.getPermissions().catch(() => null);
+      return true;
     } catch (e) {
       if (e && e.friendly) { src.status = 'error'; src.error = e.message; }
       else {
         const d = Core.describeOpenError(e);
         src.status = d.needPassword ? 'password' : 'error';
-        src.error = d.message;
+        src.error = d.needPassword ? (src.draft ? '密碼不對' : '需要開啟密碼') : d.message;
+        src.wrong = d.needPassword && !!src.draft;
       }
+      return false;
+    } finally {
+      if (!unlocking) sourcesChanged();
     }
+  }
+
+  // One 解鎖 for all: every password typed so far is tried on every locked file, its own first. A password that
+  // opens one file is tried on the others too, so files sharing one (school documents often do) need it typed once.
+  let unlocking = false;
+  async function unlockAll() {
+    if (unlocking) return;
+    const locked = state.sources.filter((s) => s.status === 'password');
+    const typed = locked.map((s) => s.draft).filter(Boolean);
+    if (!typed.length) { focusLocked(); toast('先在框裡輸入開啟密碼'); return; }
+    unlocking = true;
+    renderSources();
+    let shared = 0;
+    for (const s of locked) {
+      if (!state.sources.includes(s)) continue;
+      const own = s.draft;
+      if (await loadSource(s, [...(own ? [own] : []), ...typed, ...knownPasswords()]) && s.password.normalize('NFKC') !== own.normalize('NFKC')) shared++;
+    }
+    unlocking = false;
     sourcesChanged();
+    if (shared) toast(`同一個密碼也打開了另外 ${shared} 個檔案`);
+    focusLocked();
+  }
+  // the next box that still needs something: a wrong password (selected, to type over) or an empty one
+  function focusLocked() {
+    const s = state.sources.find((x) => x.status === 'password' && x.wrong) || state.sources.find((x) => x.status === 'password' && !x.draft);
+    const input = s && document.getElementById('pw' + s.id);
+    if (input) { input.focus({ preventScroll: true }); input.select(); }
+  }
+
+  let showPw = false;
+  const EYE = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>';
+  const EYE_OFF = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 3l18 18"/><path d="M10.6 5.1A10.7 10.7 0 0 1 12 5c6.4 0 10 7 10 7a17.6 17.6 0 0 1-3.2 4.2M6.6 6.6A17.4 17.4 0 0 0 2 12s3.6 7 10 7a10 10 0 0 0 5.4-1.6"/><path d="M9.9 9.9a3 3 0 0 0 4.2 4.2"/></svg>';
+  // a show/hide button for password boxes; on: whether they are shown now
+  function eyeButton(on, onclick) {
+    const b = el('button', { type: 'button', class: 'icon-btn pw-eye', 'aria-pressed': String(on), 'aria-label': '顯示密碼', title: on ? '隱藏密碼' : '顯示密碼', onclick });
+    b.innerHTML = on ? EYE_OFF : EYE;
+    return b;
+  }
+  function toggleShowPw() {
+    showPw = !showPw;
+    for (const i of $$('.src-pw .pw-in')) i.type = showPw ? 'text' : 'password';
+    for (const b of $$('.src-pw .pw-eye')) { b.setAttribute('aria-pressed', String(showPw)); b.title = showPw ? '隱藏密碼' : '顯示密碼'; b.innerHTML = showPw ? EYE_OFF : EYE; }
+  }
+  // what a protected file had, said once it's open (the output never carries it); what it forbade in the tooltip
+  const PERM_NAMES = [[4, '列印'], [16, '複製文字'], [8, '修改']];
+  function protection(src) {
+    if (src.password) return { text: '已解鎖，輸出後不用密碼', title: '原檔有開啟密碼，輸出的檔案不會有' };
+    if (!src.perms) return null;
+    const no = PERM_NAMES.filter(([f]) => !src.perms.includes(f)).map(([, n]) => n);
+    return { text: '有保護，輸出後會拿掉', title: `原檔${no.length ? `不能${no.join('、')}` : '有加密'}，輸出的檔案不會有這個限制` };
   }
 
   function removeSource(src) {
@@ -110,11 +169,17 @@
 
   function renderSources() {
     const ol = $('#sources');
+    // the list is drawn anew each time: the box being typed in gets its focus and caret back
+    const a = document.activeElement;
+    const typing = a && a.classList.contains('pw-in') && ol.contains(a) ? { id: a.id, from: a.selectionStart, to: a.selectionEnd } : null;
     ol.replaceChildren(...state.sources.map((src, i) => {
       let meta;
       if (src.status === 'loading') meta = el('div', { class: 'src-meta' }, el('span', { class: 'spinner', 'aria-hidden': 'true' }), ' 讀取中…');
-      else if (src.status === 'ready') meta = el('div', { class: 'src-meta', text: `${src.numPages} 頁・${fmtMB(src.file.size)}` });
-      else meta = el('div', { class: 'src-meta ' + (src.status === 'password' ? 'warn' : 'bad'), text: src.error });
+      else if (src.status === 'ready') {
+        const p = protection(src);
+        meta = [el('div', { class: 'src-meta', text: `${src.numPages} 頁・${fmtMB(src.file.size)}` }), p ? el('div', { class: 'src-meta src-lock', title: p.title, text: p.text }) : null];
+      }
+      else meta = el('div', { class: 'src-meta ' + (src.status === 'password' ? 'warn' : 'bad'), text: unlocking && src.status === 'password' ? '試試看密碼…' : src.error });
       const li = el('li', { class: 'src' },
         el('span', { class: 'src-no', text: String(i + 1) }),
         el('div', { class: 'src-main' }, el('div', { class: 'src-name', title: src.name }, ...nameParts(src.name)), meta),
@@ -123,22 +188,31 @@
           el('button', { class: 'icon-btn', type: 'button', 'aria-label': '往後移', title: '往後移', disabled: i === state.sources.length - 1, onclick: () => moveSource(src, 1), text: '↓' }),
           el('button', { class: 'icon-btn', type: 'button', 'aria-label': '移除這個檔案', title: '移除', onclick: () => removeSource(src), text: '✕' })));
       if (src.status === 'password') {
-        const id = 'pw' + src.id;
-        const input = el('input', { type: 'password', id, placeholder: '開啟密碼', autocomplete: 'off' });
-        const form = el('form', { class: 'src-pw' },
-          el('label', { for: id, class: 'sr-only', text: '開啟密碼', style: { position: 'absolute', left: '-9999px' } }), input,
-          el('button', { class: 'btn small primary', type: 'submit', text: '解鎖' }));
-        form.addEventListener('submit', (ev) => { ev.preventDefault(); src.password = input.value; loadSource(src); });
+        const input = el('input', { type: showPw ? 'text' : 'password', id: 'pw' + src.id, class: 'pw-in', placeholder: '開啟密碼', autocomplete: 'off',
+          spellcheck: 'false', autocapitalize: 'off', 'aria-label': `「${src.name}」的開啟密碼`, 'aria-invalid': src.wrong ? 'true' : null, readonly: unlocking });
+        input.value = src.draft;
+        input.addEventListener('input', () => { src.draft = input.value; if (src.wrong) { src.wrong = false; input.removeAttribute('aria-invalid'); } });
+        const form = el('form', { class: 'src-pw' }, input, eyeButton(showPw, toggleShowPw),
+          el('button', { class: 'btn small primary', type: 'submit', disabled: unlocking, text: unlocking ? '解鎖中…' : '解鎖' }));
+        form.addEventListener('submit', (ev) => { ev.preventDefault(); unlockAll(); });
         li.append(form);
       }
       return li;
     }));
+    if (typing) {
+      const n = document.getElementById(typing.id);
+      if (n) { n.focus({ preventScroll: true }); try { n.setSelectionRange(typing.from, typing.to); } catch { /* not a text box any more */ } }
+    }
     const ready = state.sources.filter((s) => s.status === 'ready');
     const pending = state.sources.length - ready.length;
     const size = ready.reduce((a, s) => a + s.file.size, 0);
+    const locked = state.sources.filter((s) => s.status === 'password').length;
     let note;
     if (!state.sources.length) note = '還沒有加入檔案。';
-    else if (pending) note = state.sources.some((s) => s.status === 'loading') ? '讀取中…' : '請先輸入密碼或移除檔案';
+    else if (pending && (unlocking || state.sources.some((s) => s.status === 'loading'))) note = unlocking ? '解鎖中…' : '讀取中…';
+    else if (locked > 1) note = `${locked} 個檔案要密碼：都輸入好，按一次「解鎖」就好`;
+    else if (locked) note = '輸入開啟密碼，再按「解鎖」';
+    else if (pending) note = '有檔案讀不了，請移除';
     else note = `${ready.length} 個檔案・共 ${state.total} 頁・${fmtMB(size)}` + (ready.length > 1 ? '・會照上面的順序接成一份' : '');
     $('#note1').textContent = note;
     $('#step1').classList.toggle('has-files', state.sources.length > 0);
@@ -543,12 +617,17 @@
     colors: Core.store.get('colors') != null ? parseInt(Core.store.get('colors'), 10) : 256,
     gray: Core.store.get('gray') === '1',
     keepOriginal: Core.store.get('keepOriginal') !== '0',
+    lockOut: false, outPw: '',   // a password for the output: never stored, asked again every time
   };
+  // 不壓縮: no limit, the pages stay as they are (people come only to take a password off, to merge or to split)
   const targetMB = () => {
+    if (S.target === 'none') return Infinity;
     if (S.target === 'custom') return Number.isFinite(S.customMB) && S.customMB >= 0.2 ? Math.min(Math.round(S.customMB * 10) / 10, 500) : 5;
     return parseFloat(S.target);
   };
-  const snapshot = () => ({ targetMB: targetMB(), mode: S.mode, format: S.format, dpi: S.dpi, quality: S.quality, colors: S.colors, gray: S.gray, keepOriginal: S.keepOriginal });
+  // the password as the PDF standard has it (full-width ＡＢＣ１２３ becomes ABC123): what every reader accepts
+  const outPassword = () => (S.lockOut ? S.outPw.normalize('NFKC') : '');
+  const snapshot = () => ({ targetMB: targetMB(), mode: S.mode, format: S.format, dpi: S.dpi, quality: S.quality, colors: S.colors, gray: S.gray, keepOriginal: S.keepOriginal, password: outPassword() });
 
   // Coloured part of a slider track (WebKit has no ::range-progress).
   const fill = (r) => r.style.setProperty('--fill', `${((r.value - r.min) / (r.max - r.min)) * 100}%`);
@@ -574,6 +653,13 @@
     $('#colors').value = String(S.colors);
     $('#gray').checked = S.gray;
     $('#keepOriginal').checked = S.keepOriginal;
+    const none = S.target === 'none';
+    for (const n of $$('.compress-only')) n.hidden = none;
+    $('#adv').hidden = none;
+    $('#targetHelp').textContent = none ? '頁面原封不動：只拿掉密碼、合併或拆分' : '保守計算，上傳系統一定收得下。';
+    $('#lockOut').checked = S.lockOut;
+    $('#pwSet').hidden = !S.lockOut;
+    syncPwHelp();
     const manual = S.mode === 'manual';
     $('#rowDpi').hidden = !manual;
     $('#rowQuality').hidden = !manual || S.format !== 'jpeg';
@@ -595,11 +681,29 @@
     else if (t.id === 'colors') { S.colors = parseInt(t.value, 10); Core.store.set('colors', t.value); }
     else if (t.id === 'gray') { S.gray = t.checked; Core.store.set('gray', t.checked ? '1' : '0'); }
     else if (t.id === 'keepOriginal') { S.keepOriginal = t.checked; Core.store.set('keepOriginal', t.checked ? '1' : '0'); }
+    else if (t.id === 'lockOut') { S.lockOut = t.checked; if (t.checked) setTimeout(() => $('#outPw').focus(), 0); }
     else return;
     syncSettingsUI();
     renderPlan();
   });
   $('#customMB').addEventListener('input', (ev) => { S.customMB = parseFloat(ev.target.value); Core.store.set('customMB', ev.target.value); renderPlan(); });
+  // the password to set is shown while typed (forgetting it locks the person out), hidden on request
+  $('#outPw').addEventListener('input', (ev) => { S.outPw = ev.target.value; syncPwHelp(); renderPlan(); });
+  let showOutPw = true;
+  function syncOutEye() {
+    const b = $('#outPwEye');
+    b.setAttribute('aria-pressed', String(showOutPw)); b.title = showOutPw ? '隱藏密碼' : '顯示密碼'; b.innerHTML = showOutPw ? EYE_OFF : EYE;
+    $('#outPw').type = showOutPw ? 'text' : 'password';
+  }
+  $('#outPwEye').addEventListener('click', () => { showOutPw = !showOutPw; syncOutEye(); });
+  syncOutEye();
+  function syncPwHelp() {
+    const help = $('#pwHelp'), pw = outPassword();
+    help.hidden = !S.lockOut;
+    if (!S.lockOut) return;
+    // full-width letters and digits (a Chinese keyboard's) are the ordinary ones in a PDF password: say which it is
+    help.replaceChildren(el('span', { text: pw && pw !== S.outPw ? `密碼會是「${pw}」（全形字當半形）。` : '忘了就打不開，請記下來。' }), el('span', { text: '要上傳學校系統的檔案先別加' }));
+  }
   $('#dpi').addEventListener('input', (ev) => { fill(ev.target); S.dpi = parseInt(ev.target.value, 10); $('#dpiOut').textContent = S.dpi + ' DPI'; Core.store.set('dpi', ev.target.value); });
   $('#quality').addEventListener('input', (ev) => { fill(ev.target); S.quality = parseInt(ev.target.value, 10); $('#qualityOut').textContent = S.quality; Core.store.set('quality', ev.target.value); });
 
@@ -610,7 +714,10 @@
     const box = $('#plan');
     box.title = plan.map((p) => `${p.filename}（${p.label}）`).join('\n');
     void names;
-    box.replaceChildren('將輸出 ', el('b', { text: `${plan.length} 個 PDF` }), `・每個 ${fmtLimit(targetMB())} 以內`);
+    const needPw = S.lockOut && !outPassword();
+    $('#start').disabled = needPw;
+    if (needPw) { box.replaceChildren(el('b', { text: '請輸入要設定的密碼' })); return; }
+    box.replaceChildren('將輸出 ', el('b', { text: `${plan.length} 個 PDF` }), S.target === 'none' ? '・不壓縮' : `・每個 ${fmtLimit(targetMB())} 以內`, S.lockOut ? '・加上密碼' : '');
   }
   $('#start').addEventListener('click', () => startRun());
 
@@ -692,11 +799,18 @@
   loadStats();
 
   async function processOne(run, o) {
-    o.status = 'running'; o.error = '';
+    o.status = 'running'; o.error = ''; o.lockFailed = false;
     const t0 = performance.now();
     renderCard(o);
     try {
       o.result = await Engine.buildOutput(state.project, { title: o.title, pages: o.pages }, o.settings, run.job, (f, text) => progressCard(o, f, text));
+      if (o.settings.password) {
+        progressCard(o, 0.99, '加上密碼…');
+        try {
+          const bytes = await PdfCrypt.lock(new Uint8Array(await o.result.blob.arrayBuffer()), o.settings.password);
+          Object.assign(o.result, { blob: new Blob([bytes], { type: 'application/pdf' }), size: bytes.length, over: bytes.length > o.settings.targetMB * MB, locked: true });
+        } catch (e) { o.lockFailed = true; throw e; }
+      }
       o.result.seconds = (performance.now() - t0) / 1000;
       o.status = 'done';
     } catch (e) {
@@ -781,6 +895,16 @@
     $('#applyEvery').click();
   }
 
+  // what happened to passwords: one was set here, or the originals' password or protection is no longer there
+  function lockState(o) {
+    if (o.result.locked) return '要輸入你設定的密碼才能打開';
+    if (o.result.method === 'original') return '';
+    const srcs = new Set(o.pages.map((g) => Engine.locate(state.project, g).src));
+    if ([...srcs].some((s) => s.password)) return '原本的密碼拿掉了';
+    if ([...srcs].some((s) => s.perms)) return '原本的保護拿掉了';
+    return '';
+  }
+
   function describeSetting(s) {
     return s.fmt === 'jpeg' ? `${s.dpi} DPI・JPEG 品質 ${Math.round(s.q * 100)}` : `${s.dpi} DPI・PNG ${s.colors ? s.colors + ' 色' : '無損'}`;
   }
@@ -791,6 +915,8 @@
     ok: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>',
     over: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M12 7v6"/><circle cx="12" cy="17" r="1.2" fill="currentColor" stroke="none"/></svg>',
     error: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M7 7l10 10M17 7L7 17"/></svg>',
+    lock: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="10" width="16" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg>',
+    unlock: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="10" width="16" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 7.7-1.5"/></svg>',
   };
   function renderCard(o) {
     const c = o.card;
@@ -811,25 +937,32 @@
     if (o.status === 'error') {
       c.classList.add('over');
       status.innerHTML = ICONS.error;
-      main.append(el('p', { class: 'out-msg bad', text: '沒有完成', title: o.error }),
-        el('p', { class: 'out-hint', text: '可改用手動模式再試' }));
+      main.append(el('p', { class: 'out-msg bad', text: o.lockFailed ? '沒辦法加上密碼' : '沒有完成', title: o.error }),
+        el('p', { class: 'out-hint', text: o.lockFailed ? '關掉「加上開啟密碼」再處理一次' : '可改用手動模式再試' }));
       return;
     }
     const r = o.result, st = o.settings;
-    const limit = st.targetMB * MB;
+    const limit = st.targetMB * MB, noLimit = !Number.isFinite(limit);
     const fits = !r.over;
     c.classList.add(fits ? 'ok' : 'over');
     status.innerHTML = fits ? ICONS.ok : ICONS.over;
     const pct = Math.min(100, (r.size / limit) * 100);
     main.append(el('div', { class: 'out-size' },
       el('b', { class: 'num', text: fmtMB(r.size) }),
-      el('span', { class: 'out-limit', text: `／ 上限 ${fmtLimit(st.targetMB)}` }),
-      el('span', { class: 'mini-meter', 'aria-hidden': 'true' }, el('span', { style: { width: pct.toFixed(1) + '%' } }))));
+      noLimit ? null : el('span', { class: 'out-limit', text: `／ 上限 ${fmtLimit(st.targetMB)}` }),
+      noLimit ? null : el('span', { class: 'mini-meter', 'aria-hidden': 'true' }, el('span', { style: { width: pct.toFixed(1) + '%' } }))));
+    // the password: the one set here, or the one the original had, gone
+    const lockNote = lockState(o);
+    if (lockNote) {
+      const icon = el('span', { class: 'lk', 'aria-hidden': 'true' });
+      icon.innerHTML = r.locked ? ICONS.lock : ICONS.unlock;
+      main.append(el('p', { class: 'out-lock' + (r.locked ? ' on' : '') }, icon, lockNote));
+    }
 
     if (fits) {
       const phrase = {
-        original: '原檔就符合上限',
-        lossless: '保留原始品質',
+        original: noLimit ? '跟原檔一樣' : '原檔就符合上限',
+        lossless: noLimit ? '頁面原封不動' : '保留原始品質',
         smart: '文字清晰，只壓縮圖片',
         compressed: r.setting && r.setting.dpi < 96 ? '已轉成圖片，請預覽看小字' : '已轉成圖片',
       }[r.method];
@@ -857,7 +990,6 @@
     if (r.method === 'smart') bits.push(`${r.images} 張圖片・${r.setting.dpi} DPI・品質 ${Math.round(r.setting.q * 100)}`);
     if (r.method === 'compressed') bits.push(describeSetting(r.setting));
     if (st.gray && (r.method === 'compressed' || r.method === 'smart')) bits.push('灰階');
-    if (r.unlocked) bits.push('已移除原檔的編輯限制');
     if (r.method !== 'original') bits.push(r.linkCount ? `保留 ${r.linkCount} 個連結` : '沒有連結');
     bits.push(`原始 ${fmtMB(state.project.sources.reduce((a, s) => a + s.file.size, 0))}`);
     bits.push(`花了 ${r.seconds < 60 ? Math.max(1, Math.round(r.seconds)) + ' 秒' : (r.seconds / 60).toFixed(1) + ' 分鐘'}`);
@@ -916,7 +1048,7 @@
   const sourcesPayload = () => state.project.sources.map((s) => ({ file: s.file, password: s.password || '' }));
   // A processed file, with the original pages alongside for comparison.
   function openViewer(o) {
-    openViewerWith({ type: 'load', title: o.filename, out: o.result.blob, compare: o.result.method === 'compressed' || o.result.method === 'smart', sources: sourcesPayload(), pages: viewerPages(o.pages) });
+    openViewerWith({ type: 'load', title: o.filename, out: o.result.blob, outPassword: o.result.locked ? o.settings.password : '', compare: o.result.method === 'compressed' || o.result.method === 'smart', sources: sourcesPayload(), pages: viewerPages(o.pages) });
   }
   // Pages of the original files before anything is processed (step 2 previews).
   function previewPages(title, pages) {

@@ -1288,7 +1288,9 @@
     let rasterProgress = progress;
     const whole = project.sources.length === 1 && N === project.sources[0].numPages && out.pages.every((g, i) => g === i);
     const src0 = project.sources[0];
-    let asIs = whole && !src0.password ? { blob: src0.file, size: src0.file.size, method: 'original' } : null;
+    // a protected original (open password, or only no printing / copying) is never handed out as it is: people
+    // come here to get rid of exactly that, and upload systems often refuse protected files
+    let asIs = whole && !src0.password && !src0.perms ? { blob: src0.file, size: src0.file.size, method: 'original' } : null;
     if (settings.keepOriginal && asIs && asIs.size <= targetBytes) {
       progress(1, '原檔就符合上限');
       return done(asIs);

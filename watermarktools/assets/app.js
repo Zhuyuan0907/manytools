@@ -191,26 +191,55 @@
     if (!picked.length) { if (list.length) toast('只能放 PDF 檔'); return; }
     for (const file of picked) {
       if (files.some((f) => f.file.name === file.name && f.file.size === file.size)) continue;
-      const f = { id: nextId++, file, name: file.name, status: 'loading', error: '', password: '', pdf: null, numPages: 0, sizes: [], run: 'wait', result: null, key: null, thumb: null };
+      const f = { id: nextId++, file, name: file.name, status: 'loading', error: '', password: '', draft: '', wrong: false, pdf: null, numPages: 0, sizes: [], run: 'wait', result: null, key: null, thumb: null };
       files.push(f);
       load(f);
     }
     render();
   }
-  async function load(f) {
-    f.status = 'loading'; render();
+  // f.draft: what is typed in its password box, kept while the list is redrawn. A file is tried without a password
+  // and with those that opened other files here (protected files often come in sets with one password).
+  const known = () => files.map((f) => f.password).filter(Boolean);
+  async function load(f, passwords = ['', ...known()]) {
     try {
       if (!libsOk) throw Object.assign(new Error('程式檔案沒有載入完整'), { friendly: true });
       const bytes = new Uint8Array(await f.file.arrayBuffer());
       if (!Core.isPdfHeader(bytes)) throw Object.assign(new Error('這不是 PDF 檔'), { friendly: true });
-      const pdf = await Core.openPdf(bytes, f.password).promise;
-      if (!files.includes(f)) { pdf.destroy(); return; }
-      f.pdf = pdf; f.numPages = pdf.numPages; f.status = 'ready'; f.error = '';
+      const { pdf, password } = await Core.openWithPasswords(bytes, passwords);
+      if (!files.includes(f)) { pdf.destroy(); return false; }
+      f.pdf = pdf; f.numPages = pdf.numPages; f.status = 'ready'; f.error = ''; f.password = password; f.wrong = false;
+      return true;
     } catch (e) {
       if (e && e.friendly) { f.status = 'error'; f.error = e.message; }
-      else { const d = Core.describeOpenError(e); f.status = d.needPassword ? 'password' : 'error'; f.error = d.message; }
+      else {
+        const d = Core.describeOpenError(e);
+        f.status = d.needPassword ? 'password' : 'error';
+        f.error = d.needPassword ? (f.draft ? '密碼不對' : '需要開啟密碼') : d.message;
+        f.wrong = d.needPassword && !!f.draft;
+      }
+      return false;
+    } finally {
+      if (!unlocking) render();
     }
+  }
+  // one 解鎖 for all: every typed password on every locked file, its own first
+  let unlocking = false;
+  async function unlockAll() {
+    if (unlocking) return;
+    const locked = files.filter((f) => f.status === 'password'), typed = locked.map((f) => f.draft).filter(Boolean);
+    if (!typed.length) { toast('先在框裡輸入開啟密碼'); return; }
+    unlocking = true;
     render();
+    let shared = 0;
+    for (const f of locked) {
+      if (files.includes(f) && await load(f, [...(f.draft ? [f.draft] : []), ...typed, ...known()]) && f.password.normalize('NFKC') !== f.draft.normalize('NFKC')) shared++;
+    }
+    unlocking = false;
+    render();
+    if (shared) toast(`同一個密碼也打開了另外 ${shared} 份`);
+    const next = files.find((f) => f.status === 'password' && f.wrong) || files.find((f) => f.status === 'password' && !f.draft);
+    const box = next && document.getElementById(`pw${next.id}`);
+    if (box) { box.focus({ preventScroll: true }); box.select(); }
   }
   function remove(f) {
     files = files.filter((x) => x !== f);
@@ -222,23 +251,32 @@
   }
   function renderStep1() {
     $('#step1').classList.toggle('has-files', files.length > 0);
+    // the box being typed in gets its focus and caret back after the redraw
+    const a = document.activeElement;
+    const typing = a && a.matches('.src-pw .text-in') ? { id: a.id, from: a.selectionStart, to: a.selectionEnd } : null;
     $('#sources').replaceChildren(...files.map((f) => {
       let meta;
       if (f.status === 'loading') meta = el('span', { class: 'src-meta' }, el('span', { class: 'spinner', 'aria-hidden': 'true' }), ' 讀取中…');
       else if (f.status === 'ready') meta = el('span', { class: 'src-meta', text: `${f.numPages} 頁・${fmtBytes(f.file.size)}` });
-      else meta = el('span', { class: `src-meta ${f.status === 'password' ? 'warn' : 'bad'}`, text: f.error });
+      else meta = el('span', { class: `src-meta ${f.status === 'password' ? 'warn' : 'bad'}`, text: unlocking && f.status === 'password' ? '試試看密碼…' : f.error });
       const li = el('li', { class: 'src' },
         el('span', { class: 'src-icon', 'aria-hidden': 'true', html: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/></svg>' }),
         el('span', { class: 'src-text' }, el('span', { class: 'src-name', text: f.name, title: f.name }), meta),
         el('button', { type: 'button', class: 'icon-btn', 'aria-label': `移除 ${f.name}`, title: '移除', text: '×', onclick: () => remove(f) }));
       if (f.status === 'password') {
-        const id = `pw${f.id}`, pw = el('input', { type: 'password', id, class: 'text-in', placeholder: '開啟密碼', autocomplete: 'off', 'aria-label': `${f.name} 的開啟密碼` });
-        const form = el('form', { class: 'src-pw' }, pw, el('button', { class: 'btn small primary', type: 'submit', text: '解鎖' }));
-        form.addEventListener('submit', (ev) => { ev.preventDefault(); f.password = pw.value; load(f); });
+        const id = `pw${f.id}`, pw = el('input', { type: 'password', id, class: 'text-in', placeholder: '開啟密碼', autocomplete: 'off', 'aria-label': `${f.name} 的開啟密碼`, 'aria-invalid': f.wrong ? 'true' : null, readonly: unlocking });
+        pw.value = f.draft;
+        pw.addEventListener('input', () => { f.draft = pw.value; if (f.wrong) { f.wrong = false; pw.removeAttribute('aria-invalid'); } });
+        const form = el('form', { class: 'src-pw' }, pw, el('button', { class: 'btn small primary', type: 'submit', disabled: unlocking, text: unlocking ? '解鎖中…' : '解鎖' }));
+        form.addEventListener('submit', (ev) => { ev.preventDefault(); unlockAll(); });
         li.append(form);
       }
       return li;
     }));
+    if (typing) {
+      const n = document.getElementById(typing.id);
+      if (n) { n.focus({ preventScroll: true }); try { n.setSelectionRange(typing.from, typing.to); } catch { /* not a text box any more */ } }
+    }
     const ok = ready(), locked = files.filter((f) => f.status === 'password').length, bad = files.filter((f) => f.status === 'error').length;
     const pages = ok.reduce((a, f) => a + f.numPages, 0);
     $('#note1').textContent = !files.length ? '還沒有加入檔案。'

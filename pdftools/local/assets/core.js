@@ -119,6 +119,20 @@
     return { promise, destroy: () => { destroyed = true; return current ? current.destroy() : Promise.resolve(); } };
   };
 
+  // pdf.js with each password in turn ('' = none) until one opens the file → { pdf, password }; throws pdf.js's
+  // error. Full-width letters typed with a Chinese keyboard count as the ordinary ones (the PDF standard says so;
+  // pdf.js only takes the password as it is).
+  Core.openWithPasswords = async function (bytes, passwords) {
+    let last = null;
+    for (const pw of new Set(passwords)) {
+      for (const form of new Set([pw, pw.normalize('NFKC')])) {
+        try { return { pdf: await Core.openPdf(bytes.slice(), form).promise, password: form }; }
+        catch (e) { if (!(e && e.name === 'PasswordException')) throw e; last = e; }
+      }
+    }
+    throw last;
+  };
+
   // Turn pdf.js open errors into sentences a student can act on.
   Core.describeOpenError = function (e) {
     if (e && e.name === 'PasswordException') {

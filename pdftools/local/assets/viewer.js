@@ -216,7 +216,7 @@
       if (d.out) {
         const bytes = new Uint8Array(await d.out.arrayBuffer());
         setStage('開啟 PDF');
-        V.out = await Core.openPdf(bytes).promise;
+        V.out = await Core.openPdf(bytes, d.outPassword).promise;   // a password set in step 3, if any
         V.N = V.out.numPages;
       } else {
         if (!V.sources || !V.pages || !V.pages.length) throw new Error('沒有可預覽的頁面');
