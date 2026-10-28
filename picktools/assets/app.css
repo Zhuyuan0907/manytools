@@ -80,6 +80,9 @@ main { min-height: 0; display: flex; flex-direction: column; }
   color: var(--accent-strong); font-size: .84rem; font-weight: 500;
 }
 .privacy-short { display: none; }
+/* /pick/demo */
+.demo-tag { margin-right: auto; padding: 3px 11px; border-radius: 999px; background: #fff3d6; color: #8a5a00; font-size: .84rem; font-weight: 700; white-space: nowrap; }
+body.culling .demo-tag { background: #3a3020; color: #f0c674; }
 
 /* step bar */
 .stepper { background: var(--surface); border: 1px solid var(--line); border-radius: 999px; box-shadow: var(--shadow); padding: 5px; }
@@ -413,13 +416,18 @@ body.culling { background: var(--lr-top); color-scheme: dark; }
 .frame .photo.in { opacity: 1; }
 .frame .ph { position: absolute; left: 50%; top: 50%; display: block; }
 /* its details: Lightroom's info overlay */
+/* Measured against Lightroom Classic's own (a Retina screenshot of it, the same text set here at 2x): the details at
+   19.7 px on a computer, the name 1.46 times that, the same baselines (line-height 1.27, the name's 1.2), the same line
+   widths (Source Sans 3 spaced +0.007em, the name −0.024em; Myriad itself as it is), and its shadow: down and right,
+   soft, dark next to the letters. */
 .ov {
-  position: absolute; left: 18px; top: 13px; max-width: calc(100% - 80px); pointer-events: none;
-  color: #fff; font-size: clamp(13px, 11px + .32vw, 17px); line-height: 1.38; letter-spacing: .01em;
-  text-shadow: 0 1px 2px rgba(0, 0, 0, .85), 0 0 9px rgba(0, 0, 0, .45);
+  position: absolute; left: 20px; top: 12px; max-width: calc(100% - 80px); pointer-events: none;
+  color: #fff; font-size: clamp(14px, 9px + .75vw, 19.7px); font-weight: 400; line-height: 1.27; letter-spacing: .007em;
+  text-shadow: 1px 2px 3px rgba(0, 0, 0, .9), .5px 1px 1.5px rgba(0, 0, 0, .3);
 }
 .ov > * { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.ov b { font-size: 1.62em; font-weight: 400; line-height: 1.22; letter-spacing: 0; }
+.ov b { font-size: 1.46em; font-weight: 400; line-height: 1.2; letter-spacing: -.024em; }
+.myriad .ov, .myriad .ov b { letter-spacing: 0; }
 /* 1/250 as Lightroom sets it: a real fraction */
 .ov .frac { font-variant-numeric: diagonal-fractions; }
 .ov { font-variant-numeric: normal; }

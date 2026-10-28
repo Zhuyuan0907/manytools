@@ -29,17 +29,26 @@
   const fmtBytes = (b) => (b >= 1e9 ? `${(b / 1e9).toFixed(1)} GB` : b >= 1e6 ? `${(b / 1e6).toFixed(1)} MB` : `${Math.max(1, Math.round(b / 1e3))} KB`);
   const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
   const PHONE = matchMedia('(max-width: 640px), (pointer: coarse) and (max-width: 900px)').matches;
+  // /pick/demo: 60 photos from this site, for people to try it without photos of their own (no counting there)
+  const DEMO = onServer && /^\/pick\/demo\/?$/.test(location.pathname);
   // a phone (a finger on a small screen, as the home page tells): not offered this tool, only told to use a computer
-  if (matchMedia('(pointer: coarse) and (max-width: 640px), (pointer: coarse) and (orientation: landscape) and (max-height: 500px)').matches) {
+  const ON_PHONE = matchMedia('(pointer: coarse) and (max-width: 640px), (pointer: coarse) and (orientation: landscape) and (max-height: 500px)').matches;
+  if (ON_PHONE) {
     document.body.classList.add('is-phone');
     $('#phoneNote').hidden = false;
     $('#pnBack').href = onServer ? '/photo' : '../home/index.html';
+    if (DEMO) $('.pn-url b').textContent = 'tools.zhuyuan.tw/pick/demo';
     $('#pnCopy').addEventListener('click', () => {
-      const url = 'https://tools.zhuyuan.tw/pick';
+      const url = `https://${$('.pn-url b').textContent}`;
       (navigator.clipboard ? navigator.clipboard.writeText(url) : Promise.reject()).then(() => toast('網址複製好了'), () => toast(url));
     });
   }
   // Safari (and every browser on an iPhone) shows HEIC itself; elsewhere the photo tool's libheif worker turns it into a picture
+  // Lightroom's own type on this computer: its spacing as it is (the overlay's is tuned to match it in Source Sans 3)
+  try {
+    const g = document.createElement('canvas').getContext('2d'), w = (f) => { g.font = `40px ${f}`; return g.measureText('1K0A3827.CR3 mm').width; };
+    if (['"Myriad Pro"', '"Myriad Web Pro"'].some((f) => w(`${f}, monospace`) !== w('monospace'))) document.documentElement.classList.add('myriad');
+  } catch {}
   const WEBKIT = /AppleWebKit/.test(navigator.userAgent) && !/Chrome\/|Chromium\/|Android/.test(navigator.userAgent);
   // saving straight into a folder: Chrome and Edge on a computer
   const CAN_DIR = typeof window.showDirectoryPicker === 'function' && !PHONE;
@@ -122,7 +131,8 @@
   const inflate = (blob) => new Response(blob.stream().pipeThrough(new DecompressionStream('deflate-raw'))).blob();
 
   // ---------- the photos ----------
-  // it: { key, name, path, dir, size, mod, src (its source), file | z, heic, t (when taken, wall clock as UTC ms),
+  // it: { key, name, path, dir, size, mod, src (its source), file | z | url (a demo photo on this site), heic,
+  //       t (when taken, wall clock as UTC ms),
   //       when (text), cam, lens, ss, fn, iso, fl (the exposure, as text), orient, w, h (as shown),
   //       thumb (Blob | null: none in the file | undefined: not read), turn (the thumbnail still needs the photo's
   //       orientation), n (place in the sorted list) }
@@ -138,13 +148,13 @@
   const keyOf = (name, size) => `${name.toLowerCase()}|${size}`;
   const baseName = (p) => p.slice(p.lastIndexOf('/') + 1);
 
-  function addPhoto(found, src, path, size, mod, file, z) {
+  function addPhoto(found, src, path, size, mod, file, z, url) {
     if (HIDDEN(path)) return;
     const name = baseName(path);
     if (!PHOTO.test(name)) { if (RAW.test(name)) skipped.raw++; else if (!/^(thumbs\.db|desktop\.ini|\.ds_store)$/i.test(name)) skipped.other++; return; }
     const key = keyOf(name, size);
     if (byKey.has(key) || found.has(key)) { skipped.same++; return; }
-    found.set(key, { key, name, path, dir: '', size, mod, src, file: file || null, z: z || null, heic: HEIC.test(name), t: null, when: '', cam: '', lens: '', ss: '', fn: '', iso: '', fl: '', orient: 1, w: 0, h: 0, thumb: undefined, turn: 1, n: 0 });
+    found.set(key, { key, name, path, dir: '', size, mod, src, file: file || null, z: z || null, url: url || null, heic: HEIC.test(name), t: null, when: '', cam: '', lens: '', ss: '', fn: '', iso: '', fl: '', orient: 1, w: 0, h: 0, thumb: undefined, turn: 1, n: 0 });
   }
   // a dropped folder, walked
   function walk(entry, found, src) {
@@ -180,7 +190,8 @@
     for (const [name, k] of subs) await walkDir(k, `${prefix}/${name}`, found, src);
   }
 
-  // list: [{ entry } | { file, path? } | { dir }] from a drop, the file boxes or the home page
+  // list: [{ entry } | { file, path? } | { dir } | { url, name, size, mod }] from a drop, the file boxes, the home page
+  // or the demo
   let loading = false;
   async function add(list) {
     if (loading || export_.busy) return;
@@ -192,8 +203,15 @@
     const found = new Map(), added = [];
     skipped = { raw: 0, other: 0, same: 0 };
     const loose = { id: ++srcSeq, name: '', kind: 'files', n: 0 };
+    const web = { id: ++srcSeq, name: '示範照片', kind: 'demo', n: 0 };
     try {
       for (const x of list) {
+        if (x.url) {
+          const before = found.size;
+          addPhoto(found, web, x.name, x.size, x.mod, null, null, x.url);
+          web.n += found.size - before;
+          continue;
+        }
         if (x.dir) {
           const src = { id: ++srcSeq, name: x.dir.name, kind: 'folder', n: 0 };
           const before = found.size;
@@ -239,6 +257,7 @@
       }
     } catch (e) { console.error(e); toast('有些檔案讀不到'); }
     if (loose.n) added.push(loose);
+    if (web.n) added.push(web);
     const fresh = [...found.values()];
     if (fresh.length) {
       await readAll(fresh);
@@ -272,8 +291,33 @@
 
   // ---------- what's in each photo: when, which camera, its thumbnail ----------
   const HEAD = 196608;   // the EXIF reader's first look
+  const WEB_HEAD = 65536;   // a demo photo's (over the network)
+  // where a JPEG's EXIF block (APP1) ends, or 0
+  function exifEnd(b) {
+    for (let i = 2; i + 4 <= b.length && b[i] === 0xff;) {
+      const m = b[i + 1], len = (b[i + 2] << 8) | b[i + 3];
+      if (m === 0xe1 && b[i + 4] === 0x45 && b[i + 5] === 0x78) return i + 2 + len;   // "Ex"if
+      if (m === 0xda) break;
+      i += 2 + len;
+    }
+    return 0;
+  }
   async function headOf(it) {
     if (it.file) return { file: it.file, bytes: null };
+    // a demo photo: its first 64 KB, asked for by byte range, and the rest of the camera's EXIF block (where the
+    // thumbnail is) if it runs on
+    if (it.url) {
+      const get = async (a, b) => {
+        const r = await fetch(it.url, { headers: { Range: `bytes=${a}-${b - 1}` } });
+        if (!r.ok) throw new Error(`${r.status}`);
+        return new Uint8Array(await r.arrayBuffer());
+      };
+      let bytes = await get(0, WEB_HEAD);
+      const end = Math.min(exifEnd(bytes), HEAD);
+      if (end > bytes.length && bytes.length === WEB_HEAD) { const more = await get(WEB_HEAD, end), all = new Uint8Array(end); all.set(bytes); all.set(more, WEB_HEAD); bytes = all; }
+      bytes = bytes.subarray(0, HEAD);
+      return { file: new File([bytes], it.name, { lastModified: it.mod }), bytes };
+    }
     const z = it.z, want = Math.min(z.csize, z.method ? HEAD + 65536 : HEAD);
     const buf = await bytesOf(z.zip, z.lho, z.lho + 30 + 4096 + want), v = new DataView(buf.buffer);
     if (v.getUint32(0, true) !== 0x04034b50) throw new Error('zip entry');
@@ -323,7 +367,7 @@
     const th = r && r.thumb;
     if (th && th.end > th.start && th.end - th.start < 300000) {
       if (it.file) it.thumb = it.file.slice(th.start, th.end, 'image/jpeg');
-      else if (!it.z.method && head) it.thumb = it.z.zip.slice(it.z.data + th.start, it.z.data + th.end, 'image/jpeg');
+      else if (it.z && !it.z.method && head) it.thumb = it.z.zip.slice(it.z.data + th.start, it.z.data + th.end, 'image/jpeg');
       else if (head && head.bytes && th.end <= head.bytes.length) it.thumb = new Blob([head.bytes.slice(th.start, th.end)], { type: 'image/jpeg' });
       if (it.thumb) it.turn = it.orient;
     }
@@ -400,7 +444,7 @@
     save(u.ch.map((c) => [c.it.key, c.from]));
     // back on the photo it was on, even if the filter had let it go
     const at = u.at || u.ch[0].it;
-    if (!view.includes(at)) { view.splice(lowerBound(at), 0, at); }
+    if (!view.includes(at)) { view.splice(lowerBound(at), 0, at); viewGen++; }
     pos = view.indexOf(at);
     sel.clear();
     show();
@@ -410,8 +454,8 @@
 
   // ---------- what's shown: the filter, the folder, the order ----------
   const SAVED = 'zt-pick';
-  const S = { step: 1, filter: 'all', folder: '', sort: 'time', auto: true, info: true, cell: 190, tip: true, grid: false, take: 'keep', lay: 'flat' };
-  const KEPT = ['sort', 'auto', 'info', 'cell', 'tip', 'lay'];
+  const S = { step: 1, filter: 'all', folder: '', sort: 'time', auto: true, info: true, tip: true, grid: false, take: 'keep', lay: 'flat' };
+  const KEPT = ['sort', 'auto', 'info', 'tip', 'lay'];
   try { const o = JSON.parse(localStorage.getItem(SAVED)) || {}; for (const k of KEPT) if (k in o) S[k] = o[k]; } catch {}
   const remember = () => { try { localStorage.setItem(SAVED, JSON.stringify(Object.fromEntries(KEPT.map((k) => [k, S[k]])))); } catch {} };
   let view = [];   // the photos shown, in order
@@ -424,6 +468,7 @@
   // where `it` would go in the view, by its place in the sorted list
   function lowerBound(it) { let a = 0, b = view.length; while (a < b) { const m = (a + b) >> 1; if (view[m].n < it.n) a = m + 1; else b = m; } return a; }
   function rebuildView(stay) {
+    viewGen++;
     view = items.filter(matches);
     pos = 0;
     if (stay) { const i = view.indexOf(stay); pos = i >= 0 ? i : Math.min(lowerBound(stay), Math.max(0, view.length - 1)); }
@@ -434,13 +479,13 @@
     if (!view.length) return;
     let next = pos + d;
     const from = view[pos];
-    if (from && !matches(from)) { view.splice(pos, 1); if (d > 0) next = pos; }
+    if (from && !matches(from)) { view.splice(pos, 1); viewGen++; if (d > 0) next = pos; }
     pos = clamp(next, 0, Math.max(0, view.length - 1));
     sel.clear();
     show();
     refresh();
   }
-  function goTo(i) { const from = view[pos]; if (from && i !== pos && !matches(from)) { view.splice(pos, 1); if (i > pos) i--; } pos = clamp(i, 0, Math.max(0, view.length - 1)); show(); refresh(); }
+  function goTo(i) { const from = view[pos]; if (from && i !== pos && !matches(from)) { view.splice(pos, 1); viewGen++; if (i > pos) i--; } pos = clamp(i, 0, Math.max(0, view.length - 1)); show(); refresh(); }
 
   // ---------- steps ----------
   const STEP_NAMES = ['放入照片', '挑照片', '存下來'];
@@ -492,7 +537,7 @@
     $('#sources').hidden = !n;
     $('#how').hidden = n > 0;
     fill($('#srcList'), ...sources.map((s) => el('li', { class: `src ${s.kind}` },
-      el('span', { class: 'src-ic', 'aria-hidden': 'true', text: s.kind === 'zip' ? 'ZIP' : s.kind === 'folder' ? '▤' : '▢' }),
+      el('span', { class: 'src-ic', 'aria-hidden': 'true', text: s.kind === 'zip' ? 'ZIP' : s.kind === 'folder' ? '▤' : s.kind === 'demo' ? '示範' : '▢' }),
       el('span', { class: 'src-name', text: s.name || '一些照片' }),
       el('span', { class: 'src-n', text: `${num(s.n)} 張` }),
       el('button', { type: 'button', class: 'icon-btn src-x', 'aria-label': `拿掉 ${s.name || '這些照片'}`, title: '拿掉', onclick: () => removeSource(s), text: '×' }))));
@@ -644,10 +689,14 @@
   function blobOf(it) {
     if (it.file) return Promise.resolve(it.file);
     const z = it.z;
-    if (!z.method) return dataStart(z).then((d) => z.zip.slice(d, d + z.csize));
+    if (z && !z.method) return dataStart(z).then((d) => z.zip.slice(d, d + z.csize));
+    // deflated in a ZIP, or a demo photo to download: the last few kept
     let p = unpacked.get(it);
     if (p) unpacked.delete(it);
-    else p = dataStart(z).then((d) => inflate(z.zip.slice(d, d + z.csize)));
+    else {
+      p = z ? dataStart(z).then((d) => inflate(z.zip.slice(d, d + z.csize))) : fetch(it.url).then((r) => { if (!r.ok) throw new Error(`${r.status}`); return r.blob(); });
+      p.catch(() => { if (unpacked.get(it) === p) unpacked.delete(it); });
+    }
     unpacked.set(it, p);
     while (unpacked.size > KEEP + 2) unpacked.delete(unpacked.keys().next().value);
     return p;
@@ -807,7 +856,8 @@
         URL.revokeObjectURL(url);
         it.thumb = await new Promise((r) => c.toBlob(r, 'image/jpeg', 0.8));
         it.turn = 1;
-        for (const d of [document, ...(swOpen() ? [sw.document] : [])]) for (const n of $$(`[data-k="${CSS.escape(it.key)}"] img`, d)) { n.src = thumbUrl(it); n.style.transform = ''; }
+        for (const n of $$(`[data-k="${CSS.escape(it.key)}"] img`)) { n.src = thumbUrl(it); n.style.transform = ''; }
+        if (swWant.delete(it.key)) sendThumbs([it]);
       } catch { /* stays blank */ }
     }
     thumbBusy = false;
@@ -908,28 +958,33 @@
     $('#bGrid').classList.toggle('on', on);
     $('#bLoupe').classList.toggle('on', !on);
     $('#bZoom').hidden = on;
-    stripPos = gridPos = swPos = -1;
+    stripPos = gridPos = -1;
     requestAnimationFrame(() => { if (on) { drawGrid(); grid.focus({ preventScroll: true }); } else { layout(); show(); } refresh(); });
   }
   $('#bGrid').addEventListener('click', () => setGrid(true));
   $('#bLoupe').addEventListener('click', () => setGrid(false));
   const targets = () => (sel.size > 1 ? view.filter((it) => sel.has(it)) : current() ? [current()] : []);
 
-  // ---------- the second window: every photo as a grid, for another screen (Lightroom's secondary display) ----------
-  // second.html is an empty page; this window draws into it (it has the photos, and the thumbnails' blob: addresses
-  // work there too), keeps the photo you're on in sight, and takes its clicks and keys back. Only the cells on screen
-  // exist, as in the grid here.
-  let sw = null, swPos = -1, swCols = 1, swQueued = false;
-  const swOpen = () => !!sw && !sw.closed;
-  const FILTER_NAME = { keep: '留用', none: '未標記', drop: '排除' };
+  // ---------- the second window (/pick/second): every photo as a grid, for another screen (Lightroom's secondary display) ----------
+  // It's its own page and draws itself; the two talk over a BroadcastChannel. So it keeps going when this page closes or
+  // reloads, and shows the next set of photos put in here (or in another tab) without being touched. From here: the list
+  // (key, name, folder) when it changes, the state (where you are, the flags, the counts) on every move, and the
+  // thumbnails it asks for, as copies (they outlive this page). From there: clicks and keys, taken as if pressed here.
+  const bc = 'BroadcastChannel' in window ? new BroadcastChannel('zt-pick') : null;
+  const ME = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 7)}`;
+  let swSeen = 0, viewGen = 0, sentGen = -1, sentAny = false, swQueued = false;
+  const swWant = new Set();
+  const swOpen = () => Date.now() - swSeen < 6000;
+  const post = (type, extra) => { if (bc) bc.postMessage({ type, from: ME, ...extra }); };
   function secondButton() {
     const on = swOpen();
     $('#bSecond').classList.toggle('on', on);
     $('#bSecond').setAttribute('aria-pressed', String(on));
   }
   function toggleSecond() {
-    if (swOpen()) { sw.close(); sw = null; secondButton(); return; }
-    const w = window.open('second.html', 'zt-pick-second', `popup,width=${Math.min(screen.availWidth, 1280)},height=${Math.min(screen.availHeight, 820)}`);
+    if (!bc) { toast('這個瀏覽器不能開副螢幕'); return; }
+    if (swOpen()) { post('close'); swSeen = 0; secondButton(); return; }
+    const w = window.open(onServer ? 'second' : 'second.html', 'zt-pick-second', `popup,width=${Math.min(screen.availWidth, 1280)},height=${Math.min(screen.availHeight, 820)}`);
     if (!w) { toast('瀏覽器擋下了新視窗：請允許這個網站開彈出式視窗', 5000); return; }
     // two screens (Chrome, Edge): put it on the other one, full size (the browser asks first)
     if (screen.isExtended && window.getScreenDetails) {
@@ -939,74 +994,57 @@
       }).catch(() => {});
     }
   }
-  // second.html calls this when it's loaded (or reloaded)
-  function attachSecond(w) {
-    sw = w; swPos = -1;
-    const d = w.document, g = d.getElementById('sGrid');
-    g.addEventListener('scroll', () => drawSecond(false), { passive: true });
-    w.addEventListener('resize', () => drawSecond(false));
-    g.addEventListener('click', (e) => { const c = e.target.closest('.c'); if (c) { sel.clear(); goTo(+c.dataset.i); } });
-    g.addEventListener('dblclick', (e) => { if (e.target.closest('.c') && S.grid) setGrid(false); });
-    const size = (k) => { S.cell = clamp(Math.round(S.cell * k), 110, 420); remember(); swPos = -1; drawSecond(); };
-    const full = () => { if (d.fullscreenElement) d.exitFullscreen().catch(() => {}); else d.documentElement.requestFullscreen().catch(() => {}); };
-    d.getElementById('sSmaller').addEventListener('click', () => size(1 / 1.2));
-    d.getElementById('sBigger').addEventListener('click', () => size(1.2));
-    d.getElementById('sFull').addEventListener('click', full);
-    // its keys work as they do here; ↑ ↓ move a row of its own grid (here they'd flag)
-    w.addEventListener('keydown', (e) => {
-      const k = e.key, plain = !e.metaKey && !e.ctrlKey && !e.altKey;
-      if (plain && (k === 'f' || k === 'F')) { e.preventDefault(); full(); return; }
-      if (plain && (k === '-' || k === '+' || k === '=')) { e.preventDefault(); size(k === '-' ? 1 / 1.2 : 1.2); return; }
-      if (plain && !S.grid && (k === 'ArrowUp' || k === 'ArrowDown') && S.step === 2) { e.preventDefault(); goTo(pos + (k === 'ArrowUp' ? -swCols : swCols)); return; }
-      onKey(e);
-    });
-    w.addEventListener('pagehide', () => { if (sw === w) { sw = null; secondButton(); } });
-    secondButton();
-    drawSecond();
+  function sendList() {
+    sentGen = viewGen; sentAny = true;
+    post('list', { list: view.map((it) => [it.key, it.name, it.dir]), filter: S.filter });
   }
-  window.ZtPickSecond = { attach: attachSecond };
-  // this page going away leaves the other one with nothing to show
-  window.addEventListener('pagehide', () => {
-    if (!swOpen()) return;
-    try { const l = sw.document.getElementById('sLost'); l.textContent = '「照片挑選」的視窗關掉或重新整理了。這個視窗可以關掉，回去再按一次「副螢幕」。'; l.hidden = false; } catch {}
-  });
+  function sendState() {
+    const flags = new Int8Array(view.length);
+    view.forEach((it, i) => { flags[i] = flagOf(it); });
+    const picked = S.grid && sel.size > 1 ? view.reduce((a, it, i) => (sel.has(it) ? (a.push(i), a) : a), []) : [];
+    post('state', { len: view.length, pos, flags, sel: picked, counts: counts(), filter: S.filter });
+  }
+  async function sendThumbs(list) {
+    const out = [];
+    for (const it of list) { try { out.push({ k: it.key, blob: new Blob([await it.thumb.arrayBuffer()], { type: 'image/jpeg' }), turn: it.turn }); } catch {} }
+    if (out.length) post('thumbs', { list: out });
+  }
   function queueSecond() {
-    if (!sw || swQueued) return;
+    // nobody listening; or a fresh page with no photos yet, and the other window keeps what it shows
+    if (!bc || !swOpen() || swQueued || (!items.length && !sentAny)) return;
     swQueued = true;
-    queueMicrotask(() => { swQueued = false; drawSecond(); });
+    queueMicrotask(() => { swQueued = false; if (viewGen !== sentGen) sendList(); sendState(); });
   }
-  function drawSecond(follow = true) {
-    if (!swOpen()) { if (sw) { sw = null; secondButton(); } return; }
-    const d = sw.document, g = d.getElementById('sGrid'), gin = d.getElementById('sIn');
-    if (!g || !gin) return;
-    const W = g.clientWidth - 12, H = g.clientHeight;
-    swCols = Math.max(1, Math.floor(W / S.cell));
-    const cw = W / swCols, ch = Math.round(cw * 0.8) + 26;
-    gin.style.height = `${Math.ceil(view.length / swCols) * ch + 12}px`;
-    if (follow && swPos !== pos) {
-      // the photo you're on, kept in sight: when it leaves, its row comes back to the middle
-      const y = 6 + Math.floor(pos / swCols) * ch, t = g.scrollTop;
-      if (y < t || y + ch > t + H) g.scrollTop = Math.max(0, y - (H - ch) / 2);
-      swPos = pos;
-    }
-    const t = g.scrollTop, a = Math.max(0, (Math.floor(t / ch) - 1) * swCols), b = Math.min(view.length, (Math.ceil((t + H) / ch) + 1) * swCols);
-    const kids = [];
-    for (let i = a; i < b; i++) {
-      const it = view[i];
-      kids.push(el('div', { class: cellClass(it, 'c'), 'data-i': i, 'data-k': it.key, title: `${it.name}${it.dir ? `・${it.dir}` : ''}`,
-        style: `left:${6 + (i % swCols) * cw}px;top:${6 + Math.floor(i / swCols) * ch}px;width:${cw - 6}px;height:${ch - 6}px` },
-      el('span', { class: 'no', text: num(i + 1) }), el('span', { class: 'pic' }, thumbImg(it)), el('span', { class: 'name', text: it.name })));
-    }
-    gin.replaceChildren(...kids);
-    const it = current(), c = counts();
-    fill(d.getElementById('sPos'), ...(it ? [el('b', { text: `第 ${num(pos + 1)}／${num(view.length)} 張` }), `・${it.name}`] : ['還沒有照片']),
-      S.filter !== 'all' ? `（只看${FILTER_NAME[S.filter]}）` : '', sel.size > 1 ? `・選了 ${num(sel.size)} 張` : '');
-    fill(d.getElementById('sCounts'), el('span', { class: 'n-keep' }, el('i'), '留用 ', el('b', { text: num(c.keep) })),
-      el('span', {}, '未標記 ', el('b', { text: num(c.none) })), el('span', { class: 'n-drop' }, el('i'), '排除 ', el('b', { text: num(c.drop) })));
-    d.getElementById('sEmpty').hidden = view.length > 0;
+  if (bc) {
+    bc.onmessage = ({ data: m }) => {
+      if (!m || !m.type) return;
+      if (m.type === 'hello' || m.type === 'here') {
+        const was = swOpen();
+        swSeen = Date.now();
+        if (!was) secondButton();
+        // a second window that just opened (or hadn't been heard from): what we have
+        if ((m.type === 'hello' || !was) && items.length) { sentGen = -1; queueSecond(); }
+        return;
+      }
+      if (m.type === 'gone') { swSeen = 0; secondButton(); return; }
+      if (m.to !== ME) return;
+      if (m.type === 'want') {
+        const ready = [];
+        for (const k of m.keys) { const it = byKey.get(k); if (!it) continue; if (it.thumb) ready.push(it); else { swWant.add(k); wantThumb(it); } }
+        sendThumbs(ready);
+      } else if (m.type === 'go') { if (S.step === 2 && view[m.i]) { sel.clear(); goTo(m.i); } }
+      else if (m.type === 'loupe') { if (S.grid) setGrid(false); }
+      else if (m.type === 'key') {
+        onKey({ key: m.key, shiftKey: m.shift, metaKey: m.meta, ctrlKey: m.ctrl, altKey: m.alt, target: document.body, preventDefault() {}, getModifierState: (x) => x === 'CapsLock' && m.caps });
+      }
+    };
+    post('hello-main');
+    // the window you're using is the one it follows
+    addEventListener('focus', () => { if (items.length && swOpen()) { sentGen = -1; queueSecond(); } });
+    addEventListener('pagehide', () => post('bye'));
   }
   $('#bSecond').addEventListener('click', toggleSecond);
-  $('#bSecond').hidden = PHONE;
+  $('#bSecond').hidden = PHONE || !bc;
 
   // ---------- the keys, the first times in (until a photo is flagged with one) ----------
   let tipTimer = 0;
@@ -1043,7 +1081,7 @@
     S.filter = b.dataset.f;
     const at = current();
     rebuildView(at && matches(at) ? at : null);
-    stripPos = gridPos = swPos = -1;
+    stripPos = gridPos = -1;
     show(); refresh();
   });
   function renderFolders() {
@@ -1057,7 +1095,7 @@
   $('#folder').addEventListener('change', (e) => {
     S.folder = e.target.value;
     rebuildView(current() && matches(current()) ? current() : null);
-    stripPos = gridPos = swPos = -1;
+    stripPos = gridPos = -1;
     show(); refresh();
     e.target.blur();
   });
@@ -1066,7 +1104,7 @@
     if (r.type !== 'radio') return;
     if (r.name === 'take' || r.name === 'lay') { S[r.name] = r.value; if (r.name === 'lay') remember(); renderStep3(); }
   });
-  $('#sort').addEventListener('change', (e) => { S.sort = e.target.value; remember(); const at = current(); sortItems(); rebuildView(at); stripPos = gridPos = swPos = -1; show(); refresh(); e.target.blur(); });
+  $('#sort').addEventListener('change', (e) => { S.sort = e.target.value; remember(); const at = current(); sortItems(); rebuildView(at); stripPos = gridPos = -1; show(); refresh(); e.target.blur(); });
   $('#auto').checked = S.auto;
   $('#auto').addEventListener('change', (e) => { S.auto = e.target.checked; remember(); e.target.blur(); });
   $('#bKeep').addEventListener('click', () => mark(targets(), flagOf(current()) === 1 && sel.size <= 1 ? 0 : 1, S.auto));
@@ -1309,7 +1347,7 @@
       for (const it of list) {
         const { dir, name } = names.get(it), path = dir ? `${dir}/${name}` : name;
         if (it.z) { const at = await dataStart(it.z); entries.push({ name: path, raw: { data: it.z.zip.slice(at, at + it.z.csize), method: it.z.method, crc: it.z.crc, size: it.z.size }, lastModified: it.z.mod }); }
-        else entries.push({ name: path, file: it.file });
+        else entries.push({ name: path, file: it.file || await blobOf(it) });
       }
       const all = entries.reduce((a, x) => a + (x.raw ? x.raw.data.size : x.file.size), 0);
       const blob = await ManyZip.files(entries, (d) => { export_.done = Math.min(list.length, Math.round((d / all) * list.length)); progress(); });
@@ -1328,7 +1366,7 @@
   // ---------- the counter ----------
   // Only a number leaves the browser: how many photos were saved.
   function count(n) {
-    if (!onServer || !n) return;
+    if (!onServer || !n || DEMO) return;
     fetch('api/stats/processed', { method: 'POST', headers: { 'Content-Type': 'application/json' }, keepalive: true, body: JSON.stringify({ files: n }) })
       .then(loadStats).catch(() => {});
   }
@@ -1360,6 +1398,19 @@
       if (missed.length) toast(`有 ${num(missed.length)} 個沒辦法從首頁帶過來，請在這裡再放一次`, 6000);
     }).catch(() => {});
   }
+  // the demo: its photos listed by the server, read like a folder (only each photo's start, until it's looked at)
+  async function startDemo() {
+    document.body.classList.add('demo');
+    $('#demoTag').hidden = false;
+    reading('正在準備示範照片…');
+    let list = [];
+    try { const r = await fetch('demo/list.json', { cache: 'no-store' }); if (r.ok) list = await r.json(); } catch {}
+    reading('');
+    if (!list.length) { toast('示範照片還沒準備好，請晚一點再試', 6000); return; }
+    await markReady.catch(() => {});
+    await add(list.map((x) => ({ url: `demo/${encodeURIComponent(x.name)}`, name: x.name, size: x.size, mod: x.mtime })));
+  }
+  if (DEMO && !ON_PHONE) startDemo();
   loadStats();
   renderStep1();
   renderStepper();

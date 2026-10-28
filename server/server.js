@@ -20,6 +20,10 @@
      POST /pick/api/stats/processed   ← { files }   (picked photos saved)
    The photo tool's Flickr links are asked from here (server/flickr.js), so the API key stays on this machine:
      GET  /exif/api/flickr/status, /exif/api/flickr/rest?method=…, /exif/api/flickr/oembed?url=…
+   照片挑選's second window is /pick/second. Its demo, /pick/demo, is the one place photos come from this server:
+   demo.zip at the top of the site (not in git), unpacked once into server/data/pick-demo, each photo served on its
+   own (with byte ranges, so the page reads just the start of each for its time and thumbnail):
+     GET  /pick/demo/list.json → [{ name, size, mtime }]      GET /pick/demo/<name> → the photo
    Env: PORT (default 8080), HOST (default 127.0.0.1), STATS_FILE (default server/data/stats.json). */
 'use strict';
 const http = require('http');
@@ -62,6 +66,7 @@ const LEGACY = [
   [/^\/exiftools(\/(index\.html)?)?$/, '/exif'],
   [/^\/renametools(\/(index\.html)?)?$/, '/rename'],
   [/^\/picktools(\/(index\.html)?)?$/, '/pick'],
+  [/^\/pick\/second\.html$/, '/pick/second'],
   [/^\/photo\/$/, '/photo'],
 ];
 
@@ -74,7 +79,7 @@ const TOOL_LIMITS = { rename: { files: 20000 }, pick: { files: 20000 } };
 const TYPES = {
   '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8',
   '.json': 'application/json; charset=utf-8', '.svg': 'image/svg+xml', '.png': 'image/png', '.jpg': 'image/jpeg',
-  '.txt': 'text/plain; charset=utf-8', '.woff2': 'font/woff2', '.wasm': 'application/wasm', '.gz': 'application/gzip', '.ico': 'image/x-icon',
+  '.txt': 'text/plain; charset=utf-8', '.woff2': 'font/woff2', '.jpeg': 'image/jpeg', '.webp': 'image/webp', '.heic': 'image/heic', '.heif': 'image/heif', '.wasm': 'application/wasm', '.gz': 'application/gzip', '.ico': 'image/x-icon',
 };
 
 let stats = { video: {}, pdf: {}, avatar: {}, image: {}, crop: {}, watermark: {}, exif: {}, rename: {}, pick: {} };
@@ -153,6 +158,107 @@ const photoSide = (html) => html
   .replace(/(<meta property="og:url" content=")[^"]*/, '$1https://tools.zhuyuan.tw/photo')
   .replace(/(<meta property="og:image" content=")[^"]*/, '$1https://tools.zhuyuan.tw/assets/og-photo.png');
 
+// ---------- 照片挑選's demo photos ----------
+const DEMO_ZIP = path.join(ROOT, 'demo.zip');
+const DEMO_DIR = path.join(__dirname, 'data', 'pick-demo');
+const DEMO_PHOTO = /\.(jpe?g|png|webp|heic|heif)$/i;
+let demoReady = null;   // Promise<Map name → { size, mtime }> | null
+// demo.zip's photos into DEMO_DIR, again only when the ZIP changed (its size and time, in .stamp)
+function demoPhotos() {
+  if (demoReady) return demoReady;
+  demoReady = (async () => {
+    const zst = await fs.promises.stat(DEMO_ZIP);
+    const stamp = `${zst.size}:${Math.round(zst.mtimeMs)}`;
+    let fresh = false;
+    try { fresh = (await fs.promises.readFile(path.join(DEMO_DIR, '.stamp'), 'utf8')) === stamp; } catch {}
+    if (!fresh) {
+      await fs.promises.rm(DEMO_DIR, { recursive: true, force: true });
+      await fs.promises.mkdir(DEMO_DIR, { recursive: true });
+      await unzipPhotos(DEMO_ZIP, DEMO_DIR);
+      await fs.promises.writeFile(path.join(DEMO_DIR, '.stamp'), stamp);
+    }
+    const list = new Map();
+    for (const name of (await fs.promises.readdir(DEMO_DIR)).sort()) {
+      if (!DEMO_PHOTO.test(name)) continue;
+      const st = await fs.promises.stat(path.join(DEMO_DIR, name));
+      list.set(name, { size: st.size, mtime: Math.round(st.mtimeMs) });
+    }
+    return list;
+  })();
+  demoReady.catch(() => { demoReady = null; });   // no demo.zip (yet): try again next time
+  return demoReady;
+}
+// a ZIP's photos (stored or deflated; ZIP64 sizes too) into a folder, flat, by their own names
+async function unzipPhotos(zipFile, dir) {
+  const zlib = require('zlib');
+  const fh = await fs.promises.open(zipFile, 'r');
+  try {
+    const { size } = await fh.stat();
+    const read = async (pos, len) => { const b = Buffer.alloc(len); await fh.read(b, 0, len, pos); return b; };
+    const tail = await read(Math.max(0, size - 65557), Math.min(size, 65557));
+    const e = tail.lastIndexOf(Buffer.from([0x50, 0x4b, 0x05, 0x06]));
+    if (e < 0) throw new Error('not a zip');
+    let cdSize = tail.readUInt32LE(e + 12), cdOff = tail.readUInt32LE(e + 16);
+    if (cdOff === 0xffffffff && e >= 20 && tail.readUInt32LE(e - 20) === 0x07064b50) {
+      const r = await read(Number(tail.readBigUInt64LE(e - 12)), 56);
+      cdSize = Number(r.readBigUInt64LE(40)); cdOff = Number(r.readBigUInt64LE(48));
+    }
+    const cd = await read(cdOff, cdSize);
+    for (let q = 0; q + 46 <= cd.length && cd.readUInt32LE(q) === 0x02014b50;) {
+      const method = cd.readUInt16LE(q + 10), nl = cd.readUInt16LE(q + 28), xl = cd.readUInt16LE(q + 30), cl = cd.readUInt16LE(q + 32);
+      const usize0 = cd.readUInt32LE(q + 24);
+      let csize = cd.readUInt32LE(q + 20), lho = cd.readUInt32LE(q + 42);
+      // ZIP64: what didn't fit in 32 bits is in extra field 1, in this order
+      for (let x = q + 46 + nl; x + 4 <= q + 46 + nl + xl;) {
+        const id = cd.readUInt16LE(x), len = cd.readUInt16LE(x + 2);
+        if (id === 1) { let y = x + 4; if (usize0 === 0xffffffff) y += 8; if (csize === 0xffffffff) { csize = Number(cd.readBigUInt64LE(y)); y += 8; } if (lho === 0xffffffff) lho = Number(cd.readBigUInt64LE(y)); }
+        x += 4 + len;
+      }
+      const name = path.basename(cd.toString('utf8', q + 46, q + 46 + nl).replace(/\\/g, '/'));
+      q += 46 + nl + xl + cl;
+      if (!DEMO_PHOTO.test(name) || name.startsWith('.') || (method !== 0 && method !== 8)) continue;
+      const lh = await read(lho, 30);
+      const at = lho + 30 + lh.readUInt16LE(26) + lh.readUInt16LE(28);
+      const src = fs.createReadStream(zipFile, { start: at, end: at + csize - 1 });
+      const out = fs.createWriteStream(path.join(dir, name));
+      await new Promise((ok, fail) => {
+        (method === 8 ? src.pipe(zlib.createInflateRaw()) : src).on('error', fail).pipe(out).on('finish', ok).on('error', fail);
+      });
+    }
+  } finally { await fh.close(); }
+}
+// a file in pieces (Range: bytes=a-b), as browsers and Cloudflare ask for big files
+function sendRanged(req, res, file, size, type, cache) {
+  const m = /^bytes=(\d*)-(\d*)$/.exec(req.headers.range || '');
+  let start = 0, end = size - 1, code = 200;
+  if (m && (m[1] || m[2])) {
+    if (m[1]) { start = +m[1]; if (m[2]) end = Math.min(+m[2], size - 1); } else start = Math.max(0, size - +m[2]);
+    if (start > end) { res.writeHead(416, { ...HEADERS, 'Content-Range': `bytes */${size}` }); return res.end(); }
+    code = 206;
+  }
+  res.writeHead(code, { ...HEADERS, 'Content-Type': type, 'Cache-Control': cache, 'Accept-Ranges': 'bytes', 'Content-Length': end - start + 1,
+    ...(code === 206 ? { 'Content-Range': `bytes ${start}-${end}/${size}` } : {}) });
+  if (req.method === 'HEAD') return res.end();
+  fs.createReadStream(file, { start, end }).pipe(res);
+}
+// the demo page: the pick tool, called what it is when shared
+const demoPage = (html) => html
+  .replace(/<title>[^<]*<\/title>/, '<title>ZhuyuanLovePick・照片挑選（示範）</title>')
+  .replace(/(<meta property="og:title" content=")[^"]*/, '$1ZhuyuanLovePick・照片挑選（示範）')
+  .replace(/(<meta property="og:url" content=")[^"]*/, '$1https://tools.zhuyuan.tw/pick/demo');
+function routeDemo(req, res, p) {
+  if (p === '/pick/demo') return serveFile(req, res, path.join(ROOT, 'picktools', 'index.html'), '/pick/', false, demoPage), true;
+  if (!p.startsWith('/pick/demo/')) return false;
+  const name = p.slice('/pick/demo/'.length);
+  demoPhotos().then((list) => {
+    if (name === 'list.json') return send(res, 200, [...list].map(([n, x]) => ({ name: n, ...x })));
+    const it = list.get(name);
+    if (!it) return send(res, 404, 'not found', 'text/plain; charset=utf-8');
+    sendRanged(req, res, path.join(DEMO_DIR, name), it.size, TYPES[path.extname(name).toLowerCase()] || 'application/octet-stream', 'public, max-age=86400');
+  }, () => (name === 'list.json' ? send(res, 200, []) : send(res, 404, 'not found', 'text/plain; charset=utf-8')));
+  return true;
+}
+
 function serveFile(req, res, file, base, immutable, edit) {
   fs.stat(file, (err, st) => {
     if (err || !st.isFile()) return send(res, 404, 'not found', 'text/plain; charset=utf-8');
@@ -181,6 +287,9 @@ function route(req, res, url) {
   for (const [re, to] of LEGACY) if (re.test(p)) return redirect(res, to);
   // the home page's 拍攝 side has its own address
   if (p === '/photo') return serveFile(req, res, path.join(ROOT, 'home', 'index.html'), null, false, photoSide);
+  // 照片挑選's second window, and its demo
+  if (p === '/pick/second') return serveFile(req, res, path.join(ROOT, 'picktools', 'second.html'), '/pick/');
+  if (routeDemo(req, res, p)) return;
   for (const { route: r, dir, tool, immutable } of MOUNTS) {
     if (tool) {
       if (p === r) return serveFile(req, res, path.join(dir, 'index.html'), `${r}/`);
@@ -204,4 +313,7 @@ http.createServer((req, res) => {
   if (url.includes('/api/') && handleApi(req, res, url)) return;
   if (req.method !== 'GET' && req.method !== 'HEAD') return send(res, 405, 'method not allowed', 'text/plain');
   route(req, res, url);
-}).listen(PORT, HOST, () => console.log(`ZhuyuanTools on http://${HOST}:${PORT}/`));
+}).listen(PORT, HOST, () => {
+  console.log(`ZhuyuanTools on http://${HOST}:${PORT}/`);
+  demoPhotos().then((l) => console.log(`照片挑選 demo: ${l.size} photos`), () => {});   // unpacked before anyone asks
+});
