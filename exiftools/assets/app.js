@@ -1069,8 +1069,9 @@
     if (!it.done) { busy([el('span', { class: 'spinner' }), it.fk ? ' 正在向 Flickr 查詢…' : ' 讀取中…'], it.fk ? nameOf(it) : engine.state === 'ready' ? it.file.name : $('#engine').textContent.trim()); return; }
     if (!it.ok) { busy([it.fk ? 'Flickr 讀不到這張照片' : '讀不到這個檔案'], it.fk ? fkMsg(it.error) : engine.state === 'error' ? '解析程式沒有載入成功，請重新整理頁面再試一次' : '檔案可能壞了，或不是照片'); return; }
     const noCamera = !val(it, ['Make', 'Model']) && !val(it, ['ExposureTime', 'FNumber']);
-    $('#camName').textContent = noCamera ? (it.fk && it.fk.exifHidden ? '作者沒有公開拍攝參數' : '沒有相機資訊') : cameraName(it) || '不知道是哪台相機';
+    $('#camName').textContent = noCamera ? (it.fk && it.fk.exifHidden ? '作者沒有公開拍攝參數' : it.fk && it.fk.exifNoKey ? '這裡看不到拍攝參數' : '沒有相機資訊') : cameraName(it) || '不知道是哪台相機';
     $('#camLens').textContent = noCamera ? (it.fk ? (it.fk.exifHidden ? '這張照片的作者在 Flickr 設定不公開 EXIF，只看得到照片和 Flickr 上的資訊。'
+      : it.fk.exifNoKey ? '目前從 Flickr 只拿得到照片、作者和授權。相機和參數，請按「在 Flickr 打開」到照片頁看。'
       : 'Flickr 上這張照片沒有拍攝參數：上傳的檔案本身就沒有，例如截圖，或輸出時拿掉了。')
       : `拍攝資料被拿掉了：截圖、修圖 App 輸出、傳過通訊軟體或社群網站的照片常常這樣。要看參數，請用相機或手機裡的原始檔。${IOS ? ' iPhone 從「照片」選的時候，請選「實際大小」，縮小過的參數會不見。' : ''}`)
       : lensName(it) || (/mm$/.test(val(it, 'Lens', { groups: ['Composite'] })) ? `鏡頭 ${metres(val(it, 'Lens', { groups: ['Composite'] }))}` : '鏡頭沒有記錄');
@@ -1618,7 +1619,8 @@
 
   // ---------- Flickr ----------
   // A link to a photo, an album, someone's albums or galleries, a gallery, a photostream, favourites, a group's pool
-  // or a collection; assets/flickr.js asks Flickr from here (the link never goes to this site's server). A photo is
+  // or a collection; assets/flickr.js asks Flickr through this site's server, which holds the API key (without one,
+  // only single photos: picture, title, author, licence, no EXIF). A photo is
   // an item like a file: its EXIF as Flickr read it from the original at upload, its picture Flickr's size that fits
   // the screen (the biggest one for 100 %). A list
   // opens as a grid first (#browse); someone's albums or galleries as covers. Up top, where you are: 月太 的藝廊 ›
@@ -1630,6 +1632,7 @@
   const KIND_WORD = { album: '相簿', gallery: '藝廊', stream: '相片串流', faves: '最愛', group: '群組' };
   const FK_ERR = {
     nokey: '這個網站的 Flickr 查詢暫時不能用',
+    needkey: '目前只看得了單張照片：請貼一張照片的網址（相簿、藝廊這類清單還不行）',
     badurl: '看不懂這個連結，請貼 Flickr 照片、相簿或藝廊的網址',
     notflickr: '這不是 Flickr 的連結',
     short: '這種短網址還看不懂：請在瀏覽器打開它，再複製網址列裡的完整網址',
@@ -1992,11 +1995,13 @@
     if ($('#start').hidden) openFlickr(m[0], (msg, bad) => { if (msg == null) $('#toast').hidden = true; else toast(typeof msg === 'string' ? msg : '正在向 Flickr 查詢…', bad ? 6000 : 20000); });
     else { $('#flkUrl').value = m[0]; openFlickr(m[0], sayIn($('#flkMsg'))); }
   });
-  // the box shows only with a Flickr key (flickr.json); /exif?flickr=<link> opens one
+  // the box shows when this site's server can ask Flickr (on a server, not from disk); /exif?flickr=<link> opens one
   if (self.ZFlickr) {
-    ZFlickr.ready.then((ok) => {
-      fkReady = ok;
+    ZFlickr.ready.then((mode) => {
+      fkReady = !!mode;
       document.documentElement.classList.toggle('fk-on', fkReady);
+      // without a key: single photos only
+      if (mode === 'basic') for (const i of ['#flkUrl', '#flkPopUrl']) $(i).placeholder = '貼上 Flickr 照片的網址';
       const link = new URLSearchParams(location.search).get('flickr');
       if (fkReady && link) { $('#flkUrl').value = link; openFlickr(link, sayIn($('#flkMsg'))); }
     });

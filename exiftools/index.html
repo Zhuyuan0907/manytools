@@ -78,7 +78,7 @@
             <span class="drop-hint"><span class="d-desk">一張、很多張或整個資料夾，</span>JPG、HEIC 或相機的 RAW 檔</span>
           </span>
         </label>
-        <!-- or a Flickr link (only with a Flickr key in flickr.json: .fk-on); this browser asks Flickr itself -->
+        <!-- or a Flickr link (.fk-on when this site's server can ask Flickr: /exif/api/flickr) -->
         <form class="flk fk-only" id="flkForm" novalidate>
           <label class="flk-label" for="flkUrl"><span class="flk-dots" aria-hidden="true"><i></i><i></i></span>Flickr 連結</label>
           <input type="url" id="flkUrl" inputmode="url" autocomplete="off" autocapitalize="off" spellcheck="false" enterkeyhint="go" placeholder="貼上照片、相簿或藝廊的網址">
@@ -90,7 +90,7 @@
           <li><span class="how-no">
             <svg class="fk-only" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1"></path><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"></path></svg>
             <svg class="fk-off" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="7" width="14" height="13" rx="2"></rect><path d="M7 4h12a2 2 0 0 1 2 2v11"></path></svg>
-          </span><b class="fk-only">Flickr 連結也可以</b><span class="fk-only">直接向 Flickr 查詢，不經過本站伺服器</span><b class="fk-off">很多張一起放</b><span class="fk-off">用縮圖或 ← → 一張一張看</span></li>
+          </span><b class="fk-only">Flickr 連結也可以</b><span class="fk-only">貼上網址，看照片、作者和授權</span><b class="fk-off">很多張一起放</b><span class="fk-off">用縮圖或 ← → 一張一張看</span></li>
           <li><span class="how-no">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="10" width="16" height="11" rx="2"></rect><path d="M8 10V7a4 4 0 0 1 8 0v3"></path></svg>
           </span><b>照片不會上傳</b><span>只在你的電腦裡讀，也不留紀錄</span></li>

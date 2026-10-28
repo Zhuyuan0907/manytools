@@ -6,17 +6,18 @@
 
 | 資料夾 | 網址 | 內容 |
 |---|---|---|
-| `home/` | `/` | 入口頁（工具清單、處理數量標語）。電腦上 PDF 浮水印、照片參數查看、頭貼裁切躲在同類的卡片後面，平常只露出一條寫著名字的頁籤（「06 PDF 浮水印」），滑鼠移上去才滑出來；手機上沒有 hover，七個工具照順序平鋪 |
+| `home/` | `/` | 入口頁（工具清單、處理數量標語）。電腦上每張卡片後面都躲著一個工具（影片後面是批次改檔名，PDF 後面是 PDF 浮水印，圖片壓縮後面是照片參數查看，Gravatar 後面是頭貼裁切），平常只露出一條寫著名字的頁籤（「06 PDF 浮水印」），滑鼠移上去才滑出來；手機上沒有 hover，八個工具照順序平鋪 |
 | `videotools/` | `/video` | 影片碼率壓縮：放入影片 → 影片資訊 → 壓縮設定 → 處理與下載 |
 | `pdftools/` | `/pdf` | PDF 壓縮・拆分（ZhuyuanLovePDF），網站用的是 `pdftools/local/` |
 | `watermarktools/` | `/watermark` | PDF 浮水印（ZhuyuanLoveMark）：文字（機密、草稿、僅供○○使用…）或圖片 Logo，大小、透明度、角度、顏色，單個放在九宮格的位置或平鋪滿版，蓋在內容上面或墊在下面，旁邊直接預覽實際頁面；可以只加在某幾頁、選「防止被移除」把頁面合成圖片，一次處理很多份、打包下載。PDF 函式庫和解密（`pdfcrypt.js`）借用 `/pdf` 的。首頁上它躲在 PDF 卡片後面，滑鼠移上去才滑出來（手機先點一下露出來的邊） |
 | `avatartools/` | `/avatar` | Gravatar 頭貼查詢（ZhuyuanLoveAvatar）：Email 在瀏覽器裡轉成 SHA-256／MD5，查頭貼、公開資料，複製網址或打包下載 |
 | `croptools/` | `/crop` | 頭貼裁切（ZhuyuanLoveCrop）：拖曳、縮放、旋轉對準臉（虛線圓是圓形頭貼看得到的範圍），輸出正方形或圓形去背，PNG／JPEG／WebP，一次可以處理很多張、打包下載。首頁上它躲在 Gravatar 卡片後面，滑鼠移上去才滑出來（手機先點一下露出來的邊） |
 | `imagetools/` | `/image` | 圖片壓縮（ZhuyuanLoveImage）：壓到指定大小以內（找上限內畫質最高的設定），可換 JPEG／WebP／PNG、縮小尺寸、裁成正方形頭貼，打包下載 |
-| `exiftools/` | `/exif` | 照片參數查看（ZhuyuanLoveExif）：不分步驟，照片丟進去就看到。一張：一個畫面放全部，焦距、光圈、快門、ISO、曝光補償五個大數字，下面按類別分成卡片（曝光、對焦、鏡頭與景深、色彩與風格、Lightroom 調色參數、後製、手機拍攝、機身、時間與地點、影像與檔案、作者），重複的只顯示一次，其餘原廠細部設定收在「其他技術資料」；照片點一下放大到 100%（像 Lightroom），拖曳移動、滾輪或兩指縮放，F 全螢幕，手機點一下全螢幕、兩下放大、左右滑換張。很多張或整個資料夾：一次一張，下面一排縮圖，← → 換張（下一張先讀好）。也可以貼 Flickr 連結（照片、相簿、相簿列表、藝廊、藝廊列表、相片串流、最愛、群組、收藏集、短網址、圖片網址都可以；在任何地方按貼上也行，`/exif?flickr=<連結>` 直接打開）：相簿類先出現格狀總覽（標題、作者、張數、拍攝日期、授權，可以用標題或攝影師名字篩選，捲到底自動載入下一批），點一張就和自己的照片一樣看參數，上面一排「誰的相簿 › 哪本相簿 › 第幾張」可以一路點回去；Flickr 卡片有標題、作者、所在相簿、授權（CC 會提示要標註）、上傳日期、觀看次數、地點、標籤、說明，「複製標註」複製一行「標題 by 作者，授權，短網址」，可下載的照片有原檔連結。參數是 Flickr 從原檔讀出來的（`flickr.photos.getExif`），照片和色階用 Flickr 上最接近螢幕大小的版本，放大到 100% 時換成最大的版本。查詢由 `assets/flickr.js` 在使用者的瀏覽器直接向 Flickr API 發出，連結和照片都不經過本站伺服器；需要一把 Flickr API 金鑰，放在 `exiftools/flickr.json`（`{ "key": "…" }`，不進 git），沒有這個檔案就不顯示 Flickr 框。讀檔：Chrome、Edge、Firefox 一張用 [ExifTool](https://exiftool.org) 13.42 的 WebAssembly 版（`exiftools/lib/`，第一次下載 7.5 MB），Safari（含所有 iPhone、iPad 上的瀏覽器）用 `assets/meta.js`（自己寫的 JavaScript 讀取器：EXIF、GPS、Apple 原廠資料、XMP、色彩描述檔，JPEG／HEIC／CR3／RAF／TIFF 類 RAW／.xmp）——Safari 跑 WebAssembly 的 Perl 慢 10～50 倍、要用 1 GB 以上記憶體，iPhone 會把頁面關掉。縮圖上的 × 移除那張、「清空」回到開頭。iPhone 從「照片」選進來的照片會被 iOS 轉成 JPG 並拿掉位置（HEIC 原檔不會送進網頁），頁面會說明並教人從「檔案」App 選原檔。首頁上它躲在圖片壓縮卡片後面；首頁拖進 RAW 檔也會直接帶來這裡 |
+| `exiftools/` | `/exif` | 照片參數查看（ZhuyuanLoveExif）：不分步驟，照片丟進去就看到。一張：一個畫面放全部，焦距、光圈、快門、ISO、曝光補償五個大數字，下面按類別分成卡片（曝光、對焦、鏡頭與景深、色彩與風格、Lightroom 調色參數、後製、手機拍攝、機身、時間與地點、影像與檔案、作者），重複的只顯示一次，其餘原廠細部設定收在「其他技術資料」；照片點一下放大到 100%（像 Lightroom），拖曳移動、滾輪或兩指縮放，F 全螢幕，手機點一下全螢幕、兩下放大、左右滑換張。很多張或整個資料夾：一次一張，下面一排縮圖，← → 換張（下一張先讀好）。也可以貼 Flickr 連結（照片、相簿、相簿列表、藝廊、藝廊列表、相片串流、最愛、群組、收藏集、短網址、圖片網址都可以；在任何地方按貼上也行，`/exif?flickr=<連結>` 直接打開）：相簿類先出現格狀總覽（標題、作者、張數、拍攝日期、授權，可以用標題或攝影師名字篩選，捲到底自動載入下一批），點一張就和自己的照片一樣看參數，上面一排「誰的相簿 › 哪本相簿 › 第幾張」可以一路點回去；Flickr 卡片有標題、作者、所在相簿、授權（CC 會提示要標註）、上傳日期、觀看次數、地點、標籤、說明，「複製標註」複製一行「標題 by 作者，授權，短網址」，可下載的照片有原檔連結。參數是 Flickr 從原檔讀出來的（`flickr.photos.getExif`），照片和色階用 Flickr 上最接近螢幕大小的版本，放大到 100% 時換成最大的版本。查詢經過本站伺服器（`server/flickr.js`），因為 Flickr API 金鑰不能放進網頁；伺服器只轉問 Flickr、暫存答案一陣子、不記錄，照片本身由瀏覽器直接從 Flickr 載入。金鑰放在 `server/data/flickr.json`（`{ "key": "…" }`，不進 git，換了不用重開）或環境變數 `FLICKR_KEY`。沒有金鑰時用 Flickr 的 oEmbed（不需要金鑰）：只能看單張照片的照片（1024 px）、標題、作者和授權，沒有拍攝參數，也不能列出相簿、藝廊。讀檔：Chrome、Edge、Firefox 一張用 [ExifTool](https://exiftool.org) 13.42 的 WebAssembly 版（`exiftools/lib/`，第一次下載 7.5 MB），Safari（含所有 iPhone、iPad 上的瀏覽器）用 `assets/meta.js`（自己寫的 JavaScript 讀取器：EXIF、GPS、Apple 原廠資料、XMP、色彩描述檔，JPEG／HEIC／CR3／RAF／TIFF 類 RAW／.xmp）——Safari 跑 WebAssembly 的 Perl 慢 10～50 倍、要用 1 GB 以上記憶體，iPhone 會把頁面關掉。縮圖上的 × 移除那張、「清空」回到開頭。iPhone 從「照片」選進來的照片會被 iOS 轉成 JPG 並拿掉位置（HEIC 原檔不會送進網頁），頁面會說明並教人從「檔案」App 選原檔。首頁上它躲在圖片壓縮卡片後面；首頁拖進 RAW 檔也會直接帶來這裡 |
+| `renametools/` | `/rename` | 照片批次改檔名（ZhuyuanLoveRename）：整個資料夾一次改名，例如 `IMG_4678.CR3` → `竺原-4678.CR3`。新檔名用 `{號碼}`（原檔名裡的號碼，取最長的一串數字）、`{流水號}`（照拍攝時間或檔名排，可設起始和位數）、`{日期}`、`{時間}`、`{相機}`（從照片的 EXIF，用照片參數查看的 `meta.js` 只讀檔案開頭）、`{原檔名}` 組合；同一張的 RAW、JPG、.xmp 一起改成同一個名字；同一個資料夾裡撞名的自動加 -2、-3，已經是新名字的不動；每個檔案改名前後都列出來（幾千個也不卡，只畫看得到的那幾行）。電腦版 Chrome、Edge 直接在原資料夾改名（File System Access 的 `move()`，輪流換名或只改大小寫會先借一個暫時的名字，絕不蓋掉別的檔案），改完可以「復原」、下載對照表 CSV；其他瀏覽器和手機原檔不動，改好名的檔案打包成 ZIP 下載（`shared/zip.js` 的 `ManyZip.files`：檔案只讀一遍算檢查碼，ZIP 只指向原檔，4 GB 以上用 ZIP64）。首頁上它躲在影片卡片後面 |
 | `fonts/` | `/fonts` | 共用字型：Noto Sans TC（思源黑體，SIL OFL），自己網站提供，不從 Google 載入；蘋果裝置會直接用蘋方 |
-| `shared/` | `/shared` | 共用程式：`handoff.js` 把首頁拖進來的檔案交給工具頁（只在使用者的瀏覽器裡，IndexedDB／檔案控制代碼，不上傳）；`mobile-nav.js` 手機版的「上一步」；`tools-nav.js` 每個工具第一步標題下的「其他工具」連結（同類的排第一，手機不顯示） |
-| `server/` | — | 小伺服器：網址對應＋處理數量計數（只存數字） |
+| `shared/` | `/shared` | 共用程式：`handoff.js` 把首頁拖進來的檔案交給工具頁（只在使用者的瀏覽器裡，IndexedDB／檔案控制代碼，不上傳）；`mobile-nav.js` 手機版的「上一步」；`tools-nav.js` 每個工具第一步標題下的「其他工具」連結（同類的排第一，手機不顯示）；`zip.js` 打包 ZIP |
+| `server/` | — | 小伺服器：網址對應＋處理數量計數（只存數字）＋照片參數查看的 Flickr 查詢（`flickr.js`） |
 
 ## 執行
 
@@ -34,8 +35,15 @@ PORT=8090 HOST=0.0.0.0 node server/server.js
 只記錄數量，不記錄檔名或內容，存在 `server/data/stats.json`（可用 `STATS_FILE` 改位置）。
 
 - `GET /api/stats` → `{ video: { files, seconds, savedBytes }, pdf: { files, pages, savedBytes } }`
-- `POST /video/api/stats/processed`、`POST /pdf/api/stats/processed`、`POST /avatar/api/stats/processed`、`POST /image/api/stats/processed`、`POST /crop/api/stats/processed`、`POST /watermark/api/stats/processed`、`POST /exif/api/stats/processed`
+- `POST /video/api/stats/processed`、`POST /pdf/api/stats/processed`、`POST /avatar/api/stats/processed`、`POST /image/api/stats/processed`、`POST /crop/api/stats/processed`、`POST /watermark/api/stats/processed`、`POST /exif/api/stats/processed`、`POST /rename/api/stats/processed`（改名的檔案數，不加進首頁的數字）
 - 首頁的「頭貼」數量是查詢（avatar）加裁切（crop），「PDF」數量是壓縮（pdf）加浮水印（watermark），「圖片」數量是壓縮（image）加看參數（exif）
+
+## Flickr 查詢
+
+- `GET /exif/api/flickr/status` → `{ key: true | false }`
+- `GET /exif/api/flickr/rest?method=flickr.photos.getInfo&photo_id=…` → Flickr API 的回答（伺服器加上金鑰；只允許照片參數查看用到的公開、唯讀方法）
+- `GET /exif/api/flickr/oembed?url=<Flickr 連結>` → Flickr oEmbed（不需要金鑰）
+- 答案暫存在記憶體（10 分鐘到一天，看是什麼），每個訪客 10 分鐘內最多 400 次新的查詢，全部加起來一小時 3,300 次（Flickr 一把金鑰一小時 3,600 次）
 
 ## 影片工具的技術重點
 

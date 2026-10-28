@@ -1,4 +1,4 @@
-/* "其他工具" under each tool's headline (step 1, screens wider than a phone): the other six tools one click away, the
+/* "其他工具" under each tool's headline (step 1, screens wider than a phone): the other tools one click away, the
    one of the same kind first, so nobody goes back to the home page to find them. Works off the markup alone —
    .hero-text — and the page's own palette variables; data-tool names the page itself.
    <script src="/shared/tools-nav.js" data-tool="image"></script> (phones have the home page's tiles instead). */
@@ -15,6 +15,7 @@
     ['watermark', 'PDF 浮水印', '/watermark', '../watermarktools/index.html', 'pdf'],
     ['image', '圖片壓縮', '/image', '../imagetools/index.html', 'exif'],
     ['exif', '照片參數查看', '/exif', '../exiftools/index.html', 'image'],
+    ['rename', '照片批次改檔名', '/rename', '../renametools/index.html', 'exif'],
     ['avatar', 'Gravatar 頭貼查詢', '/avatar', '../avatartools/index.html', 'crop'],
     ['crop', '頭貼裁切', '/crop', '../croptools/index.html', 'avatar'],
   ];

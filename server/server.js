@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /* ZhuyuanTools static server + the public counters. No dependencies: `node server/server.js`.
    Clean URLs, each tool still in its own folder:
-     /       → home/            /video → videotools/            /pdf → pdftools/local/     /avatar → avatartools/     /image → imagetools/     /crop → croptools/     /watermark → watermarktools/     /exif → exiftools/     /fonts → fonts/     /shared → shared/
+     /       → home/            /video → videotools/            /pdf → pdftools/local/     /avatar → avatartools/     /image → imagetools/     /crop → croptools/     /watermark → watermarktools/     /exif → exiftools/     /rename → renametools/     /fonts → fonts/     /shared → shared/
    A tool's page is served at /video (no trailing slash) with <base href="/video/"> injected, so its relative
    asset paths keep working both here and when the folder is opened straight from disk.
    Counters keep only totals (files, seconds/pages, bytes saved) per tool — never file content:
@@ -16,11 +16,15 @@
      POST /crop/api/stats/processed   ← { files }   (avatars cropped)
      POST /watermark/api/stats/processed ← { files }   (PDFs watermarked)
      POST /exif/api/stats/processed   ← { files }   (photos read)
+     POST /rename/api/stats/processed ← { files }   (files renamed)
+   The photo tool's Flickr links are asked from here (server/flickr.js), so the API key stays on this machine:
+     GET  /exif/api/flickr/status, /exif/api/flickr/rest?method=…, /exif/api/flickr/oembed?url=…
    Env: PORT (default 8080), HOST (default 127.0.0.1), STATS_FILE (default server/data/stats.json). */
 'use strict';
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
+const flickr = require('./flickr');
 
 const ROOT = path.resolve(__dirname, '..');
 const PORT = +process.env.PORT || 8080;
@@ -38,6 +42,7 @@ const MOUNTS = [
   { route: '/watermark', dir: path.join(ROOT, 'watermarktools'), tool: 'watermark' },
   { route: '/exif/lib', dir: path.join(ROOT, 'exiftools', 'lib'), immutable: true },
   { route: '/exif', dir: path.join(ROOT, 'exiftools'), tool: 'exif' },
+  { route: '/rename', dir: path.join(ROOT, 'renametools'), tool: 'rename' },
   { route: '/fonts', dir: path.join(ROOT, 'fonts'), immutable: true },
   { route: '/shared', dir: path.join(ROOT, 'shared') },
   { route: '', dir: path.join(ROOT, 'home') },
@@ -53,11 +58,14 @@ const LEGACY = [
   [/^\/croptools(\/(index\.html)?)?$/, '/crop'],
   [/^\/watermarktools(\/(index\.html)?)?$/, '/watermark'],
   [/^\/exiftools(\/(index\.html)?)?$/, '/exif'],
+  [/^\/renametools(\/(index\.html)?)?$/, '/rename'],
 ];
 
-const FIELDS = { video: ['files', 'seconds', 'savedBytes'], pdf: ['files', 'pages', 'savedBytes'], avatar: ['files'], image: ['files', 'savedBytes'], crop: ['files'], watermark: ['files'], exif: ['files'] };
-// Upper bounds for one report, so a single bad request can't inflate the counters much.
+const FIELDS = { video: ['files', 'seconds', 'savedBytes'], pdf: ['files', 'pages', 'savedBytes'], avatar: ['files'], image: ['files', 'savedBytes'], crop: ['files'], watermark: ['files'], exif: ['files'], rename: ['files'] };
+// Upper bounds for one report, so a single bad request can't inflate the counters much. A rename is one report for
+// a whole folder.
 const LIMITS = { files: 50, seconds: 6 * 3600 * 50, pages: 5000, savedBytes: 200e9 };
+const TOOL_LIMITS = { rename: { files: 20000 } };
 
 const TYPES = {
   '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8',
@@ -65,7 +73,7 @@ const TYPES = {
   '.txt': 'text/plain; charset=utf-8', '.woff2': 'font/woff2', '.wasm': 'application/wasm', '.gz': 'application/gzip', '.ico': 'image/x-icon',
 };
 
-let stats = { video: {}, pdf: {}, avatar: {}, image: {}, crop: {}, watermark: {}, exif: {} };
+let stats = { video: {}, pdf: {}, avatar: {}, image: {}, crop: {}, watermark: {}, exif: {}, rename: {} };
 try { stats = { ...stats, ...JSON.parse(fs.readFileSync(STATS_FILE, 'utf8')) }; } catch {}
 for (const [k, fields] of Object.entries(FIELDS)) for (const f of fields) stats[k][f] = +stats[k][f] || 0;
 
@@ -100,7 +108,7 @@ function handleApi(req, res, url) {
         try { d = JSON.parse(body); } catch { return send(res, 400, { error: 'bad json' }); }
         for (const f of FIELDS[tool]) {
           const v = Math.floor(+d[f]);
-          if (Number.isFinite(v) && v > 0) stats[tool][f] += Math.min(v, LIMITS[f]);
+          if (Number.isFinite(v) && v > 0) stats[tool][f] += Math.min(v, (TOOL_LIMITS[tool] || LIMITS)[f] || LIMITS[f]);
         }
         save();
         send(res, 200, stats[tool]);
@@ -176,6 +184,7 @@ function route(req, res, url) {
 
 http.createServer((req, res) => {
   const url = (req.url || '/').split('?')[0];
+  if (flickr.handle(req, res, url, send)) return;
   if (url.includes('/api/') && handleApi(req, res, url)) return;
   if (req.method !== 'GET' && req.method !== 'HEAD') return send(res, 405, 'method not allowed', 'text/plain');
   route(req, res, url);

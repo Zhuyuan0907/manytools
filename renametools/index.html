@@ -1,0 +1,208 @@
+<!doctype html>
+<html lang="zh-Hant-TW">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#ffffff">
+<title>ZhuyuanLoveRename・照片批次改檔名</title>
+<meta name="description" content="一整個資料夾的照片一次改檔名：IMG_4678 變成 竺原-4678，也可以用拍攝日期、流水號、相機型號。RAW 和 JPG 一起改，不用回 Lightroom 重新輸出。檔案只在你的電腦裡處理，不會上傳。">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="ZhuyuanTools">
+<meta property="og:locale" content="zh_TW">
+<meta property="og:title" content="ZhuyuanLoveRename・照片批次改檔名">
+<meta property="og:description" content="一整個資料夾的照片一次改檔名：IMG_4678 變成 竺原-4678，也可以用拍攝日期、流水號、相機型號。RAW 和 JPG 一起改，不用回 Lightroom 重新輸出。檔案只在你的電腦裡處理，不會上傳。">
+<meta property="og:url" content="https://tools.zhuyuan.tw/rename">
+<meta property="og:image" content="https://tools.zhuyuan.tw/rename/assets/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" href="assets/logo.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/fonts/noto-sans-tc.css">
+<link rel="stylesheet" href="assets/app.css">
+</head>
+<body>
+<div class="app">
+  <header class="top">
+    <a class="brand" id="brand" href="../home/index.html" title="回到 ZhuyuanTools 首頁">
+      <img class="logo" src="assets/logo.svg" alt="" width="44" height="44">
+      <span class="brand-text">
+        <span class="wordmark">Zhuyuan<span class="w-love">Love</span><span class="w-tool">Rename</span></span>
+        <span class="tagline">照片批次改檔名</span>
+      </span>
+    </a>
+    <p class="privacy">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="10" width="16" height="11" rx="2"></rect><path d="M8 10V7a4 4 0 0 1 8 0v3"></path></svg>
+      <span class="privacy-long">檔案只在你的電腦裡處理，不會上傳到任何伺服器。</span><span class="privacy-short">不上傳</span>
+    </p>
+  </header>
+
+  <nav class="stepper" aria-label="步驟">
+    <p class="m-step" id="mStep" aria-hidden="true"></p>
+    <ol>
+      <li><button type="button" data-goto="1"><span class="dot">1</span><span class="lbl">放入照片</span></button></li>
+      <li><button type="button" data-goto="2"><span class="dot">2</span><span class="lbl">新檔名</span></button></li>
+      <li><button type="button" data-goto="3"><span class="dot">3</span><span class="lbl">改名</span></button></li>
+    </ol>
+  </nav>
+
+  <main>
+    <!-- ============ STEP 1 ============ -->
+    <section class="panel" id="step1" aria-labelledby="h1t">
+      <div class="hero" id="hero">
+        <div class="hero-text">
+          <h2 class="hero-title" id="h1t">整批照片，<span>一次<em>改好檔名</em></span></h2>
+          <p class="hero-count" id="heroCount" aria-live="polite">免費・免註冊・檔案不上傳</p>
+        </div>
+        <div class="hero-art" aria-hidden="true">
+          <svg viewBox="0 0 300 160" width="300" height="160">
+            <g class="ha-big">
+              <rect x="6" y="10" width="128" height="34" rx="9" class="ha-page"/><text x="70" y="32" class="ha-name">IMG_4678.CR3</text>
+              <rect x="6" y="54" width="128" height="34" rx="9" class="ha-page"/><text x="70" y="76" class="ha-name">IMG_4679.CR3</text>
+              <rect x="6" y="98" width="128" height="34" rx="9" class="ha-page"/><text x="70" y="120" class="ha-name">IMG_4680.CR3</text>
+            </g>
+            <g class="ha-arrow"><path d="M146 71h30"/><path d="M168 61l10 10-10 10"/></g>
+            <g class="ha-small">
+              <rect x="188" y="10" width="106" height="34" rx="9" class="ha-page"/><text x="241" y="32" class="ha-name"><tspan class="ha-me">竺原</tspan>-4678</text>
+              <rect x="188" y="54" width="106" height="34" rx="9" class="ha-page"/><text x="241" y="76" class="ha-name"><tspan class="ha-me">竺原</tspan>-4679</text>
+              <rect x="188" y="98" width="106" height="34" rx="9" class="ha-page"/><text x="241" y="120" class="ha-name"><tspan class="ha-me">竺原</tspan>-4680</text>
+              <circle cx="288" cy="12" r="12" class="ha-check-bg"/><path d="M282.5 12.5l4 4 7-8" class="ha-check"/>
+            </g>
+          </svg>
+        </div>
+      </div>
+      <div class="panel-body step1-body">
+        <div class="drop" id="drop" role="button" tabindex="0" aria-label="選擇照片資料夾">
+          <input type="file" id="fileInput" multiple tabindex="-1" aria-hidden="true">
+          <input type="file" id="dirInput" webkitdirectory multiple tabindex="-1" aria-hidden="true">
+          <span class="drop-inner">
+            <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><path d="M12 10v6M9 13h6"></path></svg>
+            <span class="drop-title"><span class="d-desk">把整個資料夾拖進這裡</span><span class="d-mob">選擇照片</span></span>
+            <span class="drop-hint"><span class="d-desk">或點一下選資料夾・</span>RAW、JPG、影片都可以</span>
+          </span>
+        </div>
+        <p class="pick-more"><button type="button" class="link-btn" id="pickFiles">只選幾個檔案</button></p>
+        <p class="mode-note" id="modeNote"></p>
+        <ol class="how" aria-label="怎麼用">
+          <li><span class="how-no">1</span><b>放入資料夾</b><span>幾千張也可以</span></li>
+          <li><span class="how-no">2</span><b>設定新檔名</b><span>竺原-{號碼}、日期、流水號</span></li>
+          <li><span class="how-no">3</span><b id="how3b">直接改好</b><span id="how3s">原地改名，改錯可以復原</span></li>
+        </ol>
+        <p class="reading" id="reading" hidden><span class="spinner"></span> <span id="readingText">正在看資料夾裡有什麼…</span></p>
+      </div>
+      <div class="panel-foot">
+        <span class="foot-note" id="note1">還沒有放入照片。</span>
+        <button type="button" class="btn primary" id="next1" disabled>下一步：新檔名 →</button>
+      </div>
+    </section>
+
+    <!-- ============ STEP 2 ============ -->
+    <section class="panel fill" id="step2" aria-labelledby="h2t" hidden>
+      <div class="panel-head">
+        <span class="step-no" aria-hidden="true">2</span>
+        <div class="head-text">
+          <h2 id="h2t">新的檔名長怎樣？</h2>
+          <p id="srcLine"></p>
+        </div>
+      </div>
+      <div class="panel-body step2-body">
+        <div class="rules">
+          <div class="set set-tpl">
+            <input type="text" class="tpl" id="tpl" value="{號碼}" autocomplete="off" spellcheck="false" aria-label="新檔名" aria-describedby="example">
+            <div class="tokens" id="tokens" aria-label="插入">
+              <button type="button" class="token" data-t="{號碼}" title="原本檔名裡的號碼：IMG_4678 → 4678">號碼</button>
+              <button type="button" class="token" data-t="{流水號}" title="照順序從 001 開始編">流水號</button>
+              <button type="button" class="token" data-t="{日期}" title="拍攝日期">日期</button>
+              <button type="button" class="token" data-t="{時間}" title="拍攝時間（時分秒）">時間</button>
+              <button type="button" class="token" data-t="{相機}" title="相機型號">相機</button>
+              <button type="button" class="token" data-t="{原檔名}" title="原本的整個檔名">原檔名</button>
+            </div>
+            <p class="example" id="example" aria-live="polite"></p>
+          </div>
+          <div class="set inline" id="seqSet" hidden>
+            <span class="set-label">流水號</span>
+            <div class="seq">
+              <label>從 <input type="number" id="seqStart" value="1" min="0" max="999999" inputmode="numeric"> 開始</label>
+              <label><input type="number" id="seqPad" value="3" min="1" max="8" inputmode="numeric"> 位數</label>
+            </div>
+            <div class="seg seq-order" role="radiogroup" aria-label="排序">
+              <label><input type="radio" name="order" value="time" checked><span>照拍攝時間</span></label>
+              <label><input type="radio" name="order" value="name"><span>照檔名</span></label>
+            </div>
+          </div>
+          <div class="set inline" id="dateSet" hidden>
+            <span class="set-label" id="lblDate">日期寫法</span>
+            <div class="seg" role="radiogroup" aria-labelledby="lblDate">
+              <label><input type="radio" name="datefmt" value="ymd" checked><span>20261026</span></label>
+              <label><input type="radio" name="datefmt" value="y-m-d"><span>2026-10-26</span></label>
+              <label><input type="radio" name="datefmt" value="ymd2"><span>261026</span></label>
+            </div>
+          </div>
+          <div class="set inline">
+            <span class="set-label" id="lblExt">副檔名</span>
+            <div class="seg" role="radiogroup" aria-labelledby="lblExt">
+              <label><input type="radio" name="ext" value="keep" checked><span>不變</span></label>
+              <label><input type="radio" name="ext" value="lower"><span>小寫 .jpg</span></label>
+              <label><input type="radio" name="ext" value="upper"><span>大寫 .JPG</span></label>
+            </div>
+          </div>
+        </div>
+        <div class="preview">
+          <div class="pv-head">
+            <p class="pv-sum" id="pvSum"></p>
+            <div class="seg pv-filter" role="radiogroup" aria-label="顯示">
+              <label><input type="radio" name="show" value="all" checked><span>全部</span></label>
+              <label><input type="radio" name="show" value="warn"><span id="warnTab">要注意的</span></label>
+            </div>
+            <div class="pv-types"><span class="pv-label">要改的檔案</span><span class="types" id="types"></span></div>
+          </div>
+          <div class="plist" id="plist" tabindex="0" aria-label="改名前後對照"><div class="plist-in" id="plistIn"></div></div>
+        </div>
+      </div>
+      <div class="panel-foot">
+        <button type="button" class="btn back" data-goto="1" aria-label="上一步"><span aria-hidden="true">←</span><span class="lbl">上一步</span></button>
+        <span class="foot-note" id="note2"></span>
+        <button type="button" class="btn primary" id="go" disabled>開始改名 →</button>
+      </div>
+    </section>
+
+    <!-- ============ STEP 3 ============ -->
+    <section class="panel" id="step3" aria-labelledby="h3t" hidden>
+      <div class="panel-head">
+        <span class="step-no" aria-hidden="true">3</span>
+        <div class="head-text">
+          <h2 id="h3t">改名</h2>
+          <p id="doneLine"></p>
+        </div>
+      </div>
+      <div class="panel-body step3-body">
+        <div class="big" id="big">
+          <p class="big-num"><b id="bigNum">0</b><span id="bigOf"></span></p>
+          <p class="big-what" id="bigWhat"></p>
+          <div class="bar" id="bar"><i id="barFill"></i></div>
+        </div>
+        <ol class="fails" id="fails" hidden></ol>
+        <div class="after" id="after" hidden>
+          <button type="button" class="btn" id="undo">↶ 復原，改回原本的檔名</button>
+          <button type="button" class="btn" id="again" hidden>再下載一次</button>
+          <button type="button" class="btn" id="csv">下載對照表（CSV）</button>
+          <button type="button" class="btn ghost" id="restart"><span aria-hidden="true">↺</span> 再改一批</button>
+        </div>
+        <p class="help xlink">改好的照片要看參數？<a href="/exif">拖進照片參數查看 →</a></p>
+      </div>
+      <div class="panel-foot">
+        <button type="button" class="btn back" data-goto="2" id="back3" aria-label="回去改規則"><span aria-hidden="true">←</span><span class="lbl">回去改規則</span></button>
+        <span class="foot-note" id="note3"></span>
+      </div>
+    </section>
+  </main>
+</div>
+
+<div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+
+<script src="/shared/zip.js"></script>
+<script src="/exif/assets/meta.js"></script>
+<script src="assets/app.js"></script>
+<script src="/shared/mobile-nav.js"></script>
+<script src="/shared/tools-nav.js" data-tool="rename"></script>
+</body>
+</html>

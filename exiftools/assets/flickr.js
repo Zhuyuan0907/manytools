@@ -1,22 +1,20 @@
-/* ZhuyuanLoveExif's Flickr links, in the browser: this page asks Flickr's API itself (api.flickr.com allows that),
-   so the link someone pastes and the photos it holds go between their browser and Flickr — never through this
-   site's server. A link in (a photo, an album, someone's albums or galleries, a gallery, a photostream, favourites,
-   a group's pool, a collection), what it holds out; for each photo what Flickr knows: its EXIF (Flickr read it from
-   the original at upload), title, author, licence, place, views.
-   The key: flickr.json beside the page, { "key": "<Flickr API key>" } (kept out of git; without it the Flickr box
-   stays hidden). A key is needed to ask Flickr anything; it reads public things only. ("api" there points
-   elsewhere, for tests.)
-   ZFlickr.ready → Promise<boolean>
+/* ZhuyuanLoveExif's Flickr links. A link in (a photo, an album, someone's albums or galleries, a gallery, a
+   photostream, favourites, a group's pool, a collection), what it holds out; for each photo what Flickr knows: its EXIF
+   (Flickr read it from the original at upload), title, author, licence, place, views.
+   Asked through this site's server (server/flickr.js), which holds the Flickr API key: a key in a page would be
+   anyone's. The pictures themselves come straight from Flickr (live.staticflickr.com) to this browser.
+   Without a key the server can still ask Flickr's oEmbed: for one photo its title, author, licence and a 1024 px
+   picture — no EXIF, no lists ('basic'). Opened from disk, no Flickr at all.
+   ZFlickr.ready → Promise<'full' | 'basic' | false>
    ZFlickr.get({ url }) → { view: 'photo', photo } | a photos page | a sets page
    ZFlickr.get({ list: kind, id, page }) → a photos page: { view: 'photos', kind, id, title, owner, link, description,
                                                             total, page, pages, photos: [photo] }
    ZFlickr.get({ sets: 'albums' | 'galleries', user, page }) → { view: 'sets', …, sets: [{ kind, id, title, count, cover }] }
-   ZFlickr.get({ photo: id, secret, sizes }) → one photo, all of it (exif: [{ g, t, l, r }], exifHidden…)
-   Errors are Error(code): nokey, badurl, notflickr, short, unknown, notfound, private, busy, flickr, net. */
+   ZFlickr.get({ photo: id, secret, sizes }) → one photo, all of it (exif: [{ g, t, l, r }], exifHidden, exifNoKey…)
+   Errors are Error(code): nokey, needkey, badurl, notflickr, short, unknown, notfound, private, busy, flickr, net. */
 (() => {
   'use strict';
-  let API = 'https://api.flickr.com/services/rest/';
-  let KEY = '';
+  const API = 'api/flickr/rest';
   const PER_PAGE = 500; // the most Flickr lists in one call
   const SIZES = ['sq', 'q', 't', 's', 'n', 'w', 'm', 'z', 'c', 'l', 'h', 'k', '3k', '4k', '5k', '6k', 'o'];
   const LIST_SIZES = ['q', 'n', 'z', 'c', 'l', 'h', 'k', '3k', '4k', '5k', '6k', 'o'];
@@ -24,14 +22,10 @@
   const HOUR = 3600e3;
   void SIZES;
 
-  const ready = fetch('flickr.json', { cache: 'no-store' })
+  let mode = false;
+  const ready = !/^https?:$/.test(location.protocol) ? Promise.resolve(false) : fetch('api/flickr/status', { cache: 'no-store' })
     .then((r) => (r.ok ? r.json() : null))
-    .then((j) => {
-      if (!j || !/^[0-9a-f]{32}$/i.test(String(j.key || '').trim())) return false;
-      KEY = String(j.key).trim();
-      if (j.api && /^https?:\/\//.test(j.api)) API = j.api;
-      return true;
-    })
+    .then((j) => (mode = j ? (j.key ? 'full' : 'basic') : false))
     .catch(() => false);
 
   // ---------- calls, kept for the visit ----------
@@ -40,13 +34,11 @@
   }
   const cache = new Map(); // "method?params" → { at, ttl, p }
   function call(method, params = {}, ttl = 30 * 60e3) {
-    if (!KEY) return Promise.reject(new FlickrError('nokey'));
+    if (mode !== 'full') return Promise.reject(new FlickrError('nokey'));
     const id = `${method}?${new URLSearchParams(Object.entries(params).sort()).toString()}`;
     const hit = cache.get(id);
     if (hit && Date.now() - hit.at < hit.ttl) return hit.p;
-    const u = new URL(API);
-    u.search = new URLSearchParams({ method, api_key: KEY, format: 'json', nojsoncallback: '1', ...params }).toString();
-    const p = fetch(u, { credentials: 'omit', referrerPolicy: 'no-referrer' })
+    const p = fetch(`${API}?${new URLSearchParams({ method, ...params })}`)
       .then(async (r) => {
         let j = null;
         try { j = await r.json(); } catch {}
@@ -274,10 +266,51 @@
     return setsPage('albums', user, 1, { ids, title: text(c.title), link: `${userUrl(u.alias)}collections/${id}/`, description: plain(c.description) });
   }
 
+  // ---------- without a key: Flickr's oEmbed, one photo at a time ----------
+  async function oembed(id) {
+    const id2 = `oembed ${id}`;
+    const hit = cache.get(id2);
+    if (hit) return hit.p;
+    const p = fetch(`api/flickr/oembed?url=${encodeURIComponent(short(id))}`)
+      .then(async (r) => {
+        if (r.status === 429) throw new FlickrError('busy');
+        if (r.status === 404) throw new FlickrError('api', 1);
+        const j = r.ok ? await r.json().catch(() => null) : null;
+        if (!j || !j.url) throw new FlickrError('flickr');
+        return j;
+      }, () => { throw new FlickrError('net'); });
+    cache.set(id2, { at: Date.now(), ttl: HOUR, p });
+    p.catch(() => cache.delete(id2));
+    return p;
+  }
+  // its picture (1024 px) and thumbnail share one secret; the bigger sizes have their own, which oEmbed doesn't tell
+  function fromOembed(o, id) {
+    const m = String(o.url).match(/\/(\d+)_([0-9a-f]+)(?:_[a-z0-9]+)?\.\w+$/i) || [];
+    const lic = o.license ? { id: String(o.license_id == null ? '' : o.license_id), name: o.license, url: o.license_url || '' } : null;
+    if (lic) lic.short = shortLicense(lic);
+    return {
+      id: String(id), secret: m[2] || '', title: String(o.title || '').trim(), description: '',
+      owner: { name: o.author_name || '', username: '', id: '', url: o.author_url || '' },
+      page: o.web_page || '', short: short(id), posted: 0, taken: '', views: 0, comments: 0, format: '',
+      media: o.type === 'video' ? 'video' : 'photo', license: lic, tags: [], location: null, canDownload: false,
+      exif: [], exifHidden: false, exifNoKey: true, camera: '', thumb: o.thumbnail_url || '',
+      sizes: [
+        o.thumbnail_url ? { s: 'q', w: +o.thumbnail_width || 150, h: +o.thumbnail_height || 150, src: o.thumbnail_url } : null,
+        { s: 'l', w: +o.width || 0, h: +o.height || 0, src: o.url },
+      ].filter(Boolean),
+    };
+  }
+
   // ---------- what a link holds ----------
   async function resolve(link) {
     const w = parse(link);
     if (w.error) throw new FlickrError(w.error);
+    if (mode === 'basic') {
+      // a photo seen in an album (…/in/album-…, …/albums/…/with/…) is still that one photo
+      const id = w.kind === 'photo' ? w.id : w.kind === 'album' && w.focus ? w.focus : '';
+      if (!id) throw new FlickrError('needkey');
+      return { view: 'photo', photo: fromOembed(await oembed(id), id) };
+    }
     switch (w.kind) {
       case 'photo': {
         const p = (await call('flickr.photos.getInfo', w.secret ? { photo_id: w.id, secret: w.secret } : { photo_id: w.id })).photo;
@@ -310,6 +343,7 @@
     'Medium 800': 'c', Large: 'l', 'Large 1600': 'h', 'Large 2048': 'k', 'X-Large 3K': '3k', 'X-Large 4K': '4k', 'X-Large 5K': '5k', 'X-Large 6K': '6k', Original: 'o',
   };
   async function photo(id, secret, withSizes) {
+    if (mode === 'basic') return fromOembed(await oembed(id), id);
     const base = secret ? { photo_id: id, secret } : { photo_id: id };
     const [info, exif, sizes] = await Promise.allSettled([
       call('flickr.photos.getInfo', base),

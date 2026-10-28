@@ -5,7 +5,9 @@
    iPhone closes the page. This reads only the bytes it needs, in milliseconds. It doesn't know the makers' own
    notes (shutter count and such) — ExifTool does, where it runs well.
    Output is ExifTool's shape (-G1 -l): { 'Group:Tag': { desc, val, num } }, so the page treats both alike.
-   ZMeta.read(file) → Promise<{ tags, type } | null>    (null: not a format this knows) */
+   ZMeta.read(file) → Promise<{ tags, type } | null>    (null: not a format this knows)
+   ZMeta.read(file, { light: true }): only the first part of the file, for the camera and the times (the rename tool,
+   thousands of files); a DNG's XMP or a big JPEG's extended XMP can be missed. */
 (() => {
   'use strict';
   const bytes = async (file, a, b) => new Uint8Array(await file.slice(a, Math.min(b, file.size)).arrayBuffer());
@@ -595,7 +597,7 @@
       // metadata past the first megabyte (a big extended XMP): read on until the image data starts
       let p = 2;
       for (;;) {
-        if (p + 4 > head.length) { if (head.length >= file.size || p > 64e6) break; head = await bytes(file, 0, Math.min(file.size, p + (2 << 20))); continue; }
+        if (p + 4 > head.length) { if (head.length >= file.size || p > 64e6 || opts.light) break; head = await bytes(file, 0, Math.min(file.size, p + (2 << 20))); continue; }
         if (head[p] !== 0xFF) break;
         const m = head[p + 1];
         if (m === 0xFF) { p++; continue; }
@@ -612,7 +614,7 @@
     } else if (latin(head, 0, 16) === 'FUJIFILMCCD-RAW ') {
       type = 'RAF';
       const dv = new DataView(head.buffer, head.byteOffset), off = dv.getUint32(84), len = dv.getUint32(88);
-      const j = off + len <= head.length ? head.subarray(off, off + len) : await bytes(file, off, off + Math.min(len, 8 << 20));
+      const j = off + len <= head.length ? head.subarray(off, off + len) : await bytes(file, off, off + Math.min(len, opts.light ? 262144 : 8 << 20));
       jpeg(j, 0, out, ctx);
       // the RAF's own directory: tag 0x111 is the size of the image after the camera's crop (height, width)
       try {
@@ -627,7 +629,7 @@
     } else if ((head[0] === 0x49 && head[1] === 0x49) || (head[0] === 0x4D && head[1] === 0x4D)) {
       type = (name.match(/\.([a-z0-9]+)$/) || [, 'tiff'])[1].toUpperCase();
       // a DNG or TIFF can keep its XMP anywhere: read it whole when it isn't huge
-      if (/^(DNG|TIF|TIFF)$/.test(type) && file.size <= 80e6 && file.size > head.length) head = await bytes(file, 0, file.size);
+      if (/^(DNG|TIF|TIFF)$/.test(type) && !opts.light && file.size <= 80e6 && file.size > head.length) head = await bytes(file, 0, file.size);
       tiff(head, 0, out, 'IFD0', ctx);
       if (ctx.inner) jpeg(ctx.inner, 0, out, ctx);
       if (ctx.big && ctx.big[0] * ctx.big[1] > (N0(out.get('IFD0', 'ImageWidth')) * N0(out.get('IFD0', 'ImageHeight')))) { out.set('File', 'ImageWidth', ctx.big[0]); out.set('File', 'ImageHeight', ctx.big[1]); }

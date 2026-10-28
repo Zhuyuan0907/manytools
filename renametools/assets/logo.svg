@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="ZhuyuanLoveRename">
+  <defs>
+    <linearGradient id="zlr-bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#8dbb2c"/>
+      <stop offset="1" stop-color="#55820b"/>
+    </linearGradient>
+  </defs>
+  <rect width="64" height="64" rx="15" fill="url(#zlr-bg)"/>
+  <!-- a name tag: the hole, the name on it, a heart -->
+  <path d="M12 26.5a4 4 0 0 1 1.2-2.9l9.2-9.2a4 4 0 0 1 2.9-1.2H48a4 4 0 0 1 4 4v29.6a4 4 0 0 1-4 4H25.3a4 4 0 0 1-2.9-1.2l-9.2-9.2a4 4 0 0 1-1.2-2.9z" fill="#fff"/>
+  <circle cx="22" cy="32" r="3.2" fill="#55820b"/>
+  <path d="M30 26h15M30 38h9" stroke="#c9dd9c" stroke-width="3.6" stroke-linecap="round"/>
+  <path transform="translate(38.6 31.6) scale(.42)" d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" fill="#ff5a4e"/>
+</svg>
