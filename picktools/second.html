@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="zh-Hant-TW">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex">
+<title>照片挑選・副螢幕</title>
+<link rel="icon" href="assets/logo.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/fonts/noto-sans-tc.css">
+<link rel="stylesheet" href="/fonts/source-sans-3.css">
+<link rel="stylesheet" href="assets/second.css">
+</head>
+<body>
+<!-- 照片挑選's second window (Lightroom's secondary display): every photo as a grid, following the one you're on.
+     Everything in it is drawn by the pick tool's own window, which opened it; on its own it only says so. -->
+<header class="bar">
+  <img class="logo" src="assets/logo.svg" alt="" width="22" height="22">
+  <p class="pos" id="sPos">副螢幕</p>
+  <p class="counts" id="sCounts"></p>
+  <div class="size" role="group" aria-label="縮圖大小">
+    <button type="button" id="sSmaller" title="縮圖小一點（−）" aria-label="縮圖小一點"><svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><rect x="4" y="4" width="4.5" height="4.5" rx=".8"/><rect x="9.75" y="4" width="4.5" height="4.5" rx=".8"/><rect x="15.5" y="4" width="4.5" height="4.5" rx=".8"/><rect x="4" y="9.75" width="4.5" height="4.5" rx=".8"/><rect x="9.75" y="9.75" width="4.5" height="4.5" rx=".8"/><rect x="15.5" y="9.75" width="4.5" height="4.5" rx=".8"/><rect x="4" y="15.5" width="4.5" height="4.5" rx=".8"/><rect x="9.75" y="15.5" width="4.5" height="4.5" rx=".8"/><rect x="15.5" y="15.5" width="4.5" height="4.5" rx=".8"/></svg></button>
+    <button type="button" id="sBigger" title="縮圖大一點（＋）" aria-label="縮圖大一點"><svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><rect x="4" y="4" width="7" height="7" rx="1"/><rect x="13" y="4" width="7" height="7" rx="1"/><rect x="4" y="13" width="7" height="7" rx="1"/><rect x="13" y="13" width="7" height="7" rx="1"/></svg></button>
+  </div>
+  <button type="button" class="full" id="sFull" title="全螢幕（F）">全螢幕</button>
+</header>
+<main class="grid" id="sGrid" tabindex="-1" aria-label="所有照片"><div class="grid-in" id="sIn"></div></main>
+<p class="empty" id="sEmpty" hidden>這裡沒有照片</p>
+<p class="lost" id="sLost" hidden>請從「照片挑選」挑照片時，按右下角的「副螢幕」打開這個視窗。</p>
+<script>
+  (() => {
+    try { if (window.opener && window.opener.ZtPickSecond) { window.opener.ZtPickSecond.attach(window); return; } } catch (e) { /* not ours */ }
+    document.getElementById('sLost').hidden = false;
+  })();
+</script>
+</body>
+</html>

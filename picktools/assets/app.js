@@ -400,9 +400,10 @@
 
   // ---------- what's shown: the filter, the folder, the order ----------
   const SAVED = 'zt-pick';
-  const S = { step: 1, filter: 'all', folder: '', sort: 'time', auto: true, info: true, grid: false, take: 'keep', lay: 'flat' };
-  try { const o = JSON.parse(localStorage.getItem(SAVED)) || {}; for (const k of ['sort', 'auto', 'info', 'lay']) if (k in o) S[k] = o[k]; } catch {}
-  const remember = () => { try { localStorage.setItem(SAVED, JSON.stringify({ sort: S.sort, auto: S.auto, info: S.info, lay: S.lay })); } catch {} };
+  const S = { step: 1, filter: 'all', folder: '', sort: 'time', auto: true, info: true, cell: 190, tip: true, grid: false, take: 'keep', lay: 'flat' };
+  const KEPT = ['sort', 'auto', 'info', 'cell', 'tip', 'lay'];
+  try { const o = JSON.parse(localStorage.getItem(SAVED)) || {}; for (const k of KEPT) if (k in o) S[k] = o[k]; } catch {}
+  const remember = () => { try { localStorage.setItem(SAVED, JSON.stringify(Object.fromEntries(KEPT.map((k) => [k, S[k]])))); } catch {} };
   let view = [];   // the photos shown, in order
   let pos = 0;
   const sel = new Set();   // the grid's selection (beside the current one)
@@ -445,14 +446,14 @@
     S.step = n;
     for (let i = 1; i <= 3; i++) $(`#step${i}`).hidden = i !== n;
     document.body.classList.toggle('culling', n === 2);
-    if (n === 2) { if (was !== 2) { if (!current()) rebuildView(firstOpen()); requestAnimationFrame(() => { layout(); show(); refresh(); }); } }
+    if (n === 2) { if (was !== 2) { if (!current()) rebuildView(firstOpen()); requestAnimationFrame(() => { layout(); show(); refresh(); }); tip(); } }
     else if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
     if (n === 3) renderStep3();
     renderStepper();
   }
   document.addEventListener('click', (e) => { const b = e.target.closest('[data-goto]'); if (b && !b.disabled) goto(+b.dataset.goto); });
   $('#next1').addEventListener('click', () => goto(2));
-  $('#next2').addEventListener('click', () => goto(3));
+  for (const b of $$('.go2')) b.addEventListener('click', () => goto(3));
   function renderStepper() {
     for (const b of $$('.stepper button')) {
       const n = +b.dataset.goto;
@@ -684,7 +685,7 @@
       frame.replaceChildren();
       $('#stEmpty').textContent = !items.length ? '還沒有照片' : S.filter === 'none' ? '這裡的照片都標好了' : '這裡沒有照片';
       info(null);
-      drawStrip(); drawGrid();
+      drawStrip(); drawGrid(); queueSecond();
       return;
     }
     const p = pic(it);
@@ -711,7 +712,7 @@
       });
     } else stage.classList.remove('loading');
     info(it);
-    drawStrip(); drawGrid();
+    drawStrip(); drawGrid(); queueSecond();
     // the next ones (and the one before), once you stop for a moment
     clearTimeout(preTimer);
     preTimer = setTimeout(async () => {
@@ -724,10 +725,10 @@
   }
   // the photo's details in the top-left corner, as Lightroom's info overlay: name, exposure, lens, then when and whose
   function details(it) {
-    const exp = [it.ss ? `${it.ss} 秒` : '', it.fn ? `(ƒ / ${it.fn})` : ''].filter(Boolean).join(' ');
+    const exp = [it.ss ? [el('span', { class: 'frac', text: it.ss }), ' 秒'] : [], it.fn ? `${it.ss ? ' ' : ''}(ƒ / ${it.fn})` : '', it.iso ? `${it.ss || it.fn ? '，' : ''}ISO ${it.iso}` : ''].flat().filter(Boolean);
     return [
       el('b', { text: it.name }),
-      exp || it.iso ? el('span', { text: [exp, it.iso ? `ISO ${it.iso}` : ''].filter(Boolean).join('，') }) : null,
+      exp.length ? el('span', {}, ...exp) : null,
       it.fl || it.lens ? el('span', { text: it.fl && it.lens ? `${it.fl} (${it.lens})` : it.fl || it.lens }) : null,
       el('span', { text: [it.when, it.cam, it.dir].filter(Boolean).join('・') }),
     ];
@@ -796,7 +797,7 @@
         URL.revokeObjectURL(url);
         it.thumb = await new Promise((r) => c.toBlob(r, 'image/jpeg', 0.8));
         it.turn = 1;
-        for (const n of $$(`[data-k="${CSS.escape(it.key)}"] img`)) { n.src = thumbUrl(it); n.style.transform = ''; }
+        for (const d of [document, ...(swOpen() ? [sw.document] : [])]) for (const n of $$(`[data-k="${CSS.escape(it.key)}"] img`, d)) { n.src = thumbUrl(it); n.style.transform = ''; }
       } catch { /* stays blank */ }
     }
     thumbBusy = false;
@@ -897,12 +898,119 @@
     $('#bGrid').classList.toggle('on', on);
     $('#bLoupe').classList.toggle('on', !on);
     $('#bZoom').hidden = on;
-    stripPos = gridPos = -1;
+    stripPos = gridPos = swPos = -1;
     requestAnimationFrame(() => { if (on) { drawGrid(); grid.focus({ preventScroll: true }); } else { layout(); show(); } refresh(); });
   }
   $('#bGrid').addEventListener('click', () => setGrid(true));
   $('#bLoupe').addEventListener('click', () => setGrid(false));
   const targets = () => (sel.size > 1 ? view.filter((it) => sel.has(it)) : current() ? [current()] : []);
+
+  // ---------- the second window: every photo as a grid, for another screen (Lightroom's secondary display) ----------
+  // second.html is an empty page; this window draws into it (it has the photos, and the thumbnails' blob: addresses
+  // work there too), keeps the photo you're on in sight, and takes its clicks and keys back. Only the cells on screen
+  // exist, as in the grid here.
+  let sw = null, swPos = -1, swCols = 1, swQueued = false;
+  const swOpen = () => !!sw && !sw.closed;
+  const FILTER_NAME = { keep: '留用', none: '未標記', drop: '排除' };
+  function secondButton() {
+    const on = swOpen();
+    $('#bSecond').classList.toggle('on', on);
+    $('#bSecond').setAttribute('aria-pressed', String(on));
+  }
+  function toggleSecond() {
+    if (swOpen()) { sw.close(); sw = null; secondButton(); return; }
+    const w = window.open('second.html', 'zt-pick-second', `popup,width=${Math.min(screen.availWidth, 1280)},height=${Math.min(screen.availHeight, 820)}`);
+    if (!w) { toast('瀏覽器擋下了新視窗：請允許這個網站開彈出式視窗', 5000); return; }
+    // two screens (Chrome, Edge): put it on the other one, full size (the browser asks first)
+    if (screen.isExtended && window.getScreenDetails) {
+      window.getScreenDetails().then((d) => {
+        const other = d.screens.find((x) => x !== d.currentScreen);
+        if (other && !w.closed) { w.moveTo(other.availLeft, other.availTop); w.resizeTo(other.availWidth, other.availHeight); }
+      }).catch(() => {});
+    }
+  }
+  // second.html calls this when it's loaded (or reloaded)
+  function attachSecond(w) {
+    sw = w; swPos = -1;
+    const d = w.document, g = d.getElementById('sGrid');
+    g.addEventListener('scroll', () => drawSecond(false), { passive: true });
+    w.addEventListener('resize', () => drawSecond(false));
+    g.addEventListener('click', (e) => { const c = e.target.closest('.c'); if (c) { sel.clear(); goTo(+c.dataset.i); } });
+    g.addEventListener('dblclick', (e) => { if (e.target.closest('.c') && S.grid) setGrid(false); });
+    const size = (k) => { S.cell = clamp(Math.round(S.cell * k), 110, 420); remember(); swPos = -1; drawSecond(); };
+    const full = () => { if (d.fullscreenElement) d.exitFullscreen().catch(() => {}); else d.documentElement.requestFullscreen().catch(() => {}); };
+    d.getElementById('sSmaller').addEventListener('click', () => size(1 / 1.2));
+    d.getElementById('sBigger').addEventListener('click', () => size(1.2));
+    d.getElementById('sFull').addEventListener('click', full);
+    // its keys work as they do here; ↑ ↓ move a row of its own grid (here they'd flag)
+    w.addEventListener('keydown', (e) => {
+      const k = e.key, plain = !e.metaKey && !e.ctrlKey && !e.altKey;
+      if (plain && (k === 'f' || k === 'F')) { e.preventDefault(); full(); return; }
+      if (plain && (k === '-' || k === '+' || k === '=')) { e.preventDefault(); size(k === '-' ? 1 / 1.2 : 1.2); return; }
+      if (plain && !S.grid && (k === 'ArrowUp' || k === 'ArrowDown') && S.step === 2) { e.preventDefault(); goTo(pos + (k === 'ArrowUp' ? -swCols : swCols)); return; }
+      onKey(e);
+    });
+    w.addEventListener('pagehide', () => { if (sw === w) { sw = null; secondButton(); } });
+    secondButton();
+    drawSecond();
+  }
+  window.ZtPickSecond = { attach: attachSecond };
+  // this page going away leaves the other one with nothing to show
+  window.addEventListener('pagehide', () => {
+    if (!swOpen()) return;
+    try { const l = sw.document.getElementById('sLost'); l.textContent = '「照片挑選」的視窗關掉或重新整理了。這個視窗可以關掉，回去再按一次「副螢幕」。'; l.hidden = false; } catch {}
+  });
+  function queueSecond() {
+    if (!sw || swQueued) return;
+    swQueued = true;
+    queueMicrotask(() => { swQueued = false; drawSecond(); });
+  }
+  function drawSecond(follow = true) {
+    if (!swOpen()) { if (sw) { sw = null; secondButton(); } return; }
+    const d = sw.document, g = d.getElementById('sGrid'), gin = d.getElementById('sIn');
+    if (!g || !gin) return;
+    const W = g.clientWidth - 12, H = g.clientHeight;
+    swCols = Math.max(1, Math.floor(W / S.cell));
+    const cw = W / swCols, ch = Math.round(cw * 0.8) + 26;
+    gin.style.height = `${Math.ceil(view.length / swCols) * ch + 12}px`;
+    if (follow && swPos !== pos) {
+      // the photo you're on, kept in sight: when it leaves, its row comes back to the middle
+      const y = 6 + Math.floor(pos / swCols) * ch, t = g.scrollTop;
+      if (y < t || y + ch > t + H) g.scrollTop = Math.max(0, y - (H - ch) / 2);
+      swPos = pos;
+    }
+    const t = g.scrollTop, a = Math.max(0, (Math.floor(t / ch) - 1) * swCols), b = Math.min(view.length, (Math.ceil((t + H) / ch) + 1) * swCols);
+    const kids = [];
+    for (let i = a; i < b; i++) {
+      const it = view[i];
+      kids.push(el('div', { class: cellClass(it, 'c'), 'data-i': i, 'data-k': it.key, title: `${it.name}${it.dir ? `・${it.dir}` : ''}`,
+        style: `left:${6 + (i % swCols) * cw}px;top:${6 + Math.floor(i / swCols) * ch}px;width:${cw - 6}px;height:${ch - 6}px` },
+      el('span', { class: 'no', text: num(i + 1) }), el('span', { class: 'pic' }, thumbImg(it)), el('span', { class: 'name', text: it.name })));
+    }
+    gin.replaceChildren(...kids);
+    const it = current(), c = counts();
+    fill(d.getElementById('sPos'), ...(it ? [el('b', { text: `第 ${num(pos + 1)}／${num(view.length)} 張` }), `・${it.name}`] : ['還沒有照片']),
+      S.filter !== 'all' ? `（只看${FILTER_NAME[S.filter]}）` : '', sel.size > 1 ? `・選了 ${num(sel.size)} 張` : '');
+    fill(d.getElementById('sCounts'), el('span', { class: 'n-keep' }, el('i'), '留用 ', el('b', { text: num(c.keep) })),
+      el('span', {}, '未標記 ', el('b', { text: num(c.none) })), el('span', { class: 'n-drop' }, el('i'), '排除 ', el('b', { text: num(c.drop) })));
+    d.getElementById('sEmpty').hidden = view.length > 0;
+  }
+  $('#bSecond').addEventListener('click', toggleSecond);
+  $('#bSecond').hidden = PHONE;
+
+  // ---------- the keys, the first times in (until a photo is flagged with one) ----------
+  let tipTimer = 0;
+  function tip() {
+    const t = $('#stTip');
+    if (!S.tip || PHONE) { t.hidden = true; return; }
+    t.hidden = false; t.classList.remove('out');
+    clearTimeout(tipTimer);
+    tipTimer = setTimeout(() => t.classList.add('out'), 9000);
+  }
+  function tipDone() {
+    if (S.tip) { S.tip = false; remember(); }
+    $('#stTip').classList.add('out');
+  }
 
   // ---------- the filmstrip's header: counts, filter, folder, order ----------
   function refresh() {
@@ -913,9 +1021,9 @@
     $('#doneFill').style.width = `${c.all ? ((c.keep + c.drop) / c.all) * 100 : 0}%`;
     $('#doneBar').title = `決定了 ${num(c.keep + c.drop)}／${num(c.all)} 張`;
     const n = c.keep;
-    $('#next2').disabled = !allowed(3);
-    $('#next2').textContent = n ? `存下 ${num(n)} 張 →` : '存下來 →';
+    for (const b of $$('.go2')) { b.disabled = !allowed(3); b.textContent = n ? `存下 ${num(n)} 張 →` : '存下來 →'; }
     if (S.grid) drawGrid(); else drawStrip();
+    queueSecond();
     info(current());
     if (S.grid && sel.size > 1) { fill($('#stPos'), el('b', { text: `選了 ${num(sel.size)} 張` }), '・P、X、U 一起標'); $('#bKeep').disabled = $('#bDrop').disabled = false; }
   }
@@ -925,7 +1033,7 @@
     S.filter = b.dataset.f;
     const at = current();
     rebuildView(at && matches(at) ? at : null);
-    stripPos = gridPos = -1;
+    stripPos = gridPos = swPos = -1;
     show(); refresh();
   });
   function renderFolders() {
@@ -939,7 +1047,7 @@
   $('#folder').addEventListener('change', (e) => {
     S.folder = e.target.value;
     rebuildView(current() && matches(current()) ? current() : null);
-    stripPos = gridPos = -1;
+    stripPos = gridPos = swPos = -1;
     show(); refresh();
     e.target.blur();
   });
@@ -948,14 +1056,12 @@
     if (r.type !== 'radio') return;
     if (r.name === 'take' || r.name === 'lay') { S[r.name] = r.value; if (r.name === 'lay') remember(); renderStep3(); }
   });
-  $('#sort').addEventListener('change', (e) => { S.sort = e.target.value; remember(); const at = current(); sortItems(); rebuildView(at); stripPos = gridPos = -1; show(); refresh(); e.target.blur(); });
+  $('#sort').addEventListener('change', (e) => { S.sort = e.target.value; remember(); const at = current(); sortItems(); rebuildView(at); stripPos = gridPos = swPos = -1; show(); refresh(); e.target.blur(); });
   $('#auto').checked = S.auto;
   $('#auto').addEventListener('change', (e) => { S.auto = e.target.checked; remember(); e.target.blur(); });
   $('#bKeep').addEventListener('click', () => mark(targets(), flagOf(current()) === 1 && sel.size <= 1 ? 0 : 1, S.auto));
   $('#bDrop').addEventListener('click', () => mark(targets(), flagOf(current()) === -1 && sel.size <= 1 ? 0 : -1, S.auto));
   $('#bZoom').addEventListener('click', () => toggleZoom());
-  $('#stPrev').addEventListener('click', () => go(-1));
-  $('#stNext').addEventListener('click', () => go(1));
   $('#bKeys').addEventListener('click', () => $('#keys').showModal());
   $('#bInfo').addEventListener('click', () => setInfo(!S.info));
   // a mouse click leaves focus on a button, and the next Space or arrow would go to it
@@ -1018,7 +1124,7 @@
   new ResizeObserver(() => { cancelAnimationFrame(resizeTimer); resizeTimer = requestAnimationFrame(() => { if (S.step === 2) { layout(); drawStrip(); drawGrid(); } }); }).observe($('#viewer'));
 
   // ---------- keys ----------
-  document.addEventListener('keydown', (e) => {
+  function onKey(e) {
     if (S.step !== 2 || $('#keys').open) return;
     if (e.target.closest && e.target.closest('input[type="text"], select, textarea')) return;
     const k = e.key, mod = e.metaKey || e.ctrlKey;
@@ -1033,13 +1139,13 @@
       case 'ArrowLeft': if (S.grid && e.shiftKey) extend(-1); else go(-1); break;
       case 'ArrowUp': if (S.grid) { if (e.shiftKey) extend(-cols); else go(-cols); } else mark(one(), 1, advance); break;
       case 'ArrowDown': if (S.grid) { if (e.shiftKey) extend(cols); else go(cols); } else mark(one(), -1, advance); break;
-      case 'p': case 'P': mark(one(), 1, advance); break;
-      case 'x': case 'X': case 'Delete': case 'Backspace': mark(one(), -1, advance); break;
-      case 'u': case 'U': case '0': mark(one(), 0, advance); break;
-      case '`': mark(one(), flagOf(current()) === 1 && one().length === 1 ? 0 : 1, advance); break;
+      case 'p': case 'P': mark(one(), 1, advance); tipDone(); break;
+      case 'x': case 'X': case 'Delete': case 'Backspace': mark(one(), -1, advance); tipDone(); break;
+      case 'u': case 'U': case '0': mark(one(), 0, advance); tipDone(); break;
+      case '`': mark(one(), flagOf(current()) === 1 && one().length === 1 ? 0 : 1, advance); tipDone(); break;
       case 'i': case 'I': setInfo(!S.info); break;
       case 'z': case 'Z': case ' ': if (S.grid) setGrid(false); else toggleZoom(); break;
-      case 'g': case 'G': setGrid(!S.grid); break;
+      case 'g': case 'G': if (e.shiftKey) toggleSecond(); else setGrid(!S.grid); break;
       case 'e': case 'E': case 'Enter': if (S.grid) setGrid(false); else done = false; break;
       case 'Escape': if (S.grid && sel.size > 1) { sel.clear(); refresh(); } else if (Z.on) toggleZoom(); else if (S.grid) setGrid(false); else done = false; break;
       case 'f': case 'F': fullScreen(); break;
@@ -1051,7 +1157,8 @@
       default: done = false;
     }
     if (done) { e.preventDefault(); if (document.activeElement && document.activeElement.matches('button') && !document.activeElement.closest('dialog')) document.activeElement.blur(); }
-  });
+  }
+  document.addEventListener('keydown', onKey);
   function extend(d) {
     if (!sel.size && current()) sel.add(current());
     if (!anchor) anchor = current();

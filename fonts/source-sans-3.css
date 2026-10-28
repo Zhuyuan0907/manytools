@@ -1,0 +1,12 @@
+/* Source Sans 3 (Adobe, SIL OFL 1.1 with Reserved Font Name "Source", see source-sans-3/LICENSE.md), the variable
+   upright, weights 200–900, unmodified. Adobe's open sans, close in feel to Myriad, the type of Lightroom Classic's
+   panels: the pick tool's Lightroom-like screen sets its letters and digits in it; Chinese falls through to the page's
+   own fonts. */
+@font-face {
+  font-family: 'Source Sans 3 Web';
+  font-style: normal;
+  font-weight: 200 900;
+  font-display: swap;
+  src: url(source-sans-3/SourceSans3VF-Upright.otf.woff2) format('woff2');
+  unicode-range: U+0000-024F, U+02C6, U+02DA, U+02DC, U+2000-206F, U+20AC, U+2122, U+2190-2193, U+2212, U+2215;
+}

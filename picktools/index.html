@@ -18,6 +18,7 @@
 <meta name="twitter:card" content="summary_large_image">
 <link rel="icon" href="assets/logo.svg" type="image/svg+xml">
 <link rel="stylesheet" href="/fonts/noto-sans-tc.css">
+<link rel="stylesheet" href="/fonts/source-sans-3.css">
 <link rel="stylesheet" href="assets/app.css">
 </head>
 <body>
@@ -102,7 +103,8 @@
     </section>
 
     <!-- ============ STEP 2 ============ -->
-    <!-- Lightroom Classic's Library, loupe view: the photo with its info in the corner, the toolbar, the filmstrip -->
+    <!-- Lightroom Classic's Library, loupe view: the photo with its details in the corner, the filmstrip. Picking is done
+         with the keyboard, so on a computer there are no buttons for it; phones and tablets get 留用 / 排除 to tap. -->
     <section class="panel fill lr" id="step2" aria-labelledby="h2t" hidden>
       <h2 class="sr" id="h2t">挑照片</h2>
       <div class="viewer" id="viewer">
@@ -111,14 +113,14 @@
           <div class="ov" id="ov"></div>
           <span class="ov-flag" id="ovFlag" aria-hidden="true"></span>
           <p class="st-zoom" id="stZoom" hidden></p>
-          <button type="button" class="st-nav prev" id="stPrev" aria-label="上一張" tabindex="-1"><svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg></button>
-          <button type="button" class="st-nav next" id="stNext" aria-label="下一張" tabindex="-1"><svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5l7 7-7 7"/></svg></button>
           <p class="st-empty" id="stEmpty" hidden></p>
         </div>
         <div class="grid" id="grid" hidden tabindex="-1" aria-label="照片列表"><div class="grid-in" id="gridIn"></div></div>
         <p class="st-msg" id="stMsg" role="status"></p>
+        <p class="st-tip" id="stTip" hidden><span><kbd>←</kbd><kbd>→</kbd> 換張</span><span><kbd>P</kbd> 留用</span><span><kbd>X</kbd> 排除</span><span><kbd>U</kbd> 取消</span><span><kbd>?</kbd> 全部快捷鍵</span></p>
       </div>
 
+      <!-- for fingers (phones, tablets): hidden on a computer with a mouse -->
       <div class="tools" id="tools">
         <div class="tb tb-l">
           <button type="button" class="tb-ic on" id="bLoupe" title="單張（E）" aria-label="單張"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.9"><rect x="3.5" y="5" width="17" height="14" rx="1.5"/></svg></button>
@@ -131,11 +133,8 @@
           <button type="button" class="fl rej" id="bDrop" title="排除（X），再按一次取消（U）"><svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true"><mask id="rejX"><rect width="16" height="16" fill="#fff"/><path d="M6.6 3.6l3.6 3.6M10.2 3.6L6.6 7.2" stroke="#000" stroke-width="1.6" stroke-linecap="round"/></mask><path mask="url(#rejX)" fill="currentColor" d="M3.2 15V1.4h1.3v.8h8.8l-2.1 3.4 2.1 3.4H4.5V15z"/></svg><span>排除</span><kbd>X</kbd></button>
         </div>
         <div class="tb tb-r">
-          <label class="tog" title="標完自動跳下一張（Caps Lock 或加按 Shift 也會跳）"><input type="checkbox" id="auto" checked><span class="tog-ui" aria-hidden="true"></span><span class="tog-t">自動前進</span></label>
-          <span class="tb-sep" aria-hidden="true"></span>
           <button type="button" class="tb-ic on" id="bInfo" title="照片資訊（I）" aria-label="照片資訊" aria-pressed="true"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><circle cx="12" cy="12" r="8.5"/><path d="M12 11v5.5"/><circle cx="12" cy="7.8" r=".6" fill="currentColor"/></svg></button>
           <button type="button" class="tb-ic" id="bFull" title="全螢幕（F）" aria-label="全螢幕"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg></button>
-          <button type="button" class="tb-ic" id="bKeys" title="快捷鍵（?）" aria-label="快捷鍵"><svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="6" width="19" height="12" rx="2"/><path d="M6 9.5h.01M9.3 9.5h.01M12.6 9.5h.01M15.9 9.5h.01M18 9.5h.01M7.5 14.5h9"/></svg></button>
           <button type="button" class="btn primary go2" id="next2" disabled>存下來 →</button>
         </div>
       </div>
@@ -150,6 +149,11 @@
           <button type="button" class="tl is-keep" data-f="keep" role="radio" title="留用"><i aria-hidden="true"></i><span>留用</span><b id="nKeep">0</b></button>
           <button type="button" class="tl" data-f="none" role="radio" title="未標記"><span>未標記</span><b id="nNone">0</b></button>
           <button type="button" class="tl is-drop" data-f="drop" role="radio" title="排除"><i aria-hidden="true"></i><span>排除</span><b id="nDrop">0</b></button>
+        </div>
+        <div class="fh-act">
+          <button type="button" class="tb-ic" id="bSecond" title="副螢幕（Shift＋G）：另開一個視窗放所有照片的格狀，拖到另一個螢幕，會跟著你挑到哪" aria-label="副螢幕" aria-pressed="false"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="3.5" width="19" height="13.5" rx="1.6"/><path d="M9 21h6M12 17v4"/><path d="M6.5 7.5h2.5M10.8 7.5h2.5M15 7.5h2.5M6.5 11.5h2.5M10.8 11.5h2.5M15 11.5h2.5" stroke-width="2.2"/></svg></button>
+          <button type="button" class="tb-ic" id="bKeys" title="快捷鍵（?）" aria-label="快捷鍵"><svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="6" width="19" height="12" rx="2"/><path d="M6 9.5h.01M9.3 9.5h.01M12.6 9.5h.01M15.9 9.5h.01M18 9.5h.01M7.5 14.5h9"/></svg></button>
+          <button type="button" class="btn primary go2" id="next2d" disabled>存下來 →</button>
         </div>
         <div class="done-bar" id="doneBar"><i id="doneFill"></i></div>
       </div>
@@ -207,18 +211,20 @@
 
 <dialog class="keys" id="keys" aria-labelledby="keysT">
   <h3 id="keysT">快捷鍵</h3>
+  <label class="tog keys-auto"><input type="checkbox" id="auto" checked><span class="tog-ui" aria-hidden="true"></span><span>標完自動跳下一張（自動前進）</span></label>
   <dl>
     <dt><kbd>←</kbd> <kbd>→</kbd></dt><dd>上一張、下一張</dd>
     <dt><kbd>P</kbd></dt><dd>留用</dd>
     <dt><kbd>X</kbd></dt><dd>排除（<kbd>Delete</kbd> 也可以）</dd>
     <dt><kbd>U</kbd></dt><dd>取消旗標</dd>
     <dt><kbd>`</kbd></dt><dd>留用、取消，來回切換</dd>
-    <dt><kbd>Caps Lock</kbd> 或加按 <kbd>Shift</kbd></dt><dd>標完跳下一張（工具列的「自動前進」打開時，標完都會跳）</dd>
+    <dt><kbd>Caps Lock</kbd> 或加按 <kbd>Shift</kbd></dt><dd>標完跳下一張（上面的「自動前進」打開時，標完都會跳）</dd>
     <dt><kbd>I</kbd></dt><dd>顯示或隱藏左上角的照片資訊</dd>
     <dt><kbd>Z</kbd> 或空白鍵</dt><dd>放大到 100%，換張也維持放大；再按一次回全圖</dd>
     <dt><kbd>G</kbd>・<kbd>E</kbd></dt><dd>格狀・單張</dd>
     <dt><kbd>Shift</kbd> 點選</dt><dd>格狀裡選一段，一起標</dd>
     <dt><kbd>F</kbd></dt><dd>全螢幕</dd>
+    <dt><kbd>Shift</kbd> <kbd>G</kbd></dt><dd>副螢幕：另開視窗放所有照片的格狀，拖到另一個螢幕</dd>
     <dt><kbd>⌘</kbd> <kbd>Z</kbd></dt><dd>復原（Windows：<kbd>Ctrl</kbd> <kbd>Z</kbd>）</dd>
   </dl>
   <p class="help">旗標會記在這個瀏覽器裡，下次放入同一批照片會接著挑。</p>

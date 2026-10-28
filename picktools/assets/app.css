@@ -362,10 +362,13 @@ kbd { display: inline-block; min-width: 1.6em; padding: 0 5px; border-radius: 5p
   --lr-dim: #96969b;
   --lr-hi: #f4f4f5;
   --lr-rej: #e46a59;
+  /* Lightroom's panels are set in Myriad: that if it's on the computer, else Adobe's open Source Sans 3 (/fonts) */
+  --lr-font: "Myriad Pro", "Myriad Web Pro", "Source Sans 3 Web", -apple-system, BlinkMacSystemFont, "PingFang TC", "Noto Sans TC Web", "Noto Sans TC", "Microsoft JhengHei", "Heiti TC", sans-serif;
   --i-flag: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M3.2 15V1.4h1.3v.8h8.8l-2.1 3.4 2.1 3.4H4.5V15z'/%3E%3C/svg%3E");
   --i-rej: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cmask id='m'%3E%3Crect width='16' height='16' fill='%23fff'/%3E%3Cpath d='M6.6 3.6l3.6 3.6M10.2 3.6L6.6 7.2' stroke='%23000' stroke-width='1.6' stroke-linecap='round'/%3E%3C/mask%3E%3Cpath mask='url(%23m)' d='M3.2 15V1.4h1.3v.8h8.8l-2.1 3.4 2.1 3.4H4.5V15z'/%3E%3C/svg%3E");
 }
 body.culling { background: var(--lr-top); color-scheme: dark; }
+.lr, .keys, body.culling .top, body.culling .stepper { font-family: var(--lr-font); }
 @media (min-width: 641px) {
   body.culling .app { max-width: none; padding: 0; gap: 0; grid-template-columns: minmax(0, 1fr) auto; grid-template-rows: auto minmax(0, 1fr); }
   body.culling .top { grid-column: 1; grid-row: 1; height: 46px; padding: 0 18px; }
@@ -407,6 +410,9 @@ body.culling { background: var(--lr-top); color-scheme: dark; }
 }
 .ov > * { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .ov b { font-size: 1.62em; font-weight: 400; line-height: 1.22; letter-spacing: 0; }
+/* 1/250 as Lightroom sets it: a real fraction */
+.ov .frac { font-variant-numeric: diagonal-fractions; }
+.ov { font-variant-numeric: normal; }
 .lr.no-info .ov, .ov:empty { display: none; }
 .ov-flag { position: absolute; right: 16px; top: 15px; width: 22px; height: 22px; pointer-events: none; filter: drop-shadow(0 1px 2px rgba(0, 0, 0, .9)); }
 .ov-flag::before { content: ""; position: absolute; inset: 0; background: currentColor; -webkit-mask: var(--i-flag) center / contain no-repeat; mask: var(--i-flag) center / contain no-repeat; }
@@ -430,11 +436,15 @@ body.culling { background: var(--lr-top); color-scheme: dark; }
 @keyframes msg { 0% { opacity: 0; } 8%, 60% { opacity: 1; } 100% { opacity: 0; } }
 @media (prefers-reduced-motion: reduce) { .frame.glide { transition: none; } }
 .st-empty { position: absolute; inset: 0; margin: 0; display: grid; place-items: center; color: rgba(255, 255, 255, .55); font-size: 1.05rem; pointer-events: none; }
-.st-nav { position: absolute; top: 50%; width: 42px; height: 76px; margin-top: -38px; display: grid; place-items: center; border: 0; border-radius: 8px; background: rgba(0, 0, 0, .3); color: #fff; opacity: 0; transition: opacity .15s; cursor: pointer; }
-.st-nav.prev { left: 8px; }
-.st-nav.next { right: 8px; }
-.stage.zoomed .st-nav { display: none; }
-@media (any-hover: hover) { .stage:hover .st-nav { opacity: .6; } .stage .st-nav:hover { opacity: 1; background: rgba(0, 0, 0, .5); } }
+/* the keys, the first times in: at the bottom of the photo, until the first flag */
+.st-tip {
+  position: absolute; left: 50%; bottom: 18px; margin: 0; transform: translateX(-50%); pointer-events: none;
+  display: flex; gap: 18px; padding: 9px 18px; border-radius: 8px; white-space: nowrap;
+  background: rgba(24, 24, 26, .82); color: var(--lr-text); font-size: .92rem; -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px);
+  transition: opacity .4s;
+}
+.st-tip kbd { margin-right: 4px; }
+.st-tip.out { opacity: 0; }
 
 /* the toolbar */
 /* three columns: the flags stay in the middle while both sides fit, and move over rather than overlap */
@@ -463,15 +473,10 @@ body.culling { background: var(--lr-top); color-scheme: dark; }
 .tog-ui::after { content: ""; position: absolute; left: 2px; top: 2px; border-radius: 50%; background: #fff; transition: transform .15s; }
 .tog input:checked + .tog-ui { background: var(--accent); }
 .tog input:focus-visible + .tog-ui { outline: 3px solid color-mix(in srgb, var(--accent) 55%, transparent); outline-offset: 2px; }
-.lr .tog { color: var(--lr-dim); font-size: .86rem; }
-.lr .tog:hover { color: var(--lr-text); }
-.lr .tog-ui { width: 30px; height: 18px; background: #4b4b4f; }
-.lr .tog-ui::after { width: 14px; height: 14px; box-shadow: none; }
-.lr .tog input:checked + .tog-ui::after { transform: translateX(12px); }
 .lr .btn.go2 { height: 32px; margin-left: 8px; padding: 0 14px; border-radius: 6px; font-size: .9rem; box-shadow: none; }
 .lr .btn.go2:disabled { opacity: .35; }
 
-/* the filmstrip's header: folder, order, where you are, the filter (also the counts) */
+/* the filmstrip's header: folder, order, where you are, the filter (also the counts), the second screen, the keys, on */
 .fhead { position: relative; display: flex; align-items: center; gap: 16px; min-height: 32px; padding: 3px 12px; background: var(--lr-panel-2); border-top: 1px solid #19191a; color: var(--lr-dim); font-size: .82rem; }
 .fh-sel { display: inline-flex; align-items: center; gap: 7px; flex: none; white-space: nowrap; }
 .fh-sel select { height: 24px; max-width: 230px; padding: 0 6px; border-radius: 4px; border: 1px solid #444447; background: #2c2c2e; color: var(--lr-text); font-size: .82rem; }
@@ -487,6 +492,9 @@ body.culling { background: var(--lr-top); color-scheme: dark; }
 .tl.on { background: #404043; color: var(--lr-hi); }
 .tl.on b { color: var(--lr-hi); }
 /* how much is decided: a thin line along the top */
+.fh-act { display: flex; align-items: center; gap: 2px; flex: none; margin-left: 4px; padding-left: 10px; border-left: 1px solid var(--lr-line); }
+.fh-act .tb-ic { width: 32px; height: 26px; }
+.lr .fh-act .btn.go2 { height: 26px; margin-left: 8px; padding: 0 12px; font-size: .84rem; border-radius: 5px; }
 .done-bar { position: absolute; left: 0; right: 0; top: -1px; height: 2px; pointer-events: none; }
 .done-bar i { display: block; height: 100%; width: 0; background: #b07ccc; transition: width .2s; }
 
@@ -521,19 +529,35 @@ body.culling { background: var(--lr-top); color-scheme: dark; }
 .g-pic img { width: min(100cqw, 100cqh); height: min(100cqw, 100cqh); }
 .g-name { flex: none; height: 22px; font-size: .74rem; line-height: 22px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-align: center; }
 
+/* A computer with a mouse: the keyboard picks (Lightroom's way), so the buttons for it go and the photo gets the room.
+   Fingers (phones, tablets) keep them, and the filmstrip's header drops what's for a keyboard and a second screen. */
+@media (min-width: 641px) and (hover: hover) and (pointer: fine) { .tools { display: none; } }
+@media (max-width: 640px), (hover: none), (pointer: coarse), (pointer: none) { .fh-act, .st-tip, .fl kbd { display: none !important; } }
+
 /* full screen: the whole step */
 #step2:fullscreen { max-height: none; width: 100vw; height: 100vh; border: 0; border-radius: 0; }
 /* only there for the phones' "‹ 加照片" (/shared/mobile-nav.js clicks it) */
 .lr-foot { display: none !important; }
 
 /* the shortcuts */
-.keys { border: 0; border-radius: 16px; padding: 22px 24px 20px; width: min(520px, calc(100vw - 32px)); color: var(--ink); box-shadow: 0 24px 70px rgba(0, 0, 0, .3); }
-.keys::backdrop { background: rgba(24, 16, 30, .45); }
-.keys h3 { font-size: 1.15rem; margin-bottom: 12px; }
-.keys dl { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 8px 16px; margin: 0 0 14px; align-items: baseline; }
-.keys dt { white-space: nowrap; color: var(--ink-2); font-size: .88rem; }
-.keys dd { margin: 0; }
+/* the shortcuts: opened over the dark culling screen, so dark too, with light text (its own colours, whatever the page's) */
+.keys {
+  border: 1px solid #3e3e41; border-radius: 12px; padding: 22px 26px 20px; width: min(540px, calc(100vw - 32px)); max-height: calc(100dvh - 32px); overflow: auto;
+  background: #2a2a2c; color: #ececee; color-scheme: dark; box-shadow: 0 24px 70px rgba(0, 0, 0, .55);
+}
+.keys::backdrop { background: rgba(0, 0, 0, .55); }
+.keys h3 { font-size: 1.2rem; font-weight: 600; margin-bottom: 14px; color: #fff; }
+.keys dl { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 9px 18px; margin: 0 0 14px; align-items: baseline; }
+.keys dt { white-space: nowrap; color: #c4c4c9; font-size: .92rem; }
+.keys dd { margin: 0; color: #ececee; font-size: .96rem; }
+.keys kbd { background: #1c1c1e; border-color: #55555a; color: #f0f0f2; font-size: .8rem; }
+.keys .help { color: #a6a6ab; font-size: .88rem; }
+.keys-auto { margin: -2px 0 16px; padding-bottom: 14px; border-bottom: 1px solid #3e3e41; width: 100%; color: #ececee; font-size: .96rem; }
+.keys .tog-ui { width: 34px; height: 20px; background: #4b4b4f; }
+.keys .tog-ui::after { width: 16px; height: 16px; }
+.keys .tog input:checked + .tog-ui::after { transform: translateX(14px); }
 .keys form { margin-top: 14px; display: flex; justify-content: flex-end; }
+@media (max-width: 560px) { .keys dl { grid-template-columns: minmax(0, 1fr); gap: 2px; } .keys dd { margin-bottom: 8px; } }
 
 /* ================= step 3 ================= */
 .step3-body { display: flex; flex-direction: column; gap: 16px; }
@@ -555,16 +579,23 @@ body.culling { background: var(--lr-top); color-scheme: dark; }
 
 /* narrower and shorter: the words go before the photo gets smaller */
 @media (max-width: 1100px) and (min-width: 641px) {
-  .fh-lbl, .tl.is-keep span, .tl.is-drop span { display: none; }
+  .fh-lbl, .fh-sel > span, .tl.is-keep span, .tl.is-drop span { display: none; }
   .fh-sel select { max-width: 160px; }
 }
+@media (max-width: 960px) and (min-width: 641px) {
+  .fh-pos { display: none; }
+  .tally { margin-left: auto; }
+}
 @media (max-width: 900px) and (min-width: 641px) {
-  .fl kbd, .fh-sel > span { display: none; }
+  .fl kbd { display: none; }
   .tools { gap: 8px; }
   .fhead { gap: 10px; }
 }
+@media (max-width: 800px) and (min-width: 641px) {
+  .fh-sel:not(#folderWrap), #bSecond { display: none; }
+}
 @media (max-width: 760px) and (min-width: 641px) {
-  .tog-t, .fh-pos { display: none; }
+  .fh-sel select { max-width: 130px; }
   .tally { margin-left: auto; }
   body.culling .stepper button, body.culling .stepper button.current { padding: 1px 10px; }
   body.culling .wordmark { font-size: .95rem; }
@@ -609,7 +640,7 @@ body.culling { background: var(--lr-top); color-scheme: dark; }
   .tb-c { order: -1; flex: 1 1 100%; display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
   .fl { height: 50px; justify-content: center; font-size: 1.05rem; border-radius: 12px; }
   .fl svg { width: 18px; height: 18px; }
-  .fl kbd, .lr .tog, #bFull, #bKeys, .tb-r .tb-sep { display: none; }
+  .fl kbd, #bFull { display: none; }
   .tb-l, .tb-r { flex: none; }
   .tb-r { flex: 1 1 auto; }
   .tb-ic, .tb-txt { height: 44px; }

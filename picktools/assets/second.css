@@ -1,0 +1,57 @@
+/* 照片挑選's second window: every photo as a grid on another screen, dark like Lightroom Classic's secondary display.
+   The cells, flags and colours are the pick tool's own grid (app.css), kept in step. */
+:root {
+  --bg: #1f1f20;
+  --bar: #2a2a2b;
+  --text: #cfcfd2;
+  --dim: #96969b;
+  --hi: #f4f4f5;
+  --rej: #e46a59;
+  --font: "Myriad Pro", "Myriad Web Pro", "Source Sans 3 Web", -apple-system, BlinkMacSystemFont, "PingFang TC", "Noto Sans TC Web", "Noto Sans TC", "Microsoft JhengHei", "Heiti TC", sans-serif;
+  --i-flag: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M3.2 15V1.4h1.3v.8h8.8l-2.1 3.4 2.1 3.4H4.5V15z'/%3E%3C/svg%3E");
+  --i-rej: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cmask id='m'%3E%3Crect width='16' height='16' fill='%23fff'/%3E%3Cpath d='M6.6 3.6l3.6 3.6M10.2 3.6L6.6 7.2' stroke='%23000' stroke-width='1.6' stroke-linecap='round'/%3E%3C/mask%3E%3Cpath mask='url(%23m)' d='M3.2 15V1.4h1.3v.8h8.8l-2.1 3.4 2.1 3.4H4.5V15z'/%3E%3C/svg%3E");
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; }
+body {
+  display: grid; grid-template-rows: auto minmax(0, 1fr); overflow: hidden; background: var(--bg); color: var(--text);
+  font: 15px/1.5 var(--font); -webkit-font-smoothing: antialiased; user-select: none; -webkit-user-select: none;
+}
+[hidden] { display: none !important; }
+p { margin: 0; }
+button { font: inherit; }
+
+.bar { display: flex; align-items: center; gap: 18px; height: 42px; padding: 0 12px 0 14px; background: var(--bar); border-bottom: 1px solid #111112; white-space: nowrap; }
+.logo { flex: none; border-radius: 6px; }
+.pos { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; color: var(--dim); }
+.pos b { color: var(--hi); font-weight: 600; }
+.counts { display: flex; gap: 16px; flex: none; color: var(--dim); font-size: .93rem; }
+.counts span { display: inline-flex; align-items: center; gap: 5px; }
+.counts b { color: var(--text); font-weight: 600; }
+.counts i { width: 12px; height: 12px; background: currentColor; -webkit-mask: var(--i-flag) center / contain no-repeat; mask: var(--i-flag) center / contain no-repeat; }
+.counts .n-drop i { -webkit-mask-image: var(--i-rej); mask-image: var(--i-rej); }
+.size { display: flex; gap: 2px; flex: none; }
+.bar button { height: 28px; min-width: 32px; padding: 0 9px; display: inline-grid; place-items: center; border: 0; border-radius: 5px; background: none; color: var(--dim); cursor: pointer; }
+.bar button:hover { background: #3a3a3d; color: var(--hi); }
+.bar .full { color: var(--text); font-size: .92rem; }
+
+.grid { position: relative; overflow-y: auto; outline: none; scrollbar-color: #48484c transparent; }
+.grid-in { position: relative; }
+.c { position: absolute; display: flex; flex-direction: column; gap: 4px; padding: 10px 10px 0; border-radius: 4px; background: #2b2b2d; color: var(--dim); cursor: pointer; overflow: hidden; }
+.c:hover { background: #333336; }
+.c.picked { background: #444447; }
+.c.cur { background: #6a6a6f; color: var(--hi); box-shadow: inset 0 0 0 1px #a2a2a7; }
+/* Lightroom's cell number, big and faint behind the photo */
+.no { position: absolute; right: 9px; top: 3px; font-size: 1.5rem; font-weight: 700; line-height: 1.2; color: rgba(255, 255, 255, .07); }
+.c.cur .no { color: rgba(255, 255, 255, .16); }
+.pic { position: relative; flex: 1 1 auto; min-height: 0; display: grid; place-items: center; overflow: hidden; container-type: size; }
+.pic img { display: block; width: min(100cqw, 100cqh); height: min(100cqw, 100cqh); object-fit: contain; }
+.c.is-drop img { opacity: .3; }
+.name { flex: none; height: 22px; font-size: .8rem; line-height: 22px; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.c.is-keep::before, .c.is-drop::before { content: ""; position: absolute; left: 6px; top: 6px; z-index: 1; width: 22px; height: 22px; border-radius: 5px; background: rgba(18, 18, 19, .72); }
+.c.is-keep::after, .c.is-drop::after { content: ""; position: absolute; left: 11px; top: 11px; z-index: 1; width: 12px; height: 12px; background: #fff; -webkit-mask: var(--i-flag) center / contain no-repeat; mask: var(--i-flag) center / contain no-repeat; }
+.c.is-drop::after { background: var(--rej); -webkit-mask-image: var(--i-rej); mask-image: var(--i-rej); }
+
+.empty, .lost { position: fixed; inset: 42px 0 0; display: grid; place-items: center; padding: 24px; text-align: center; color: var(--dim); font-size: 1.05rem; pointer-events: none; }
+.lost { inset: 0; background: var(--bg); color: var(--text); pointer-events: auto; }
