@@ -60,7 +60,7 @@ h1, h2, p, dl, dd { margin: 0; }
   border: 0; border-radius: 999px; background: none; color: var(--ink-2); font: inherit; font-weight: 700; font-size: .95rem; cursor: pointer; white-space: nowrap;
   -webkit-tap-highlight-color: transparent; transition: color .3s;
 }
-.switch button[aria-selected="true"] { color: #fff; }
+.switch button[aria-selected="true"], html[data-world="daily"] .switch:not([data-to]) [data-world="daily"], html[data-world="photo"] .switch:not([data-to]) [data-world="photo"] { color: #fff; }
 .sw-n { font-size: .72rem; font-weight: 700; opacity: .55; margin-left: -2px; }
 @media (pointer: coarse) { .switch button { height: 44px; } }
 .switch-thumb {
@@ -208,6 +208,13 @@ html[data-world="daily"] #photo, html[data-world="photo"] #daily { display: none
   .chip-t, .chip-bad, .chip-ok, .chip-n, .name-t { display: none; }
   .chip-ok.b { display: inline; }
   .tbar { display: inline; }
+}
+@media (max-width: 1419px) {
+  @container (max-height: 127px) or (max-width: 239px) {
+    .chip-t, .chip-bad, .chip-ok, .chip-n, .name-t { display: none; }
+    .chip-ok.b { display: inline; }
+    .tbar { display: inline; }
+  }
 }
 
 /* ================= photos in: which tool ================= */
@@ -365,9 +372,23 @@ html[data-world="daily"] #photo, html[data-world="photo"] #daily { display: none
   .tool-desc { font-size: .88rem; }
 }
 
+/* 1000–1100 wide on its side (an iPad 10.2" held flat, 1024-wide laptops): one row of cards, like wider screens */
+@media (min-width: 1000px) and (max-width: 1100px) and (orientation: landscape) {
+  .shelf { --cols: 5; }
+  #photo .shelf { --cols: 4; }
+  .group { grid-column: span var(--n); grid-template-columns: subgrid; grid-template-rows: auto 1fr; }
+  .g-video .tool { grid-template-rows: auto 1fr; }
+  .art, .g-video .art { height: clamp(84px, 15vh, 130px); min-height: 0; }
+  .g-video .art svg { width: auto; height: 100%; max-height: none; }
+  .foot { display: flex; }
+}
+/* up to 1100: the subtitle in two lines on both sides (only one of them would wrap, and the page would jump) */
+@media (max-width: 1100px) { .sub > span { display: block; } }
+
 /* ================= phones: each group a card of rows, and the switch under the thumb ================= */
 @media (max-width: 640px) {
   .app { padding: 12px 16px calc(98px + env(safe-area-inset-bottom)); gap: 12px; grid-template-rows: auto auto auto; align-content: start; }
+  .top, .foot { z-index: auto; }
   /* what scrolls under the switch fades out instead of peeking beside it */
   body::after { content: ""; position: fixed; left: 0; right: 0; bottom: 0; height: calc(88px + env(safe-area-inset-bottom)); z-index: 89; pointer-events: none; background: linear-gradient(to top, var(--page) 48%, transparent); }
   main { align-content: start; }
@@ -429,6 +450,9 @@ html[data-world="daily"] #photo, html[data-world="photo"] #daily { display: none
 @media (min-width: 500px) and (max-width: 640px) {
   .shelf, #photo .shelf { --cols: 2; }
   .g-video { grid-column: 1 / -1; }
+  .tool { gap: 0 10px; }
+  .tool .ico { width: 34px; height: 34px; }
+  .tool + .tool::before { left: 56px; }
 }
 /* taller phones: room for the groups' names */
 @media (max-width: 640px) and (min-height: 780px) {

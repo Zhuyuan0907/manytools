@@ -26,24 +26,35 @@
   // ---------- big screens: the same page, larger ----------
   // Laid out for about 1420 × 770 (ultra-wide: 1900 × 640); a bigger screen at 100 % gets it scaled up (CSS zoom), as
   // far as its height allows. Not across two screens: the hinge's position (env()) isn't zoomed.
+  // Ctrl/⌘ + and − change the device pixel ratio and the window's size in CSS px together: that's the visitor zooming,
+  // and z is fitted to the size before it (k), so their zoom isn't undone.
+  let dpr = devicePixelRatio, cssW = innerWidth, k = 1;
   function fitZoom() {
+    const W = innerWidth * k, H = innerHeight * k;
     const ultra = matchMedia('(min-aspect-ratio: 21/10) and (min-width: 1900px)').matches;
     const z = matchMedia('(horizontal-viewport-segments: 2)').matches ? 1
-      : ultra ? Math.max(1, Math.min(innerWidth / 1900, innerHeight / 640, 2.6)) : Math.max(1, Math.min(innerWidth / 1420, innerHeight / 770, 2.6));
+      : ultra ? Math.max(1, Math.min(W / 1900, H / 640, 2.6)) : Math.max(1, Math.min(W / 1420, H / 770, 2.6));
     root.style.setProperty('--z', z.toFixed(3));
   }
   fitZoom();
-  addEventListener('resize', fitZoom);
+  addEventListener('resize', () => {
+    if (devicePixelRatio !== dpr && innerWidth !== cssW) k *= devicePixelRatio / dpr;
+    dpr = devicePixelRatio; cssW = innerWidth;
+    fitZoom();
+  });
 
   // ---------- the two sides ----------
   const SIDES = { daily: { path: '/', title: 'ZhuyuanTools・小小ㄉ工具箱', theme: '#f4f7fa' }, photo: { path: '/photo', title: 'ZhuyuanTools・拍攝', theme: '#f4f7fa' } };
   let side = root.dataset.world === 'photo' ? 'photo' : 'daily';
-  function paint() {
+  function tabs(to) {
     for (const b of $$('.switch [role="tab"]')) {
-      const on = b.dataset.world === side;
+      const on = b.dataset.world === to;
       b.setAttribute('aria-selected', String(on));
       b.tabIndex = on ? 0 : -1;
     }
+  }
+  function paint() {
+    tabs(side);
     document.title = SIDES[side].title;
     $('meta[name="theme-color"]').content = SIDES[side].theme;
   }
@@ -51,14 +62,16 @@
   // remembered 拍攝 opened at /: say so in the address too
   if (onServer && side === 'photo' && location.pathname === '/') history.replaceState({ side }, '', '/photo');
 
-  let moving = false, wanted = null, settle = 0;
+  let moving = false, popped = false, settle = 0;
   // how: 'push' (a new address), 'pop' (Back/Forward already moved it)
   async function turn(to, how = 'push') {
-    if (moving) { if (how === 'pop') wanted = to; return; }   // Back/Forward mid-sweep: done after it
-    if (to === side) return;
+    if (moving || to === side) return;
     moving = true;
+    // the other side's characters: their font slices start loading now, not after the swap
+    if (document.fonts) document.fonts.load('700 1em "Noto Sans TC Web"', $(`#${to}`).textContent).catch(() => {});
     $('#switch').dataset.to = to;   // the switch moves at once, above the sweep
-    for (const b of $$('.switch [role="tab"]')) b.setAttribute('aria-selected', String(b.dataset.world === to));
+    tabs(to);
+    if (onServer && how === 'push') history.pushState({ side: to }, '', SIDES[to].path);   // the address at once too
     const swap = () => {
       side = to;
       root.dataset.world = to;
@@ -66,7 +79,6 @@
       paint();
       if (scrollY) scrollTo(0, 0);   // the other side opens at its top (hidden under the band)
       try { localStorage.setItem('zt-world', to); } catch {}
-      if (onServer && how === 'push') history.pushState({ side: to }, '', SIDES[to].path);
       const sec = $(`#${to}`);
       sec.classList.remove('enter', 'fade');
       sec.classList.add(calm() ? 'fade' : 'enter');
@@ -75,20 +87,27 @@
     };
     if (calm()) swap(); else await sweep(to, swap);
     moving = false;
-    const next = wanted;
-    wanted = null;
-    if (next && next !== side) turn(next, 'pop');
+    // Back or Forward pressed during the sweep: follow the address now
+    if (popped) {
+      popped = false;
+      const at = location.pathname === '/photo' ? 'photo' : 'daily';
+      if (onServer && at !== side) turn(at, 'pop');
+    }
   }
   for (const b of $$('.switch [role="tab"]')) b.addEventListener('click', () => turn(b.dataset.world));
   // the arrow keys move between the two (a tab list)
   $('#switch').addEventListener('keydown', (e) => {
     if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(e.key)) return;
     e.preventDefault();
+    if (moving) return;   // like clicks, keys wait for the sweep (focus stays on the tab being selected)
     const to = e.key === 'Home' ? 'daily' : e.key === 'End' ? 'photo' : side === 'daily' ? 'photo' : 'daily';
     turn(to);
     $(`.switch [data-world="${to}"]`).focus();
   });
-  addEventListener('popstate', () => turn(location.pathname === '/photo' ? 'photo' : 'daily', 'pop'));
+  addEventListener('popstate', () => {
+    if (moving) { popped = true; return; }
+    turn(location.pathname === '/photo' ? 'photo' : 'daily', 'pop');
+  });
 
   // ---------- the sweep ----------
   // Three bands cross the screen from the bottom left to the top right, under the header and footer (which stay): two
@@ -292,13 +311,14 @@
     dlg.showModal();
     $('.opt.best', dlg).focus();
   }
+  const outside = (e) => { const r = dlg.getBoundingClientRect(); return e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom; };
+  let downOut = false;
+  dlg.addEventListener('pointerdown', (e) => { downOut = e.target === dlg && outside(e); });
   dlg.addEventListener('click', (e) => {
     const b = e.target.closest('.opt');
     if (b && !b.disabled && asking) { const set = asking; asking = null; dlg.close(); hand(b.dataset.tool, set); return; }
-    if (e.target === dlg) {   // the backdrop — or the card's own padding, which is the dialog element too
-      const r = dlg.getBoundingClientRect();
-      if (e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom) dlg.close();
-    }
+    // the backdrop (the card's own padding is the dialog element too; a drag that ends outside isn't a click outside)
+    if (e.target === dlg && downOut && outside(e)) dlg.close();
   });
   dlg.addEventListener('keydown', (e) => {
     const i = '1234'.indexOf(e.key);
