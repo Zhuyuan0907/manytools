@@ -36,4 +36,11 @@ swap('self.ExifTool={parseMetadata:ne}', 'self.ExifTool={parseMetadata:ne,drop()
 fs.writeFileSync(process.argv[2], '/* ExifTool 13.42 (Phil Harvey; Perl Artistic License / GPL) on zeroperl, via @uswriting/exiftool 1.0.9 and @6over3/zeroperl-ts 1.0.10 (Apache-2.0). Bundled with esbuild; the WASM is fetched by the caller. See LICENSES.txt. */\n' + s);
 JS
 gzip -9 -n -c node_modules/@6over3/zeroperl-ts/dist/esm/zeroperl.wasm > "$OUT/zeroperl-1.0.10.wasm.gz"
+# libheif 1.23.5 for HEIC pictures where the browser has no decoder (assets/heic.js): libheif-js's WebAssembly
+# build as it comes, the .wasm gzipped like zeroperl's
+npm pack --silent libheif-js@1.23.5 > /dev/null
+tar -xzf libheif-js-1.23.5.tgz
+cp package/libheif-wasm/libheif.js "$OUT/libheif-1.23.5.js"
+gzip -9 -n -c package/libheif-wasm/libheif.wasm > "$OUT/libheif-1.23.5.wasm.gz"
+cp package/libheif-wasm/LICENSE "$OUT/libheif-LICENSE.txt"
 ls -l "$OUT"

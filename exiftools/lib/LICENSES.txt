@@ -10,3 +10,9 @@ exiftool-13.42.js
 zeroperl-1.0.10.wasm.gz
   zeroperl 1.0.10: the Perl 5 interpreter compiled to WebAssembly, with ExifTool's modules inside —
   Apache License 2.0 (zeroperl) / Perl's own licence (Perl, ExifTool). gzip-compressed; unpacked in the browser.
+
+libheif-1.23.5.js, libheif-1.23.5.wasm.gz
+  libheif 1.23.5 with libde265 (HEIC / HEVC decoding) — GNU Lesser General Public License v3; full text in
+  libheif-LICENSE.txt. Built for the browser by libheif-js 1.23.5 (https://github.com/catdad-experiments/libheif-js,
+  the npm package as it comes; sources: https://github.com/strukturag/libheif, https://github.com/strukturag/libde265).
+  Kept as separate files, so either can be replaced with another build. gzip-compressed; unpacked in the browser.

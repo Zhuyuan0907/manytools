@@ -32,8 +32,10 @@
   const OTHER = /\.(jpe?g|jpe|png|webp|avif|gif|bmp|heic|heif|hif|tiff?|jxl)$/i;
   const SIDECAR = /\.xmp$/i;
   const isPhoto = (f) => RAW.test(f.name) || OTHER.test(f.name) || /^image\//.test(f.type);
-  // what an <img> can show by itself (HEIC and TIFF only in Safari: tried, and the embedded JPEG looked for too)
+  // what an <img> can show by itself (HEIC and TIFF only in Safari: tried, and the embedded JPEG looked for too;
+  // elsewhere a HEIC is decoded by libheif, see heicDecode)
   const SHOWABLE = /\.(jpe?g|jpe|png|webp|avif|gif|bmp)$/i;
+  const HEIC = /\.(heic|heif|hif)$/i;
   const extOf = (name) => (name.match(/\.([^.]+)$/) || [, ''])[1].toUpperCase();
   // what a photo is called on screen: its file name, or a Flickr photo's title
   const nameOf = (it) => (it.fk ? it.fk.title || `Flickr ${it.fk.id}` : it.file.name);
@@ -1174,12 +1176,13 @@
     const url = URL.createObjectURL(blob);
     try { const im = new Image(); im.decoding = 'async'; im.src = url; await im.decode(); return im; } catch { return null; } finally { URL.revokeObjectURL(url); }
   };
-  async function decodeBlob(blob, maxSide) {
+  async function decodeBlob(blob, maxSide, p3) {
     let img = null;
     if (WEBKIT) img = await viaImg(blob);
     else {
       try { img = await createImageBitmap(blob, { imageOrientation: 'from-image' }); } catch { img = await viaImg(blob); }
     }
+    if (!img && blob instanceof File && HEIC.test(blob.name)) return heicDecode(blob, maxSide, p3);
     if (!img) return null;
     const [ow, oh] = sizeOf(img);
     if (WEBKIT && img instanceof HTMLImageElement) {
@@ -1207,9 +1210,39 @@
     release(img);
     return { img: small, ow, oh };
   }
+  // HEIC where the browser has no decoder (Chrome, Edge, Firefox): libheif as WebAssembly in a worker of its own
+  // (assets/heic.js, about 0.6 MB, fetched on the first one), ended after a while idle since its memory only grows
+  let heicWorker = null, heicSeq = 0, heicIdle = 0;
+  const heicJobs = new Map();
+  function heicDecode(file, maxSide, p3) {
+    return new Promise((resolve) => {
+      if (!heicWorker) {
+        try { heicWorker = new Worker('assets/heic.js'); } catch { resolve(null); return; }
+        heicWorker.onmessage = ({ data: d }) => {
+          const done = heicJobs.get(d.id);
+          heicJobs.delete(d.id);
+          if (done) done(d.bmp ? { img: d.bmp, ow: d.w, oh: d.h } : null);
+          if (d.error) console.warn('HEIC', d.error);
+          heicRest();
+        };
+        heicWorker.onerror = () => { for (const [, done] of heicJobs) done(null); heicJobs.clear(); heicWorker.terminate(); heicWorker = null; };
+      }
+      clearTimeout(heicIdle);
+      const id = ++heicSeq;
+      heicJobs.set(id, resolve);
+      heicWorker.postMessage({ id, file, maxSide, p3: !!p3 });
+    });
+  }
+  function heicRest() {
+    clearTimeout(heicIdle);
+    if (!heicJobs.size) heicIdle = setTimeout(() => { if (heicWorker && !heicJobs.size) { heicWorker.terminate(); heicWorker = null; } }, 20000);
+  }
+  // an iPhone's photos are in Display P3: said so, their colours come out right
+  const isP3 = (it) => !it.fk && /P3/i.test(String(val(it, 'ProfileDescription') || ''));
+
   async function viewOf(it) {
     if (views.has(it.id)) { const v = views.get(it.id); views.delete(it.id); views.set(it.id, v); return v; }
-    const v = await decodeBlob(blobOf(it), SCREEN);
+    const v = await decodeBlob(blobOf(it), SCREEN, isP3(it));
     if (!v) return null;
     views.set(it.id, v);
     while (views.size > (SMALL_DEVICE ? 2 : 4)) {
@@ -1402,7 +1435,7 @@
   async function loadFull(it) {
     if (fullLoading === it.id) return;
     fullLoading = it.id;
-    const f = await decodeBlob(it.fk ? await bigOf(it) : blobOf(it), FULL_MAX);
+    const f = await decodeBlob(it.fk ? await bigOf(it) : blobOf(it), FULL_MAX, isP3(it));
     fullLoading = 0;
     if (!f) return;
     // still wanted?
@@ -1445,7 +1478,7 @@
       fill(msg, el('b', { text: it.kind === 'xmp' ? '這是 Lightroom 的 .xmp 檔' : '這裡沒辦法顯示這張照片' }), el('span', {
         text: it.kind === 'xmp' ? '裡面只有調色設定和拍攝資料，沒有影像。把它的 RAW 檔一起放進來就看得到照片。'
           : it.fk ? '從 Flickr 下載照片沒有成功。參數不受影響。'
-          : heic ? '這個瀏覽器看不懂 HEIC，用 Safari 就看得到。參數不受影響。'
+          : heic ? '這張 HEIC 在這裡解不開，用 Safari 看看。參數不受影響。'
             : tiff ? '這個瀏覽器看不懂 TIFF，用 Safari 就看得到。參數不受影響。'
               : it.raw ? '這個 RAW 檔裡沒有放預覽圖。參數不受影響。' : '參數還是看得到。',
       }));
@@ -1600,7 +1633,7 @@
       let blob = null, o = 1;
       if (r && r.thumb) { blob = it.file.slice(r.thumb.start, r.thumb.end, 'image/jpeg'); o = turn; }
       else if (r && r.preview) { blob = it.file.slice(r.preview.start, r.preview.end, 'image/jpeg'); o = r.preview.orient ? 1 : turn; }
-      else if (!it.raw && SHOWABLE.test(it.file.name) && (!SMALL_DEVICE || it.file.size < 4e6)) blob = it.file;
+      else if (!it.raw && (SHOWABLE.test(it.file.name) || HEIC.test(it.file.name)) && (!SMALL_DEVICE || it.file.size < 4e6)) blob = it.file;
       if (!blob) return null;
       const v = await decodeBlob(blob, 264);
       if (!v) return null;
