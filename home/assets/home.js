@@ -24,10 +24,12 @@
   }
 
   // ---------- big screens: the same page, larger ----------
-  // Laid out for about 1500 × 880; a 2K or 4K screen at 100 % gets it scaled up (CSS zoom), as far as its height allows.
-  // Not across two screens: the hinge's position (env()) isn't zoomed.
+  // Laid out for about 1420 × 770 (ultra-wide: 1900 × 640); a bigger screen at 100 % gets it scaled up (CSS zoom), as
+  // far as its height allows. Not across two screens: the hinge's position (env()) isn't zoomed.
   function fitZoom() {
-    const z = matchMedia('(horizontal-viewport-segments: 2)').matches ? 1 : Math.max(1, Math.min(innerWidth / 1500, innerHeight / 880, 2.2));
+    const ultra = matchMedia('(min-aspect-ratio: 21/10) and (min-width: 1900px)').matches;
+    const z = matchMedia('(horizontal-viewport-segments: 2)').matches ? 1
+      : ultra ? Math.max(1, Math.min(innerWidth / 1900, innerHeight / 640, 2.6)) : Math.max(1, Math.min(innerWidth / 1420, innerHeight / 770, 2.6));
     root.style.setProperty('--z', z.toFixed(3));
   }
   fitZoom();
@@ -49,27 +51,33 @@
   // remembered 拍攝 opened at /: say so in the address too
   if (onServer && side === 'photo' && location.pathname === '/') history.replaceState({ side }, '', '/photo');
 
-  let moving = false;
+  let moving = false, wanted = null, settle = 0;
   // how: 'push' (a new address), 'pop' (Back/Forward already moved it)
   async function turn(to, how = 'push') {
-    if (to === side || moving) return;
+    if (moving) { if (how === 'pop') wanted = to; return; }   // Back/Forward mid-sweep: done after it
+    if (to === side) return;
     moving = true;
     $('#switch').dataset.to = to;   // the switch moves at once, above the sweep
+    for (const b of $$('.switch [role="tab"]')) b.setAttribute('aria-selected', String(b.dataset.world === to));
     const swap = () => {
       side = to;
       root.dataset.world = to;
       delete $('#switch').dataset.to;
       paint();
+      if (scrollY) scrollTo(0, 0);   // the other side opens at its top (hidden under the band)
       try { localStorage.setItem('zt-world', to); } catch {}
       if (onServer && how === 'push') history.pushState({ side: to }, '', SIDES[to].path);
       const sec = $(`#${to}`);
       sec.classList.remove('enter', 'fade');
-      void sec.offsetWidth;
       sec.classList.add(calm() ? 'fade' : 'enter');
-      setTimeout(() => sec.classList.remove('enter', 'fade'), 1700);
+      clearTimeout(settle);
+      settle = setTimeout(() => sec.classList.remove('enter', 'fade'), 900);
     };
     if (calm()) swap(); else await sweep(to, swap);
     moving = false;
+    const next = wanted;
+    wanted = null;
+    if (next && next !== side) turn(next, 'pop');
   }
   for (const b of $$('.switch [role="tab"]')) b.addEventListener('click', () => turn(b.dataset.world));
   // the arrow keys move between the two (a tab list)
@@ -83,42 +91,34 @@
   addEventListener('popstate', () => turn(location.pathname === '/photo' ? 'photo' : 'daily', 'pop'));
 
   // ---------- the sweep ----------
-  // Three bands cross the screen from the bottom left to the top right: two in the colour of the side you're going
-  // to, then one in the page's own colour, under which the side changes. Each band is a long strip turned 45°,
-  // moved by its transform only (smooth on a phone too); the last one is thick enough to hide the screen for a
-  // moment around its middle, when the change happens.
+  // Three bands cross the screen from the bottom left to the top right, under the header and footer (which stay): two
+  // in the colours of the side you're going to, then a pale one that covers everything — it stops there until the new
+  // side has been drawn (two frames), and only then moves on and uncovers it. Each band is a long strip turned 45°,
+  // moved by its transform only (smooth on a phone too).
   const sweepBox = $('#sweep');
-  const SWEEP = { photo: ['#e8630a', '#ffd6b3'], daily: ['#2468e0', '#cddcfa'] };
-  function sweep(to, atCovered) {
-    return new Promise((done) => {
-      const W = innerWidth, H = innerHeight;
-      const across = (W + H) / Math.SQRT2;          // the screen measured along the sweep
-      const thick = across * 1.7, long = Math.hypot(W, H) * 2;
-      const far = (thick + across) / 2 + 8;
-      const at = (d) => `translate(${(d * Math.SQRT1_2).toFixed(1)}px, ${(-d * Math.SQRT1_2).toFixed(1)}px) rotate(45deg)`;
-      const DUR = 620, STEP = 55;
-      const colours = [...SWEEP[to], '#f4f7fa'];
-      sweepBox.hidden = false;
-      const runs = $$('i', sweepBox).map((band, i) => {
-        Object.assign(band.style, { width: `${long}px`, height: `${thick}px`, marginLeft: `${-long / 2}px`, marginTop: `${-thick / 2}px`, background: colours[i] });
-        return band.animate([{ transform: at(-far) }, { transform: at(far) }], { duration: DUR, delay: i * STEP, easing: 'cubic-bezier(.65, 0, .35, 1)', fill: 'both' });
-      });
-      // the last band's middle: the screen is covered
-      const last = runs[runs.length - 1];
-      let swapped = false;
-      const watch = () => {
-        if (swapped) return;
-        if ((last.currentTime || 0) >= (runs.length - 1) * STEP + DUR / 2) { swapped = true; atCovered(); return; }
-        requestAnimationFrame(watch);
-      };
-      requestAnimationFrame(watch);
-      last.finished.then(() => {
-        if (!swapped) { swapped = true; atCovered(); }
-        sweepBox.hidden = true;
-        for (const r of runs) r.cancel();
-        done();
-      });
-    });
+  const SWEEP = { photo: ['#e8630a', '#ffd6b3', '#fff8f2'], daily: ['#2468e0', '#cddcfa', '#f5f8fe'] };
+  const frame = () => new Promise((r) => requestAnimationFrame(() => r()));
+  async function sweep(to, atCovered) {
+    const W = innerWidth, H = innerHeight;
+    const across = (W + H) / Math.SQRT2;          // the screen measured along the sweep
+    const thick = across * 1.25, long = Math.hypot(W, H) * 2;
+    const far = (thick + across) / 2 + 8;
+    const at = (d) => `translate(${(d * Math.SQRT1_2).toFixed(1)}px, ${(-d * Math.SQRT1_2).toFixed(1)}px) rotate(45deg)`;
+    const DUR = 420, STEP = 45;
+    const bands = $$('i', sweepBox);
+    bands.forEach((band, i) => Object.assign(band.style, { width: `${long}px`, height: `${thick}px`, marginLeft: `${-long / 2}px`, marginTop: `${-thick / 2}px`, background: SWEEP[to][i] }));
+    sweepBox.hidden = false;
+    const runs = bands.slice(0, 2).map((band, i) => band.animate([{ transform: at(-far) }, { transform: at(far) }], { duration: DUR, delay: i * STEP, easing: 'cubic-bezier(.45, 0, .2, 1)', fill: 'both' }));
+    const last = bands[2];
+    const inn = last.animate([{ transform: at(-far) }, { transform: at(0) }], { duration: DUR * 0.55, delay: 2 * STEP, easing: 'cubic-bezier(.45, 0, 1, 1)', fill: 'both' });
+    try { await inn.finished; } catch {}
+    atCovered();
+    await frame(); await frame();   // the new side is on screen under the band
+    const out = last.animate([{ transform: at(0) }, { transform: at(far) }], { duration: DUR * 0.6, easing: 'cubic-bezier(0, 0, .2, 1)', fill: 'forwards' });
+    inn.cancel();
+    try { await out.finished; } catch {}
+    sweepBox.hidden = true;
+    for (const r of [...runs, out]) r.cancel();
   }
 
   // ---------- live numbers ----------
@@ -295,7 +295,10 @@
   dlg.addEventListener('click', (e) => {
     const b = e.target.closest('.opt');
     if (b && !b.disabled && asking) { const set = asking; asking = null; dlg.close(); hand(b.dataset.tool, set); return; }
-    if (e.target === dlg) dlg.close();   // a click on the backdrop
+    if (e.target === dlg) {   // the backdrop — or the card's own padding, which is the dialog element too
+      const r = dlg.getBoundingClientRect();
+      if (e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom) dlg.close();
+    }
   });
   dlg.addEventListener('keydown', (e) => {
     const i = '1234'.indexOf(e.key);
@@ -350,7 +353,7 @@
       let handles;
       try {
         handles = await window.showOpenFilePicker({ multiple: true, id: `zt-${side}`, types: side === 'photo'
-          ? [{ description: '照片', accept: { 'image/*': ['.jpg', '.jpeg', '.png', '.webp', '.heic', '.heif', '.dng', '.cr3', '.cr2', '.nef', '.arw', '.raf', '.orf', '.rw2'] } }, { description: 'ZIP', accept: { 'application/zip': ['.zip'] } }]
+          ? [{ description: '照片', accept: { 'image/*': ['.jpg', '.jpeg', '.png', '.webp', '.gif', '.avif', '.heic', '.heif', '.hif', '.dng', '.cr3', '.cr2', '.crw', '.nef', '.nrw', '.arw', '.srf', '.sr2', '.raf', '.orf', '.rw2', '.rwl', '.pef', '.srw', '.3fr', '.iiq', '.x3f'] } }, { description: 'ZIP', accept: { 'application/zip': ['.zip'] } }]
           : [{ description: '影片', accept: { 'video/*': ['.mp4', '.mov', '.m4v', '.mts', '.m2ts', '.ts', '.mkv', '.webm', '.mxf'] } }, { description: 'PDF', accept: { 'application/pdf': ['.pdf'] } }] });
       } catch (e) { if (e && e.name === 'AbortError') return; handles = null; }
       if (handles) {
@@ -361,12 +364,17 @@
         return;
       }
     }
+    pick.accept = ACCEPT[side];
     pick.click();
   }
   for (const z of [$('#drop'), $('#dropPhoto')]) {
     z.addEventListener('click', choose);
     z.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); choose(); } });
   }
+  const ACCEPT = {
+    photo: 'image/*,.heic,.heif,.hif,.avif,.dng,.cr3,.cr2,.crw,.nef,.nrw,.arw,.srf,.sr2,.raf,.orf,.rw2,.rwl,.pef,.srw,.3fr,.iiq,.x3f,.zip,application/zip',
+    daily: 'video/*,.mp4,.mov,.m4v,.mts,.m2ts,.ts,.mkv,.webm,.mxf,application/pdf,.pdf',
+  };
   pick.addEventListener('change', () => { const fs = [...pick.files]; pick.value = ''; if (fs.length) route(fromPicker(fs), null); });
 
   // Back brings this page back as it was left

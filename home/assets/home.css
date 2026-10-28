@@ -1,10 +1,11 @@
 /* ZhuyuanTools home — two sides behind one switch, 日常 and 拍攝, each one screen, the same page in both: a headline
    with live numbers and a drop area (top), the side's tools as themed cards under small group labels (bottom).
    Switching only changes which tools are there; three bands sweep across from the bottom left to the top right while
-   it happens (home.js). The side is html[data-world], set before the first paint (index.html).
-   Wide: the cards in a row (five on 日常, four on 拍攝). Big screens: zoomed (home.js). Ultra-wide: words and drop
-   area beside the cards. 641–1100 (iPads, small laptops, unfolded foldables): the groups as columns. Phones: the
-   groups as cards of rows, the switch at the bottom under the thumb. */
+   it happens (home.js), under the header and footer, which stay. The side is html[data-world], set before the first
+   paint (index.html).
+   Wide: the cards in a row (five on 日常, four on 拍攝). Big screens: zoomed (home.js). Ultra-wide: the words on the
+   left, the drop area over the cards on the right. 641–1100 (iPads, small laptops, unfolded foldables): the groups as
+   columns of cards. Phones: the groups as cards of rows, the switch at the bottom under the thumb. */
 :root {
   --ink: #17202c;
   --ink-2: #485365;
@@ -41,10 +42,10 @@ h1, h2, p, dl, dd { margin: 0; }
 :focus-visible { outline: 3px solid color-mix(in srgb, var(--blue) 50%, transparent); outline-offset: 3px; }
 .file-in { display: none; }
 
-.app { zoom: var(--z, 1); min-height: calc(100vh / var(--z, 1)); min-height: calc(100dvh / var(--z, 1)); max-width: 1200px; margin: 0 auto; padding: 16px 32px 18px; display: grid; grid-template-rows: auto minmax(0, 1fr) auto; gap: 14px; }
+.app { zoom: var(--z, 1); min-height: calc(100vh / var(--z, 1)); min-height: calc(100dvh / var(--z, 1)); max-width: 1320px; margin: 0 auto; padding: 16px 32px 18px; display: grid; grid-template-rows: auto minmax(0, 1fr) auto; gap: 14px; }
 
 /* ================= header: name, and the switch ================= */
-.top { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.top { position: relative; z-index: 95; display: flex; align-items: center; justify-content: space-between; gap: 16px; }
 .brand { display: flex; align-items: center; gap: 10px; color: inherit; text-decoration: none; font-size: 1.25rem; font-weight: 800; letter-spacing: -.01em; white-space: nowrap; }
 .brand img { width: 40px; height: 40px; border-radius: 10px; display: block; }
 .brand-text { display: grid; line-height: 1.2; }
@@ -143,7 +144,7 @@ html[data-world="daily"] #photo, html[data-world="photo"] #daily { display: none
 .tool > .art { grid-row: 1; grid-column: 1; }
 .tool > .tool-text { grid-row: 2; grid-column: 1; }
 .art {
-  display: grid; place-items: center; height: clamp(84px, 15vh, 150px); padding: 10px 14px; background-color: var(--soft);
+  display: grid; place-items: center; height: clamp(84px, 15vh, 150px); padding: 10px 8px; background-color: var(--soft);
   background-image: linear-gradient(rgba(23, 32, 44, .045) 1px, transparent 1px), linear-gradient(90deg, rgba(23, 32, 44, .045) 1px, transparent 1px);
   background-size: 22px 22px; container-type: size;
 }
@@ -185,7 +186,7 @@ html[data-world="daily"] #photo, html[data-world="photo"] #daily { display: none
 .play { fill: var(--line-strong); }
 .small .play { fill: var(--c); }
 .sun { fill: var(--sun); }
-.chip-bad { fill: #fde9e6; }
+.chip-bad { fill: #fff; stroke: #f2b8ae; stroke-width: 1.5; }
 .chip-ok { fill: #fff; }
 .chip-ok.b { stroke: color-mix(in srgb, var(--c) 45%, #fff); stroke-width: 2; }
 .chip-n { fill: #fff; stroke: var(--line-strong); stroke-width: 1.5; }
@@ -199,10 +200,11 @@ html[data-world="daily"] #photo, html[data-world="photo"] #daily { display: none
 .arrow path { fill: none; stroke: var(--c); stroke-width: 4; stroke-linecap: round; stroke-linejoin: round; }
 .check-bg { fill: var(--c); }
 .check { fill: none; stroke: #fff; stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; }
-.dim { opacity: .5; }
-.x { stroke: #b6c0cd; stroke-width: 3; stroke-linecap: round; }
-/* (after the rules above, so it wins) the pills that are the picture stay, with a bar for their words */
-@container (max-height: 104px) {
+/* the smaller words in the pictures: as big as the rest (in a narrow card the picture is scaled down) */
+.small .chip-t, .chip-t.mono, .name-t, .small .name-t { font-size: 15px; }
+/* (after the rules above, so it wins) small pictures: their words would be specks — they go; the pills that are the
+   picture stay, with a bar for their words */
+@container (max-height: 110px) {
   .chip-t, .chip-bad, .chip-ok, .chip-n, .name-t { display: none; }
   .chip-ok.b { display: inline; }
   .tbar { display: inline; }
@@ -256,17 +258,17 @@ html[data-world="daily"] #photo, html[data-world="photo"] #daily { display: none
 /* ================= the sweep between the sides ================= */
 /* three bands from the bottom left to the top right (sized and moved by home.js) */
 .sweep { position: fixed; inset: 0; z-index: 90; overflow: hidden; touch-action: none; }
-.sweep i { position: absolute; left: 50%; top: 50%; display: block; will-change: transform; box-shadow: 0 0 40px rgba(23, 32, 44, .12); }
-/* after it: the side's parts settle in */
-@media (prefers-reduced-motion: no-preference) {
-  .world.enter .in { animation: rise .55s cubic-bezier(.16, 1, .3, 1) backwards; animation-delay: calc(var(--i, 0) * 40ms); }
-  @keyframes rise { from { opacity: 0; transform: translate(-10px, 10px); } }
+.sweep i { position: absolute; left: 50%; top: 50%; display: block; will-change: transform; }
+/* after it: the side is already there (no fading in behind the band), its parts settle a few pixels */
+@media (prefers-reduced-motion: no-preference) and (min-width: 641px) {
+  .world.enter .in { animation: rise .3s cubic-bezier(.16, 1, .3, 1) backwards; animation-delay: calc(var(--i, 0) * 25ms); }
+  @keyframes rise { from { transform: translate(-6px, 6px); } }
 }
 /* without motion: a quick fade */
 .world.fade { animation: fade .2s ease-out; }
 @keyframes fade { from { opacity: 0; } }
 
-.foot { display: flex; justify-content: space-between; gap: 6px 16px; flex-wrap: wrap; color: var(--muted); font-size: .8rem; }
+.foot { position: relative; z-index: 95; display: flex; justify-content: space-between; gap: 6px 16px; flex-wrap: wrap; color: var(--muted); font-size: .8rem; }
 /* the advice to use Chrome is for computers */
 @media (hover: none) and (pointer: coarse) { .foot span:first-child { display: none; } .foot { justify-content: center; } }
 .toast { position: fixed; left: 50%; top: 18px; transform: translateX(-50%); z-index: 96; max-width: calc(100vw - 32px); padding: 10px 18px; border-radius: 12px; background: #17202c; color: #fff; font-size: .92rem; box-shadow: 0 8px 24px rgba(0, 0, 0, .2); }
@@ -295,41 +297,33 @@ html[data-world="daily"] #photo, html[data-world="photo"] #daily { display: none
    on the right, their bottoms in line */
 @media (min-aspect-ratio: 21/10) and (min-width: 1900px) {
   .app { max-width: 2600px; padding-left: 48px; padding-right: 48px; }
-  .world { grid-template-columns: minmax(380px, 1fr) minmax(0, 2.15fr); align-items: end; column-gap: clamp(48px, 4vw, 96px); }
-  .lead { grid-template-columns: 1fr; gap: 26px; }
-  .drop { min-height: 220px; }
+  .world { grid-template-columns: minmax(380px, 1fr) minmax(0, 2.15fr); grid-template-rows: auto auto; align-items: center; column-gap: clamp(48px, 4vw, 96px); row-gap: 22px; }
+  .lead { display: contents; }
+  .lead-text { grid-column: 1; grid-row: 1 / span 2; }
+  .drop { grid-column: 2; grid-row: 1; min-height: 0; grid-template-columns: auto auto; column-gap: 22px; padding: 18px 28px; }
+  .drop .stack { grid-row: 1 / span 3; margin: 0; }
+  .shelf { grid-column: 2; grid-row: 2; }
   .art { height: 168px; }
   .tool-name { font-size: 1.36rem; }
   .tool-desc { font-size: .92rem; }
 }
 
-/* 641–1100 (laptops, iPads on their side): the groups as columns (three on 日常, two on 拍攝), each group's tools
-   one under another, side-on */
+/* 641–1100 (laptops, iPads, unfolded foldables): the groups as columns (three on 日常, two on 拍攝), each group's
+   cards one under another, pictures on top */
 @media (max-width: 1100px) and (min-width: 641px) {
   .app { padding: 16px 24px 18px; }
   .lead { gap: 28px; }
   .shelf { --cols: 3; gap: 10px 14px; }
   #photo .shelf { --cols: 2; }
   .group { grid-column: auto; grid-template-columns: minmax(0, 1fr); grid-template-rows: auto; }
-  .tool { grid-template-rows: auto; grid-template-columns: 40% minmax(0, 1fr); }
-  .tool > .tool-text { grid-row: 1; grid-column: 2; }
-  .art { height: auto; min-height: 92px; padding: 8px; }
-  .tool-text { align-content: center; padding: 12px 12px 12px 14px; }
-  .word { font-size: .72rem; }
-  .tool-name { font-size: 1.04rem; }
   .tool-desc { font-size: .84rem; white-space: normal; }
-  .go { display: none; }
-}
-/* 641–900 (small tablets, unfolded foldables) and any tablet held upright: the cards keep their pictures on top */
-@media (max-width: 900px) and (min-width: 641px), (max-width: 1100px) and (min-width: 641px) and (min-height: 880px) {
-  .tool { grid-template-rows: auto 1fr; grid-template-columns: none; }
-  .tool > .tool-text { grid-row: 2; grid-column: 1; }
   .art { height: 96px; min-height: 0; }
   .go { display: grid; width: 34px; height: 34px; margin: -17px 10px 0 0; }
   .tool-text { align-content: start; padding: 10px 12px 13px; }
   .tool-name { font-size: 1rem; }
   .word { font-size: .7rem; }
   /* 製播 has one tool beside columns of two: its card grows, the picture fills it */
+  .g-video { grid-template-rows: auto minmax(0, 1fr); }
   .g-video .tool { grid-template-rows: minmax(0, 1fr) auto; }
   .g-video .art { height: auto; min-height: 96px; }
   .g-video .art svg { width: 100%; height: auto; max-height: 150px; }
@@ -340,15 +334,22 @@ html[data-world="daily"] #photo, html[data-world="photo"] #daily { display: none
   .drop-formats { display: none; }
   .stack img { width: 44px; height: 44px; }
 }
+/* iPads on their side, 1024-wide laptops: a little lower */
+@media (min-width: 901px) and (max-width: 1100px) and (max-height: 800px) {
+  .art { height: 84px; }
+  .g-video .art { height: auto; min-height: 84px; }
+  .world { gap: 20px; }
+}
 /* unfolded foldables on their side, small tablets held flat: short as well as narrow */
-@media (max-width: 900px) and (min-width: 641px) and (max-height: 700px) {
+@media (max-width: 1100px) and (min-width: 641px) and (max-height: 700px) {
   .app { padding-top: 12px; padding-bottom: 12px; gap: 10px; }
   .world { gap: 16px; }
   .lead h1 { font-size: 1.75rem; }
   .nums, .drop-formats { display: none; }
   .drop { padding: 12px 16px; }
   .stack img { width: 38px; height: 38px; }
-  .art, .g-video .art { height: 70px; min-height: 70px; padding: 6px 10px; }
+  .art { height: 70px; padding: 6px 10px; }
+  .g-video .art { height: auto; min-height: 70px; padding: 6px 10px; }
   .tool-text { padding: 8px 10px 10px; }
   .foot { display: none; }
 }
@@ -362,8 +363,6 @@ html[data-world="daily"] #photo, html[data-world="photo"] #daily { display: none
   .g-video .art svg { max-height: 160px; }
   .tool-name { font-size: 1.12rem; }
   .tool-desc { font-size: .88rem; }
-  /* 拍攝: two columns of two — the pictures can be bigger */
-  #photo .art { height: clamp(120px, 15vh, 200px); }
 }
 
 /* ================= phones: each group a card of rows, and the switch under the thumb ================= */
@@ -401,6 +400,7 @@ html[data-world="daily"] #photo, html[data-world="photo"] #daily { display: none
   .drop-title { font-size: 1.02rem; line-height: 1.4; }
   .drop-hint { font-size: .82rem; line-height: 1.4; }
   .drop-formats { display: none; }
+  .drop:active { background: var(--line); }
 
   /* each group: one card, a row per tool (icon, name and what it does, a quiet arrow) with hairlines between —
      the group's name only where the screen is tall enough (its tools' names say it anyway) */
@@ -446,6 +446,17 @@ html[data-world="daily"] #photo, html[data-world="photo"] #daily { display: none
   .lead h1 { font-size: 1.6rem; }
   .drop-hint { font-size: .8rem; }
 }
+/* very short phones (iPhone SE): every tool on the first screen */
+@media (max-width: 640px) and (max-height: 600px) {
+  .lead h1 { font-size: 1.45rem; }
+  .nums { display: none; }
+  .world { gap: 10px; }
+  .drop { padding: 8px 12px; }
+  .tool { padding: 6px 12px; }
+  .tool .ico { width: 34px; height: 34px; }
+  .tool + .tool::before { left: 58px; }
+  .tool-desc { font-size: .76rem; }
+}
 /* a narrow folded phone's cover screen (about 344 wide): even less */
 @media (max-width: 350px) {
   .app { padding-left: 12px; padding-right: 12px; }
@@ -453,6 +464,7 @@ html[data-world="daily"] #photo, html[data-world="photo"] #daily { display: none
   .lead h1 { font-size: 1.45rem; }
   .tool { gap: 0 10px; padding: 8px 10px; }
   .tool .ico { width: 34px; height: 34px; }
+  .tool + .tool::before { left: 54px; }
 }
 
 /* phones on their side: little height — the words shrink, the groups sit side by side as rows */

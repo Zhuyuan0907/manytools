@@ -26,7 +26,7 @@
     try { if (location.pathname === '/photo' || (location.pathname === '/' && localStorage.getItem('zt-world') === 'photo')) w = 'photo'; } catch (e) {}
     document.documentElement.dataset.world = w;
     // a big screen at 100 % gets the page larger (home.js keeps this up to date)
-    document.documentElement.style.setProperty('--z', (matchMedia('(horizontal-viewport-segments: 2)').matches ? 1 : Math.max(1, Math.min(innerWidth / 1500, innerHeight / 880, 2.2))).toFixed(3));
+    document.documentElement.style.setProperty('--z', (matchMedia('(horizontal-viewport-segments: 2)').matches ? 1 : matchMedia('(min-aspect-ratio: 21/10) and (min-width: 1900px)').matches ? Math.max(1, Math.min(innerWidth / 1900, innerHeight / 640, 2.6)) : Math.max(1, Math.min(innerWidth / 1420, innerHeight / 770, 2.6))).toFixed(3));
   })();
 </script>
 </head>
@@ -38,11 +38,11 @@
       <span class="switch-thumb" aria-hidden="true"></span>
       <button type="button" role="tab" id="tabDaily" data-world="daily" aria-controls="daily">
         <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3.5" y="3.5" width="7" height="7" rx="1.8"/><rect x="13.5" y="3.5" width="7" height="7" rx="1.8"/><rect x="3.5" y="13.5" width="7" height="7" rx="1.8"/><rect x="13.5" y="13.5" width="7" height="7" rx="1.8"/></svg>
-        <span>日常</span><small class="sw-n">5</small>
+        <span>日常</span><small class="sw-n" aria-hidden="true">5</small>
       </button>
       <button type="button" role="tab" id="tabPhoto" data-world="photo" aria-controls="photo">
         <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 8.5A2.5 2.5 0 0 1 6.5 6h1.6l1.4-2h5l1.4 2h1.6A2.5 2.5 0 0 1 20 8.5v8a2.5 2.5 0 0 1-2.5 2.5h-11A2.5 2.5 0 0 1 4 16.5z"/><circle cx="12" cy="12.4" r="3.6"/></svg>
-        <span>拍攝</span><small class="sw-n">4</small>
+        <span>拍攝</span><small class="sw-n" aria-hidden="true">4</small>
       </button>
     </div>
   </header>
@@ -100,7 +100,7 @@
               <svg viewBox="0 0 300 160">
                 <g><rect x="16" y="6" width="104" height="128" rx="10" class="page"/><path d="M34 40h56M34 54h68M34 68h68M34 82h48M34 96h60" class="lines"/></g>
                 <g class="arrow"><path d="M136 70h36"/><path d="M164 60l10 10-10 10"/></g>
-                <g class="small"><rect x="186" y="6" width="104" height="128" rx="10" class="page"/><path d="M204 40h56M204 54h68M204 68h68M204 82h48M204 96h60" class="lines"/><text x="238" y="84" class="stamp" transform="rotate(-28 238 72)">機密</text><circle cx="286" cy="10" r="14" class="check-bg"/><path d="M279.5 10.5l4.5 4.5 8-9" class="check"/></g>
+                <g class="small"><rect x="186" y="6" width="104" height="128" rx="10" class="page"/><path d="M204 40h56M204 54h68M204 68h68M204 82h48M204 96h60" class="lines"/><text x="238" y="84" class="stamp" transform="rotate(-28 238 72)">機密</text><circle cx="282" cy="18" r="14" class="check-bg"/><path d="M275.5 18.5l4.5 4.5 8-9" class="check"/></g>
               </svg>
             </span>
             <span class="tool-text"><span class="word">Zhuyuan<i>Love</i><u>Mark</u></span><b class="tool-name">PDF 浮水印</b><span class="tool-desc">蓋上機密、草稿字樣</span></span>
@@ -142,11 +142,11 @@
       <div class="lead">
         <div class="lead-text">
           <h1 class="in" style="--i:0"><span>拍完照，</span><span class="soft">剩下的交給這裡。</span></h1>
-          <p class="sub in" style="--i:1"><span>挑照片、改檔名、壓縮、看參數，</span><span>照片都不會離開你的<span class="on-pc">電腦</span><span class="on-pad">平板</span><span class="on-phone">手機</span></span></p>
+          <p class="sub in" style="--i:1"><span>挑選、改名、壓縮、看參數，</span><span>全在你的瀏覽器處理，不會上傳</span></p>
           <p class="nums in" style="--i:2" hidden>已處理 <span class="n-c"><b data-stat="photo.files">0</b> 張照片</span></p>
         </div>
         <div class="drop in" style="--i:1" id="dropPhoto" data-zone="photo" role="button" tabindex="0" aria-label="選擇照片，再選要做什麼">
-          <span class="stack" aria-hidden="true"><img src="/pick/assets/logo.svg" alt=""><img src="assets/tool-image.svg" alt=""><img src="/exif/assets/logo.svg" alt=""></span>
+          <span class="stack" aria-hidden="true"><img src="assets/tool-pick.svg" alt=""><img src="assets/tool-image.svg" alt=""><img src="assets/tool-exif.svg" alt=""></span>
           <b class="drop-title"><span class="d-desk">把照片拖進這裡</span><span class="d-mob">選擇照片</span></b>
           <span class="drop-hint"><span class="d-desk">會問你要做什麼・也可以直接拖到工具卡上</span><span class="d-mob">一次選很多張・ZIP 也可以</span></span>
           <span class="drop-formats">JPG・HEIC・RAW<i class="sep">｜</i>Google Drive 的 ZIP、整個資料夾也行</span>
@@ -162,7 +162,7 @@
               <svg viewBox="0 0 300 160">
                 <g><rect x="14" y="26" width="98" height="72" rx="10" class="page" transform="rotate(-9 63 62)"/><rect x="22" y="28" width="98" height="72" rx="10" class="page" transform="rotate(6 71 64)"/><rect x="18" y="34" width="98" height="72" rx="10" class="page"/><circle cx="40" cy="55" r="8" class="sun"/><path d="M26 100l26-29 18 18 12-12 32 23z" class="play"/><rect x="27" y="120" width="80" height="30" rx="8" class="chip-n"/><text x="67" y="140" class="chip-t dark">3,214 張</text></g>
                 <g class="arrow"><path d="M138 70h36"/><path d="M166 60l10 10-10 10"/></g>
-                <g class="small"><rect x="194" y="30" width="94" height="72" rx="10" class="page"/><circle cx="216" cy="50" r="7" class="sun"/><path d="M202 96l24-27 16 16 11-11 33 22z" class="play"/><rect x="205" y="116" width="72" height="26" rx="7" class="chip-ok b"/><text x="241" y="134" class="chip-t">留 412</text><path class="tbar" d="M223 129H259"/><circle cx="286" cy="32" r="14" class="check-bg"/><path d="M279.5 32.5l4.5 4.5 8-9" class="check"/></g>
+                <g class="small"><rect x="194" y="30" width="94" height="72" rx="10" class="page"/><circle cx="216" cy="50" r="7" class="sun"/><path d="M202 96l24-27 16 16 11-11 33 22z" class="play"/><rect x="205" y="116" width="72" height="26" rx="7" class="chip-ok"/><text x="241" y="134" class="chip-t">留 412</text><circle cx="286" cy="32" r="14" class="check-bg"/><path d="M279.5 32.5l4.5 4.5 8-9" class="check"/></g>
               </svg>
             </span>
             <span class="tool-text"><span class="word">Zhuyuan<i>Love</i><u>Pick</u></span><b class="tool-name">照片挑選</b><span class="tool-desc">幾千張用鍵盤快速挑</span></span>
@@ -174,7 +174,7 @@
               <svg viewBox="0 0 300 160">
                 <g><rect x="6" y="16" width="124" height="32" rx="9" class="page"/><text x="68" y="37" class="name-t">IMG_4678.CR3</text><path class="tbar" d="M33 32H103"/><rect x="6" y="62" width="124" height="32" rx="9" class="page"/><text x="68" y="83" class="name-t">IMG_4679.CR3</text><path class="tbar" d="M33 78H103"/><rect x="6" y="108" width="124" height="32" rx="9" class="page"/><text x="68" y="129" class="name-t">IMG_4680.CR3</text><path class="tbar" d="M33 124H103"/></g>
                 <g class="arrow"><path d="M142 78h30"/><path d="M164 68l10 10-10 10"/></g>
-                <g class="small"><rect x="184" y="16" width="108" height="32" rx="9" class="page"/><text x="238" y="37" class="name-t"><tspan class="acc">竺原</tspan>-4678</text><path class="tbar" d="M208 32H268"/><rect x="184" y="62" width="108" height="32" rx="9" class="page"/><text x="238" y="83" class="name-t"><tspan class="acc">竺原</tspan>-4679</text><path class="tbar" d="M208 78H268"/><rect x="184" y="108" width="108" height="32" rx="9" class="page"/><text x="238" y="129" class="name-t"><tspan class="acc">竺原</tspan>-4680</text><path class="tbar" d="M208 124H268"/><circle cx="290" cy="18" r="14" class="check-bg"/><path d="M283.5 18.5l4.5 4.5 8-9" class="check"/></g>
+                <g class="small"><rect x="184" y="16" width="108" height="32" rx="9" class="page"/><text x="238" y="37" class="name-t"><tspan class="acc">竺原</tspan>-4678</text><path class="tbar" d="M208 32H268"/><rect x="184" y="62" width="108" height="32" rx="9" class="page"/><text x="238" y="83" class="name-t"><tspan class="acc">竺原</tspan>-4679</text><path class="tbar" d="M208 78H268"/><rect x="184" y="108" width="108" height="32" rx="9" class="page"/><text x="238" y="129" class="name-t"><tspan class="acc">竺原</tspan>-4680</text><path class="tbar" d="M208 124H268"/><circle cx="284" cy="18" r="14" class="check-bg"/><path d="M277.5 18.5l4.5 4.5 8-9" class="check"/></g>
               </svg>
             </span>
             <span class="tool-text"><span class="word">Zhuyuan<i>Love</i><u>Rename</u></span><b class="tool-name">照片批次改檔名</b><span class="tool-desc">IMG_4678 → 竺原-4678</span></span>
@@ -201,7 +201,7 @@
               <svg viewBox="0 0 300 160">
                 <g><rect x="8" y="14" width="124" height="96" rx="12" class="page"/><circle cx="38" cy="42" r="10" class="sun"/><path d="M18 102l34-38 22 22 16-16 34 32z" class="play"/><rect x="26" y="120" width="88" height="30" rx="8" class="chip-n"/><text x="70" y="140" class="chip-t mono">IMG.CR3</text></g>
                 <g class="arrow"><path d="M142 64h36"/><path d="M170 54l10 10-10 10"/></g>
-                <g class="small"><rect x="188" y="12" width="104" height="30" rx="8" class="chip-ok b"/><text x="240" y="32" class="chip-t">f/2.8</text><path class="tbar" d="M214 27H266"/><rect x="188" y="50" width="104" height="30" rx="8" class="chip-ok b"/><text x="240" y="70" class="chip-t">1/250 s</text><path class="tbar" d="M214 65H266"/><rect x="188" y="88" width="104" height="30" rx="8" class="chip-ok b"/><text x="240" y="108" class="chip-t">ISO 400</text><path class="tbar" d="M214 103H266"/><rect x="188" y="126" width="104" height="30" rx="8" class="chip-ok b"/><text x="240" y="146" class="chip-t">85 mm</text><path class="tbar" d="M214 141H266"/></g>
+                <g class="small"><rect x="186" y="24" width="100" height="30" rx="8" class="chip-ok b"/><text x="236" y="44" class="chip-t">f/2.8</text><path class="tbar" d="M211 39H261"/><rect x="186" y="64" width="100" height="30" rx="8" class="chip-ok b"/><text x="236" y="84" class="chip-t">1/250 s</text><path class="tbar" d="M211 79H261"/><rect x="186" y="104" width="100" height="30" rx="8" class="chip-ok b"/><text x="236" y="124" class="chip-t">ISO 400</text><path class="tbar" d="M211 119H261"/><circle cx="284" cy="24" r="14" class="check-bg"/><path d="M277.5 24.5l4.5 4.5 8-9" class="check"/></g>
               </svg>
             </span>
             <span class="tool-text"><span class="word">Zhuyuan<i>Love</i><u>Exif</u></span><b class="tool-name">照片參數查看</b><span class="tool-desc">焦距、光圈、快門一次看</span></span>
