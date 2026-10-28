@@ -151,8 +151,7 @@ const photoSide = (html) => html
   .replace(/(<meta property="og:title" content=")[^"]*/, '$1ZhuyuanTools・拍攝')
   .replace(/(<meta (?:name="description"|property="og:description") content=")[^"]*/g, `$1${PHOTO_DESC}`)
   .replace(/(<meta property="og:url" content=")[^"]*/, '$1https://tools.zhuyuan.tw/photo')
-  .replace(/(<meta property="og:image" content=")[^"]*/, '$1https://tools.zhuyuan.tw/assets/og-photo.png')
-  .replace(/(<meta name="theme-color" content=")[^"]*/, '$1#121110');
+  .replace(/(<meta property="og:image" content=")[^"]*/, '$1https://tools.zhuyuan.tw/assets/og-photo.png');
 
 function serveFile(req, res, file, base, immutable, edit) {
   fs.stat(file, (err, st) => {

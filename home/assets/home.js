@@ -1,4 +1,5 @@
-/* ZhuyuanTools home: two sides, 日常 and 拍攝, behind one switch (a camera's aperture closes and opens between them),
+/* ZhuyuanTools home: two sides, 日常 and 拍攝 — the same page with different tools — behind one switch (three bands
+   sweep across from the bottom left to the top right as it changes),
    the live numbers, and dropping files: on the drop area or viewfinder they go to the right tool (photos ask which
    one), on a tool they go straight to it.
    Files never leave this browser: they're handed to the tool page through ManyHandoff (/shared/handoff.js) — as
@@ -33,7 +34,7 @@
   addEventListener('resize', fitZoom);
 
   // ---------- the two sides ----------
-  const SIDES = { daily: { path: '/', title: 'ZhuyuanTools・小小ㄉ工具箱', theme: '#f4f7fa' }, photo: { path: '/photo', title: 'ZhuyuanTools・拍攝', theme: '#121110' } };
+  const SIDES = { daily: { path: '/', title: 'ZhuyuanTools・小小ㄉ工具箱', theme: '#f4f7fa' }, photo: { path: '/photo', title: 'ZhuyuanTools・拍攝', theme: '#f4f7fa' } };
   let side = root.dataset.world === 'photo' ? 'photo' : 'daily';
   function paint() {
     for (const b of $$('.switch [role="tab"]')) {
@@ -53,7 +54,7 @@
   async function turn(to, how = 'push') {
     if (to === side || moving) return;
     moving = true;
-    $('#switch').dataset.to = to;   // the switch moves at once, above the closing aperture
+    $('#switch').dataset.to = to;   // the switch moves at once, above the sweep
     const swap = () => {
       side = to;
       root.dataset.world = to;
@@ -67,7 +68,7 @@
       sec.classList.add(calm() ? 'fade' : 'enter');
       setTimeout(() => sec.classList.remove('enter', 'fade'), 1700);
     };
-    if (calm()) swap(); else await aperture(swap);
+    if (calm()) swap(); else await sweep(to, swap);
     moving = false;
   }
   for (const b of $$('.switch [role="tab"]')) b.addEventListener('click', () => turn(b.dataset.world));
@@ -81,84 +82,42 @@
   });
   addEventListener('popstate', () => turn(location.pathname === '/photo' ? 'photo' : 'daily', 'pop'));
 
-  // ---------- the aperture ----------
-  // Seven blades. The opening is a regular heptagon of inradius r; each blade is what lies beyond one side of it,
-  // up to the next side's line carried on (a pinwheel), so the blades meet without overlapping. As r goes to 0 the
-  // blades turn, as a lens's do. Drawn on a canvas over everything but the switch.
-  const canvas = $('#iris');
-  const N = 7, STEP = (2 * Math.PI) / N;
-  const easeInOut = (t) => (t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2);
-  const easeOut = (t) => 1 - (1 - t) ** 4;
-  function blades(g, W, H, r, k) {
-    g.clearRect(0, 0, W, H);
-    const cx = W / 2, cy = H / 2, far = Math.hypot(W, H) * 2;
-    const spin = -0.35 + k * 1.05, rho = r / Math.cos(Math.PI / N);
-    const corner = (a) => [cx + rho * Math.cos(a), cy + rho * Math.sin(a)];
-    // the metal everywhere but the opening (seams between blades show this, not the page)
-    g.beginPath();
-    g.rect(0, 0, W, H);
-    for (let i = 0; i < N; i++) { const [x, y] = corner(spin + i * STEP - Math.PI / N); if (i) g.lineTo(x, y); else g.moveTo(x, y); }
-    g.closePath();
-    g.fillStyle = '#131315';
-    g.fill('evenodd');
-    for (let i = 0; i < N; i++) {
-      const a = spin + i * STEP;
-      const [ax, ay] = corner(a - Math.PI / N), [bx, by] = corner(a + Math.PI / N);
-      const dx = -Math.sin(a), dy = Math.cos(a);                 // along this side, A → B
-      const px = -Math.sin(a - STEP), py = Math.cos(a - STEP);   // along the side before, carried past A
-      const qa = a + Math.PI / 2 - STEP / 2;
-      g.beginPath();
-      g.moveTo(ax + px * far, ay + py * far);
-      g.lineTo(ax, ay);
-      g.lineTo(bx, by);
-      g.lineTo(bx + dx * far, by + dy * far);
-      g.lineTo(cx + Math.cos(qa) * far * 2, cy + Math.sin(qa) * far * 2);
-      g.closePath();
-      // brushed metal: lighter at the leading edge, in the shadow of the blade before it at the trailing one
-      const shade = 26 + (i % 3) * 3;
-      const lg = g.createLinearGradient(ax, ay, ax + dy * -120 + dx * 0, ay + dx * 120);
-      lg.addColorStop(0, `rgb(${shade + 14}, ${shade + 14}, ${shade + 17})`);
-      lg.addColorStop(1, `rgb(${shade - 6}, ${shade - 6}, ${shade - 4})`);
-      g.fillStyle = lg;
-      g.fill();
-      const sh = g.createLinearGradient(ax, ay, ax - py * 70, ay + px * 70);
-      sh.addColorStop(0, 'rgba(0, 0, 0, .55)');
-      sh.addColorStop(1, 'rgba(0, 0, 0, 0)');
-      g.fillStyle = sh;
-      g.fill();
-      // the leading edge catches the light
-      g.beginPath();
-      g.moveTo(ax, ay);
-      g.lineTo(bx, by);
-      g.lineTo(bx + dx * far, by + dy * far);
-      g.strokeStyle = 'rgba(255, 255, 255, .16)';
-      g.lineWidth = 1.5;
-      g.stroke();
-    }
-  }
-  function aperture(atClosed) {
+  // ---------- the sweep ----------
+  // Three bands cross the screen from the bottom left to the top right: two in the colour of the side you're going
+  // to, then one in the page's own colour, under which the side changes. Each band is a long strip turned 45°,
+  // moved by its transform only (smooth on a phone too); the last one is thick enough to hide the screen for a
+  // moment around its middle, when the change happens.
+  const sweepBox = $('#sweep');
+  const SWEEP = { photo: ['#e8630a', '#ffd6b3'], daily: ['#2468e0', '#cddcfa'] };
+  function sweep(to, atCovered) {
     return new Promise((done) => {
-      const W = innerWidth, H = innerHeight, dpr = Math.min(2, devicePixelRatio || 1);
-      canvas.width = Math.round(W * dpr); canvas.height = Math.round(H * dpr);
-      canvas.hidden = false;
-      const g = canvas.getContext('2d');
-      g.setTransform(dpr, 0, 0, dpr, 0, 0);
-      const R = Math.hypot(W, H) / 2 + 30;
-      const CLOSE = 460, HOLD = 110, OPEN = 640;
-      let t0 = 0, swapped = false;
-      const frame = (now) => {
-        if (!t0) t0 = now;
-        const t = now - t0;
-        let k;
-        if (t < CLOSE) k = easeInOut(t / CLOSE);
-        else if (t < CLOSE + HOLD) k = 1;
-        else k = 1 - easeOut(Math.min(1, (t - CLOSE - HOLD) / OPEN));
-        if (t >= CLOSE && !swapped) { swapped = true; atClosed(); }
-        blades(g, W, H, R * (1 - k), k);
-        if (t < CLOSE + HOLD + OPEN) requestAnimationFrame(frame);
-        else { canvas.hidden = true; g.clearRect(0, 0, W, H); done(); }
+      const W = innerWidth, H = innerHeight;
+      const across = (W + H) / Math.SQRT2;          // the screen measured along the sweep
+      const thick = across * 1.7, long = Math.hypot(W, H) * 2;
+      const far = (thick + across) / 2 + 8;
+      const at = (d) => `translate(${(d * Math.SQRT1_2).toFixed(1)}px, ${(-d * Math.SQRT1_2).toFixed(1)}px) rotate(45deg)`;
+      const DUR = 620, STEP = 55;
+      const colours = [...SWEEP[to], '#f4f7fa'];
+      sweepBox.hidden = false;
+      const runs = $$('i', sweepBox).map((band, i) => {
+        Object.assign(band.style, { width: `${long}px`, height: `${thick}px`, marginLeft: `${-long / 2}px`, marginTop: `${-thick / 2}px`, background: colours[i] });
+        return band.animate([{ transform: at(-far) }, { transform: at(far) }], { duration: DUR, delay: i * STEP, easing: 'cubic-bezier(.65, 0, .35, 1)', fill: 'both' });
+      });
+      // the last band's middle: the screen is covered
+      const last = runs[runs.length - 1];
+      let swapped = false;
+      const watch = () => {
+        if (swapped) return;
+        if ((last.currentTime || 0) >= (runs.length - 1) * STEP + DUR / 2) { swapped = true; atCovered(); return; }
+        requestAnimationFrame(watch);
       };
-      requestAnimationFrame(frame);
+      requestAnimationFrame(watch);
+      last.finished.then(() => {
+        if (!swapped) { swapped = true; atCovered(); }
+        sweepBox.hidden = true;
+        for (const r of runs) r.cancel();
+        done();
+      });
     });
   }
 
@@ -347,7 +306,7 @@
   // ---------- dropping ----------
   // over a tool: that tool lights up and says so; anywhere else: the side's own drop area
   let dragDepth = 0, lit = null;
-  const zone = () => $(side === 'photo' ? '#vf' : '#drop');
+  const zone = () => $(side === 'photo' ? '#dropPhoto' : '#drop');
   function light(el) {
     if (lit === el) return;
     if (lit) { lit.classList.remove('target'); const tag = $('.drop-tag', lit); if (tag) tag.remove(); }
@@ -357,7 +316,7 @@
   function clearDrag() {
     dragDepth = 0;
     light(null);
-    for (const z of $$('.drop, .vf')) z.classList.remove('over', 'pdf', 'video', 'image');
+    for (const z of $$('.drop')) z.classList.remove('over', 'pdf', 'video', 'image');
   }
   addEventListener('dragenter', (e) => { if (e.dataTransfer && [...e.dataTransfer.types].includes('Files')) dragDepth++; });
   addEventListener('dragleave', () => { if (--dragDepth <= 0) clearDrag(); });
@@ -404,7 +363,7 @@
     }
     pick.click();
   }
-  for (const z of [$('#drop'), $('#vf')]) {
+  for (const z of [$('#drop'), $('#dropPhoto')]) {
     z.addEventListener('click', choose);
     z.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); choose(); } });
   }
