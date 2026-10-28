@@ -310,6 +310,11 @@ button.qm-item:hover { background: var(--surface-2); }
 .out-title { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 10px; }
 .out-name { font-size: 1rem; overflow-wrap: anywhere; }
 .out-pages { color: var(--muted); font-size: .84rem; }
+.out-name-row { display: flex; align-items: center; gap: 6px; min-width: 0; max-width: 100%; }
+.out-rename { width: 28px; height: 28px; border-radius: 7px; flex: none; }
+.out-name-edit { display: flex; align-items: center; gap: 6px; width: 100%; max-width: 460px; }
+.out-name-in { flex: 1 1 auto; min-width: 0; height: 34px; padding: 0 10px; border: 1px solid var(--accent); border-radius: 8px; background: var(--surface); font-weight: 600; box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent); outline: none; }
+.out-ext { color: var(--muted); font-size: .9rem; }
 .out-size { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 10px; }
 .out-size b { font-size: 1.25rem; font-family: var(--font-latin); font-variant-numeric: tabular-nums; }
 .out-limit { color: var(--muted); font-size: .9rem; }

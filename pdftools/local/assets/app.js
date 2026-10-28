@@ -18,6 +18,7 @@
     splitMode: 'single',         // 'single' | 'split' | 'direct' (no compression, for taking passwords off)
     modeChosen: false,           // has the student picked one/many files in step 2 yet
     directEach: true,            // 直接輸出 with several files: each on its own (else merged)
+    names: new Map(),            // output file names changed in step 4: the name it would have had → the new one
     parts: [],                   // split editor: output files { id, name, custom, text (page ranges) }
     project: null,
     total: 0,
@@ -162,6 +163,7 @@
     state.total = off;
     state.project = { sources: ready, info: [], cache: { key: null, blobs: [] }, outline: null };
     state.parts = [];
+    state.names = new Map();
     state.run = null;
     thumbs.invalidate();
     renderSources();
@@ -339,6 +341,7 @@
         title: s.name, filename: (safeFile(s.name) || `第${s.index + 1}份`) + '.pdf', pages: s.pages, label: s.label, color: s.color,
       }));
     }
+    for (const p of plan) { p.key = p.filename; if (state.names.has(p.key)) p.filename = state.names.get(p.key); }
     const seen = new Map();
     for (const p of plan) {
       const k = p.filename.toLowerCase();
@@ -777,7 +780,7 @@
   $('#start').addEventListener('click', () => startRun());
 
   // ======================= step 4: run =======================
-  const signature = () => JSON.stringify({ plan: outputsPlan().map((p) => [p.filename, p.pages[0], p.pages.length]), s: snapshot() });
+  const signature = () => JSON.stringify({ plan: outputsPlan().map((p) => [p.key, p.pages[0], p.pages.length]), s: snapshot() });   // a renamed file isn't a changed one
 
   async function startRun() {
     if (state.run && state.run.running) return;
@@ -994,7 +997,31 @@
     error: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M7 7l10 10M17 7L7 17"/></svg>',
     lock: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="10" width="16" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg>',
     unlock: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="10" width="16" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 7.7-1.5"/></svg>',
+    pen: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M13.5 6.5l4 4"/></svg>',
   };
+  // a finished file's name, edited in place: Enter or 好 keeps it, Esc goes back. Kept for a re-run, and used by
+  // 下載, the ZIP and the preview (the default names are fixed, 備審資料_合併.pdf and so on)
+  function editName(o) {
+    const title = o.card.querySelector('.out-title');
+    const input = el('input', { class: 'out-name-in', value: stripPdf(o.filename), maxlength: '120', spellcheck: 'false', 'aria-label': '新的檔名' });
+    const form = el('form', { class: 'out-name-edit' }, input, el('span', { class: 'out-ext', text: '.pdf' }), el('button', { type: 'submit', class: 'btn small primary', text: '好' }));
+    const close = (keep) => { if (!form.isConnected) return; if (keep) rename(o, input.value); renderCard(o); };
+    form.addEventListener('submit', (e) => { e.preventDefault(); close(true); });
+    input.addEventListener('keydown', (e) => { if (e.key === 'Escape') { e.preventDefault(); close(false); } });
+    input.addEventListener('blur', () => setTimeout(() => close(true), 150));
+    title.replaceChildren(form);
+    input.focus();
+    input.select();
+  }
+  function rename(o, text) {
+    const name = safeFile(text.replace(/\.pdf$/i, ''));
+    if (!name) return;
+    const taken = new Set(state.run.outputs.filter((x) => x !== o).map((x) => x.filename.toLowerCase()));
+    let file = name + '.pdf';
+    for (let n = 2; taken.has(file.toLowerCase()); n++) file = `${name}(${n}).pdf`;
+    o.filename = file;
+    state.names.set(o.key, file);
+  }
   function renderCard(o) {
     const c = o.card;
     if (!c) return;
@@ -1019,6 +1046,11 @@
       return;
     }
     const r = o.result, st = o.settings;
+    const pen = el('button', { type: 'button', class: 'icon-btn sm out-rename', title: '改檔名', 'aria-label': `改「${o.filename}」的檔名`, onclick: () => editName(o) });
+    pen.innerHTML = ICONS.pen;
+    const nameEl = title.querySelector('.out-name'), row = el('span', { class: 'out-name-row' });
+    nameEl.replaceWith(row);
+    row.append(nameEl, pen);
     const limit = st.targetMB * MB, noLimit = !Number.isFinite(limit);
     const fits = !r.over;
     c.classList.add(fits ? 'ok' : 'over');
