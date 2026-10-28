@@ -1293,31 +1293,43 @@
 
   // ---------- the loupe: fit; a click goes to 100 % right there (like Lightroom), drag moves, wheel or pinch zooms ----------
   // One for the stage, one for the full-screen view; the same photo, its own zoom.
+  // The zoom (zoomed, s, cx, cy) says where the picture should be; what is on screen (L.view: scale and top-left
+  // corner) glides there like Lightroom's: a zoom about one fixed screen point (the clicked spot stays under the
+  // pointer while the picture grows), easing out. Dragging and pinching follow the fingers at once.
+  const ZOOM_MS = 260, WHEEL_MS = 150;
+  const CALM = matchMedia('(prefers-reduced-motion: reduce)');
   function makeLoupe(box, cv, bar) {
-    const L = { it: null, v: null, o: 1, iw: 0, ih: 0, zoomed: false, s: 0, cx: 0, cy: 0, ox: 0, oy: 0, fitS: 1, pad: 8 };
+    const L = { it: null, v: null, o: 1, iw: 0, ih: 0, zoomed: false, s: 0, cx: 0, cy: 0, ox: 0, oy: 0, fitS: 1, pad: 8, view: null, anim: null };
     const ctx = cv.getContext('2d');
     const clamp = (x, a, b) => Math.min(b, Math.max(a, x));
     L.set = (it, v) => {
       if (L.it !== it) { L.zoomed = false; dropFull(); }
       L.it = it; L.v = v;
       if (v) { L.o = orientOf(it); [L.iw, L.ih] = oriented(v.ow, v.oh, L.o); }
+      L.stop();
       L.paint();
     };
     L.max = () => 4 / DPR(); // 400 %
-    L.paint = () => {
-      const W = box.clientWidth, H = box.clientHeight, D = DPR();
-      if (!W || !H) return;
-      if (cv.width !== Math.round(W * D) || cv.height !== Math.round(H * D)) { cv.width = Math.round(W * D); cv.height = Math.round(H * D); }
-      ctx.setTransform(1, 0, 0, 1, 0, 0);
-      ctx.clearRect(0, 0, cv.width, cv.height);
-      box.classList.toggle('zoomed', L.zoomed);
-      if (!L.v) { showZoom(); return; }
+    // where the picture should be: L.ox, L.oy (top-left corner, box pixels) at scale L.ts
+    function layout() {
+      const W = box.clientWidth, H = box.clientHeight;
       L.fitS = Math.min((W - 2 * L.pad) / L.iw, (H - 2 * L.pad) / L.ih, 2);
       const s = L.zoomed ? L.s : L.fitS;
       const dw = L.iw * s, dh = L.ih * s;
+      L.ts = s;
       L.ox = dw <= W ? (W - dw) / 2 : clamp(W / 2 - L.cx * s, W - dw, 0);
       L.oy = dh <= H ? (H - dh) / 2 : clamp(H / 2 - L.cy * s, H - dh, 0);
       if (L.zoomed) { L.cx = (W / 2 - L.ox) / s; L.cy = (H / 2 - L.oy) / s; }
+      return { s, ox: L.ox, oy: L.oy };
+    }
+    // draw the picture as it is on screen now
+    function draw() {
+      const W = box.clientWidth, H = box.clientHeight, D = DPR();
+      if (cv.width !== Math.round(W * D) || cv.height !== Math.round(H * D)) { cv.width = Math.round(W * D); cv.height = Math.round(H * D); }
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.clearRect(0, 0, cv.width, cv.height);
+      const { s, ox, oy } = L.view;
+      const dw = L.iw * s, dh = L.ih * s;
       // more pixels than the screen-size picture has: the full one (decoded once, on demand)
       const need = s * D * Math.max(L.iw, L.ih) > Math.max(...sizeOf(L.v.img)) * 1.05;
       const hi = need && fullRes && fullRes.id === L.it.id ? fullRes.img : null;
@@ -1325,11 +1337,62 @@
       ctx.imageSmoothingEnabled = true;
       ctx.imageSmoothingQuality = 'high';
       ctx.save();
-      ctx.translate(Math.round(L.ox * D), Math.round(L.oy * D));
-      if (!L.zoomed) { ctx.shadowColor = 'rgba(0, 0, 0, .38)'; ctx.shadowBlur = 22 * D; ctx.shadowOffsetY = 5 * D; }
+      ctx.translate(Math.round(ox * D), Math.round(oy * D));
+      // the drop shadow of a picture that fits fades as it grows past twice that
+      const shade = clamp(2 - s / L.fitS, 0, 1);
+      if (shade > 0) { ctx.shadowColor = `rgba(0, 0, 0, ${(0.38 * shade).toFixed(3)})`; ctx.shadowBlur = 22 * D; ctx.shadowOffsetY = 5 * D; }
       drawOriented(ctx, hi || L.v.img, L.o, Math.round(dw * D), Math.round(dh * D));
       ctx.restore();
+    }
+    L.paint = () => {
+      const W = box.clientWidth, H = box.clientHeight;
+      if (!W || !H) return;
+      box.classList.toggle('zoomed', L.zoomed);
+      if (!L.v) {
+        const D = DPR();
+        if (cv.width !== Math.round(W * D) || cv.height !== Math.round(H * D)) { cv.width = Math.round(W * D); cv.height = Math.round(H * D); }
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
+        ctx.clearRect(0, 0, cv.width, cv.height);
+        showZoom();
+        return;
+      }
+      const to = layout();
+      if (L.anim) L.anim.to = to;   // on its way: the same glide, to where it should be now
+      else L.view = to;
+      draw();
       showZoom();
+    };
+    // glide from what is on screen to where the zoom says, in ms
+    L.glide = (ms) => {
+      if (!L.v || !box.clientWidth) return;
+      const to = layout();
+      box.classList.toggle('zoomed', L.zoomed);
+      showZoom();
+      if (!L.view || !ms || CALM.matches) { L.stop(); L.view = to; draw(); return; }
+      L.anim = { from: { ...L.view }, to, t0: performance.now(), ms };
+      if (!L.araf) L.araf = requestAnimationFrame(step);
+    };
+    function step(now) {
+      L.araf = 0;
+      const a = L.anim;
+      if (!a || !L.v) return;
+      const t = clamp((now - a.t0) / a.ms, 0, 1), e = 1 - (1 - t) ** 3;   // a frame's time can be a little before the click
+      const { from, to } = a, r = to.s / from.s;
+      if (Math.abs(r - 1) < 1e-4) L.view = { s: to.s, ox: from.ox + (to.ox - from.ox) * e, oy: from.oy + (to.oy - from.oy) * e };
+      else {
+        // the one screen point the zoom leaves where it is; the scale moves evenly on a log scale
+        const fx = (to.ox - from.ox * r) / (1 - r), fy = (to.oy - from.oy * r) / (1 - r);
+        const s = from.s * r ** e, k = s / from.s;
+        L.view = { s, ox: fx - (fx - from.ox) * k, oy: fy - (fy - from.oy) * k };
+      }
+      if (t >= 1) { L.view = { ...to }; L.anim = null; }
+      draw();
+      if (L.anim) L.araf = requestAnimationFrame(step);
+    }
+    // end a glide where it was headed
+    L.stop = () => {
+      if (L.araf) { cancelAnimationFrame(L.araf); L.araf = 0; }
+      if (L.anim) { L.view = { ...L.anim.to }; L.anim = null; }
     };
     // percent of the picture's own pixels, one to one with the screen's
     L.percent = () => Math.round((L.zoomed ? L.s : L.fitS) * DPR() * 100);
@@ -1344,23 +1407,23 @@
       $('.z-fit', bar).classList.toggle('on', !L.zoomed);
       $('.z-100', bar).classList.toggle('on', L.zoomed && Math.abs(L.percent() - 100) < 1);
     }
-    // zoom to scale s keeping the picture point under (x, y) — box coordinates — where it is
-    L.zoomAt = (s, x = box.clientWidth / 2, y = box.clientHeight / 2) => {
+    // zoom to scale s keeping the picture point under (x, y) — box coordinates — where it is on screen; in ms
+    L.zoomAt = (s, x = box.clientWidth / 2, y = box.clientHeight / 2, ms = ZOOM_MS) => {
       if (!L.v) return;
-      const cs = L.zoomed ? L.s : L.fitS;
-      const px = (x - L.ox) / cs, py = (y - L.oy) / cs;
+      const cur = L.view || { s: L.zoomed ? L.s : L.fitS, ox: L.ox, oy: L.oy };
+      const px = (x - cur.ox) / cur.s, py = (y - cur.oy) / cur.s;
       const ns = clamp(s, L.fitS, Math.max(L.fitS, L.max()));
-      if (ns <= L.fitS * 1.001) { L.zoomed = false; dropFull(); L.paint(); return; }
+      if (ns <= L.fitS * 1.001) { L.zoomed = false; dropFull(); L.glide(ms); return; }
       L.zoomed = true;
       L.s = ns;
       if (!zoomHinted) { zoomHinted = true; try { localStorage.setItem('exif-zoomed', '1'); } catch {} }
       L.cx = px - (x - box.clientWidth / 2) / ns;
       L.cy = py - (y - box.clientHeight / 2) / ns;
-      L.paint();
+      L.glide(ms);
     };
     // a click: fit ↔ 100 % (a picture smaller than the screen: twice its fit)
     L.toggle = (x, y) => {
-      if (L.zoomed) L.zoomAt(0);
+      if (L.zoomed) L.zoomAt(0, x, y);
       else L.zoomAt(Math.max(1 / DPR(), L.fitS * 2), x, y);
     };
     L.fit = () => { if (L.zoomed) L.zoomAt(0); };
@@ -1369,6 +1432,7 @@
     const local = (e) => { const r = box.getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top]; };
     box.addEventListener('pointerdown', (e) => {
       if (!L.v || e.button > 0) return;
+      L.stop();   // a glide still going ends where it was headed, and the drag starts from there
       try { box.setPointerCapture(e.pointerId); } catch {}
       pts.set(e.pointerId, local(e));
       if (pts.size === 1) down = { p: local(e), cx: L.cx, cy: L.cy, moved: false, type: e.pointerType };
@@ -1384,7 +1448,7 @@
       if (pinch && pts.size >= 2) {
         const [a, b] = [...pts.values()];
         const d = Math.hypot(a[0] - b[0], a[1] - b[1]);
-        L.zoomAt(pinch.s * (d / pinch.d), (a[0] + b[0]) / 2, (a[1] + b[1]) / 2);
+        L.zoomAt(pinch.s * (d / pinch.d), (a[0] + b[0]) / 2, (a[1] + b[1]) / 2, 0);
         e.preventDefault();
         return;
       }
@@ -1419,8 +1483,12 @@
       if (!L.v) return;
       e.preventDefault();
       const [x, y] = local(e);
+      // a mouse wheel's notches glide (turned again mid-glide: on from where it was going); a trackpad's stream of
+      // small steps (and its pinch, ctrlKey) follows at once
       const k = Math.exp(-e.deltaY * (e.ctrlKey ? 0.012 : 0.0018));
-      L.zoomAt((L.zoomed ? L.s : L.fitS) * k, x, y);
+      const notch = !e.ctrlKey && e.deltaMode === 0 && Math.abs(e.deltaY) >= 50;
+      const base = L.anim ? L.anim.to.s : L.view ? L.view.s : (L.zoomed ? L.s : L.fitS);
+      L.zoomAt(base * k, x, y, notch || e.deltaMode ? WHEEL_MS : 0);
     }, { passive: false });
     if (bar) {
       $('.z-fit', bar).addEventListener('click', () => L.fit());
