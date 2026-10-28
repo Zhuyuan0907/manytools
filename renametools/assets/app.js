@@ -3,8 +3,9 @@
    {流水號} a running number, {日期} {時間} {相機} from the photo, {原檔名}), every file's before and after →
    3 renamed. Files of one shot (IMG_4678.CR3, .JPG, .xmp) keep one name.
    Chrome and Edge on a computer rename the files where they are (File System Access: a folder picked or dropped,
-   then FileSystemHandle.move), with an undo while the page is open; elsewhere the files stay as they are and a ZIP of
-   renamed copies is downloaded. Nothing is uploaded; on a server only the number of files renamed is reported. */
+   then FileSystemHandle.move), with an undo while the page is open; elsewhere the files stay as they are and the
+   renamed copies are downloaded: one file as itself, more as a ZIP. Nothing is uploaded; on a server only the number
+   of files renamed is reported. */
 (() => {
   'use strict';
   const $ = (s, r = document) => r.querySelector(s);
@@ -351,9 +352,9 @@
   function modeText() {
     $('#modeNote').replaceChildren(...(CAN_MOVE
       ? [el('b', { text: '直接改原本的檔案' }), '，改完可以復原。']
-      : [el('b', { text: '原檔不會動' }), '：改好名的檔案打包成 ZIP 下載。', PHONE ? '' : '用電腦版 Chrome 或 Edge 可以直接改原檔。']));
+      : [el('b', { text: '原檔不會動' }), '：下載改好名的檔案，兩個以上打包成 ZIP。', PHONE ? '' : '用電腦版 Chrome 或 Edge 可以直接改原檔。']));
     $('#how3b').textContent = CAN_MOVE ? '直接改好' : '下載改好的';
-    $('#how3s').textContent = CAN_MOVE ? '原地改名，改錯可以復原' : '打包成 ZIP，原檔不動';
+    $('#how3s').textContent = CAN_MOVE ? '原地改名，改錯可以復原' : '一個直接下載，多個打包成 ZIP';
     $('#pickFiles').hidden = PHONE;
   }
   async function pickFolder() {
@@ -437,13 +438,13 @@
   function update() {
     if (!src) return;
     compute();
-    const c = plan.counts, inPlace = src.kind === 'dir';
+    const c = plan.counts, inPlace = src.kind === 'dir', one = !inPlace && c.move === 1 ? movedRow() : null;
     for (const b of $$('.token')) b.classList.toggle('on', S.tpl.includes(b.dataset.t));
     $('#seqSet').hidden = !/\{流水號\}/.test(S.tpl);
     $('#dateSet').hidden = !/\{日期\}/.test(S.tpl);
     const shots = plan.live.length;
     fill($('#srcLine'), `${src.name ? `「${src.name}」裡` : ''}${num(shots)} 張照片（${num(c.files)} 個檔案）・`,
-      el('b', { text: inPlace ? '直接改原檔，可以復原' : '原檔不動，下載 ZIP' }));
+      el('b', { text: inPlace ? '直接改原檔，可以復原' : one ? '原檔不動，下載改好名的檔案' : '原檔不動，下載 ZIP' }));
     // the first one that changes, as the example
     const ex = plan.rows.find((r) => !r.side && (r.state === '' || r.state === 'dup' || r.state === 'wait')) || plan.rows.find((r) => !r.side && r.state !== 'same') || plan.rows[0];
     fill($('#example'), ex ? el('span', { class: 'ex-old', text: ex.e.name }) : null,
@@ -459,8 +460,9 @@
     fill($('#pvSum'), ...parts);
     $('#warnTab').textContent = `要注意的 ${num(c.dup + c.bad)}`;
     $('#go').disabled = !c.move || meta.busy || c.wait > 0;
-    $('#go').textContent = inPlace ? `開始改名 ${num(c.move)} 個檔案 →` : `打包下載（ZIP）→`;
-    $('#note2').textContent = c.wait ? '正在讀取拍攝資料…' : !c.move ? '這個規則不會改到任何檔案' : inPlace ? '改完可以復原' : `原檔不會動・${fmtBytes(plan.rows.reduce((a, r) => a + r.e.file.size, 0))}`;
+    $('#go').textContent = inPlace ? `開始改名 ${num(c.move)} 個檔案 →` : one ? '下載改好名的檔案 →' : '打包下載（ZIP）→';
+    $('#note2').textContent = c.wait ? '正在讀取拍攝資料…' : !c.move ? '這個規則不會改到任何檔案' : inPlace ? '改完可以復原'
+      : `原檔不會動・${fmtBytes(one ? one.e.file.size : plan.rows.reduce((a, r) => a + r.e.file.size, 0))}`;
     drawList();
   }
 
@@ -506,7 +508,8 @@
         if (p !== 'granted') { toast('要允許「編輯檔案」才能改名'); return; }
       }
       renameAll(plan.moves, 'rename');
-    } else zipAll();
+    } else if (plan.moves.length === 1) saveOne();
+    else zipAll();
   });
   window.addEventListener('beforeunload', (e) => { if (run.busy) { e.preventDefault(); e.returnValue = ''; } });
 
@@ -628,6 +631,31 @@
     if (run.busy || !run.log.length) return;
     renameAll(run.log.slice().reverse().map((x) => ({ dir: x.dir, from: x.to, to: x.from })), 'undo');
   });
+
+  // the one file that gets a new name, when only one does: the file itself under that name, no ZIP to open
+  function movedRow() {
+    const m = plan.moves[0];
+    return plan.rows.find((r) => r.e.dir === m.dir && r.e.name === m.from);
+  }
+  function saveOne() {
+    const r = movedRow();
+    run.mode = 'one'; run.all = run.done = 1; run.fails = [];
+    run.log = plan.moves.map((m) => ({ dir: m.dir, from: m.from, to: m.to }));
+    run.blob = r.e.file; run.zipName = r.to;
+    showRun();
+    save(run.blob, run.zipName);
+    progress();
+    $('#bar').classList.add('done');
+    $('#h3t').textContent = '開始下載了';
+    fill($('#bigWhat'), el('b', { text: r.to }), `・原本是 ${r.e.name}`);
+    $('#doneLine').textContent = '原本的檔案沒有動，下載的就是改好名的照片。';
+    $('#bigOf').textContent = '個新檔名';
+    $('#fails').hidden = true;
+    $('#undo').hidden = true; $('#again').hidden = false; $('#csv').hidden = true;
+    $('#after').hidden = false;
+    count(1);
+    renderStepper();
+  }
 
   // a ZIP of renamed copies (every browser): the files are read once for their checksums, nothing big kept in memory
   async function zipAll() {

@@ -1,7 +1,7 @@
 /* ZhuyuanLoveCrop — avatars cut out in this browser. Three steps: 1 drop pictures → 2 crop each one (drag to move,
-   wheel / pinch / slider to zoom, turn and flip; a dashed circle shows what round avatars show) → 3 shape, size
-   and format, then download one, or all as a ZIP. On a server only the number of pictures is reported, never a
-   picture or its name. */
+   wheel / pinch / slider to zoom, turn and flip; a dashed circle shows what round avatars show) → 3 shape (round
+   unless changed), size and format, then download one, or all as a ZIP. On a server only the number of pictures is
+   reported, never a picture or its name. */
 (() => {
   'use strict';
   const $ = (s, r = document) => r.querySelector(s);

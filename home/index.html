@@ -47,32 +47,23 @@
     </section>
 
     <section class="tools" aria-label="工具">
-      <!-- every card hides a second tool: it slides out on hover or focus, or with a tap on its edge on touch screens -->
-      <div class="tool-stack" id="videoStack">
-        <a class="tool video" href="/video" data-local="../videotools/index.html">
-          <span class="tool-text">
-            <span class="tool-top"><span class="no">01</span><span class="word">Zhuyuan<i>Love</i><u>Video</u></span></span>
-            <b class="tool-name">影片碼率壓縮</b>
-            <span class="tool-desc">業務機素材壓到指定碼率</span>
-            <span class="cta">開始壓縮 <span aria-hidden="true">→</span></span>
-          </span>
-          <span class="art" aria-hidden="true">
-            <svg viewBox="0 0 300 160">
-              <g><rect x="6" y="16" width="122" height="96" rx="12" class="page"/><path d="M18 21v8M34 21v8M50 21v8M66 21v8M82 21v8M98 21v8M114 21v8M18 99v8M34 99v8M50 99v8M66 99v8M82 99v8M98 99v8M114 99v8" class="holes"/><path d="M58 50v28l24-14z" class="play"/><rect x="27" y="122" width="80" height="30" rx="8" class="chip-bad"/><text x="67" y="142" class="chip-t">20 Mbps</text></g>
-              <g class="arrow"><path d="M140 66h36"/><path d="M168 56l10 10-10 10"/></g>
-              <g class="small"><rect x="194" y="32" width="96" height="74" rx="10" class="page"/><path d="M205 36v6M219 36v6M233 36v6M247 36v6M261 36v6M275 36v6M205 96v6M219 96v6M233 96v6M247 96v6M261 96v6M275 96v6" class="holes"/><path d="M235 58v20l17-10z" class="play"/><rect x="208" y="116" width="68" height="26" rx="7" class="chip-ok"/><text x="242" y="134" class="chip-t">12 Mbps</text><circle cx="286" cy="34" r="14" class="check-bg"/><path d="M279.5 34.5l4.5 4.5 8-9" class="check"/></g>
-            </svg>
-          </span>
-        </a>
-        <a class="tool rename peek" id="renameCard" href="/rename" data-local="../renametools/index.html">
-          <span class="tool-text">
-            <span class="tool-top"><span class="no">08</span><span class="word">Zhuyuan<i>Love</i><u>Rename</u></span></span>
-            <b class="tool-name">照片批次改檔名</b>
-            <span class="tool-desc">IMG_4678 → 竺原-4678</span>
-            <span class="cta"><span aria-hidden="true">→</span></span>
-          </span>
-        </a>
-      </div>
+      <!-- the cards hide more tools: they slide out on hover or focus, or with a tap on their edge on touch screens.
+           The photo card hides two, 照片參數查看 and 照片批次改檔名, one tab above the other -->
+      <a class="tool video" href="/video" data-local="../videotools/index.html">
+        <span class="tool-text">
+          <span class="tool-top"><span class="no">01</span><span class="word">Zhuyuan<i>Love</i><u>Video</u></span></span>
+          <b class="tool-name">影片碼率壓縮</b>
+          <span class="tool-desc">業務機素材壓到指定碼率</span>
+          <span class="cta">開始壓縮 <span aria-hidden="true">→</span></span>
+        </span>
+        <span class="art" aria-hidden="true">
+          <svg viewBox="0 0 300 160">
+            <g><rect x="6" y="16" width="122" height="96" rx="12" class="page"/><path d="M18 21v8M34 21v8M50 21v8M66 21v8M82 21v8M98 21v8M114 21v8M18 99v8M34 99v8M50 99v8M66 99v8M82 99v8M98 99v8M114 99v8" class="holes"/><path d="M58 50v28l24-14z" class="play"/><rect x="27" y="122" width="80" height="30" rx="8" class="chip-bad"/><text x="67" y="142" class="chip-t">20 Mbps</text></g>
+            <g class="arrow"><path d="M140 66h36"/><path d="M168 56l10 10-10 10"/></g>
+            <g class="small"><rect x="194" y="32" width="96" height="74" rx="10" class="page"/><path d="M205 36v6M219 36v6M233 36v6M247 36v6M261 36v6M275 36v6M205 96v6M219 96v6M233 96v6M247 96v6M261 96v6M275 96v6" class="holes"/><path d="M235 58v20l17-10z" class="play"/><rect x="208" y="116" width="68" height="26" rx="7" class="chip-ok"/><text x="242" y="134" class="chip-t">12 Mbps</text><circle cx="286" cy="34" r="14" class="check-bg"/><path d="M279.5 34.5l4.5 4.5 8-9" class="check"/></g>
+          </svg>
+        </span>
+      </a>
       <div class="tool-stack" id="pdfStack">
         <a class="tool pdf" href="/pdf" data-local="../pdftools/local/index.html">
           <span class="tool-text">
@@ -119,6 +110,14 @@
             <span class="tool-top"><span class="no">07</span><span class="word">Zhuyuan<i>Love</i><u>Exif</u></span></span>
             <b class="tool-name">照片參數查看</b>
             <span class="tool-desc">焦距、光圈、快門一次看</span>
+            <span class="cta"><span aria-hidden="true">→</span></span>
+          </span>
+        </a>
+        <a class="tool rename peek second" id="renameCard" href="/rename" data-local="../renametools/index.html">
+          <span class="tool-text">
+            <span class="tool-top"><span class="no">08</span><span class="word">Zhuyuan<i>Love</i><u>Rename</u></span></span>
+            <b class="tool-name">照片批次改檔名</b>
+            <span class="tool-desc">IMG_4678 → 竺原-4678</span>
             <span class="cta"><span aria-hidden="true">→</span></span>
           </span>
         </a>

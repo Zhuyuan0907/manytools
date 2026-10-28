@@ -38,16 +38,16 @@
       .catch(() => {});
   }
 
-  // ---------- the tools hiding behind the PDF and avatar cards ----------
-  // Hover and keyboard focus show them by CSS alone. A finger has no hover: its first tap on the edge that peeks out
-  // slides the card up instead of going in, the next one goes in, and a tap elsewhere hides it again.
-  const stacks = [...document.querySelectorAll('.tool-stack')].map((stack) => ({ stack, peek: stack.querySelector('.peek') })).filter((x) => x.peek);
+  // ---------- the tools hiding behind the cards ----------
+  // Hover and keyboard focus show them by CSS alone. A finger has no hover: its first tap on an edge that peeks out
+  // slides the cards of that stack up instead of going in, the next one goes in, and a tap elsewhere hides them again.
+  const stacks = [...document.querySelectorAll('.tool-stack')].map((stack) => ({ stack, peeks: [...stack.querySelectorAll('.peek')] })).filter((x) => x.peeks.length);
   const show = (x, open) => x.stack.classList.toggle('open', open);
   let finger = false;
   document.addEventListener('pointerdown', (e) => { finger = e.pointerType !== 'mouse'; }, true);
   // on a phone the tiles lie flat (home.css), so a tap simply goes in
   const flat = () => matchMedia('(max-width: 760px)').matches;
-  for (const x of stacks) x.peek.addEventListener('click', (e) => {
+  for (const x of stacks) for (const peek of x.peeks) peek.addEventListener('click', (e) => {
     if (!finger || flat() || x.stack.classList.contains('open')) return;
     e.preventDefault();
     for (const y of stacks) show(y, y === x);
