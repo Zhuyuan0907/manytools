@@ -1,145 +1,410 @@
-/* Home page: the live numbers, and the drop area that sends files to the right tool.
-   Files never leave this browser: they're handed to the tool page through ManyHandoff (/shared/handoff.js).
-   The numbers are totals from the server (see server/server.js); opened as a local file, links point at the
-   sibling folders instead and the numbers stay at 0. */
+/* ZhuyuanTools home: two sides, 日常 and 拍攝, behind one switch (a camera's aperture closes and opens between them),
+   the live numbers, and dropping files: on the drop area or viewfinder they go to the right tool (photos ask which
+   one), on a tool they go straight to it.
+   Files never leave this browser: they're handed to the tool page through ManyHandoff (/shared/handoff.js) — as
+   file handles where the browser has them (Chrome, Edge: nothing is copied, a folder stays a folder), else as files.
+   The numbers are totals from the server (see server/server.js). Opened as a local file, links point at the sibling
+   folders and there's no /photo address. */
 (() => {
   'use strict';
-  const $ = (s) => document.querySelector(s);
+  const $ = (s, r = document) => r.querySelector(s);
+  const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+  const root = document.documentElement;
   const onServer = /^https?:$/.test(location.protocol);
-  if (!onServer) for (const a of document.querySelectorAll('a[data-local]')) a.href = a.dataset.local;
-  const TOOL_URL = onServer ? { video: '/video', pdf: '/pdf', image: '/image', exif: '/exif' }
-    : { video: '../videotools/index.html', pdf: '../pdftools/local/index.html', image: '../imagetools/index.html', exif: '../exiftools/index.html' };
-  const TOOL_NAME = { video: '影片碼率壓縮', pdf: 'PDF 壓縮・拆分', image: '圖片壓縮', exif: '照片參數查看' };
+  if (!onServer) for (const a of $$('a[data-local]')) a.href = a.dataset.local;
+  const calm = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const num = (n) => n.toLocaleString('zh-TW');
+
+  let toastTimer;
+  function say(text, ms = 3800) {
+    const t = $('#toast');
+    t.textContent = text; t.hidden = false;
+    clearTimeout(toastTimer); toastTimer = setTimeout(() => { t.hidden = true; }, ms);
+  }
+
+  // ---------- big screens: the same page, larger ----------
+  // Laid out for about 1500 × 880; a 2K or 4K screen at 100 % gets it scaled up (CSS zoom), as far as its height allows.
+  function fitZoom() {
+    const z = Math.max(1, Math.min(innerWidth / 1500, innerHeight / 880, 1.8));
+    root.style.setProperty('--z', z.toFixed(3));
+  }
+  fitZoom();
+  addEventListener('resize', fitZoom);
+
+  // ---------- the two sides ----------
+  const SIDES = { daily: { path: '/', title: 'ZhuyuanTools・小小ㄉ工具箱', theme: '#f4f7fa' }, photo: { path: '/photo', title: 'ZhuyuanTools・拍攝', theme: '#121110' } };
+  let side = root.dataset.world === 'photo' ? 'photo' : 'daily';
+  function paint() {
+    for (const b of $$('.switch [role="tab"]')) {
+      const on = b.dataset.world === side;
+      b.setAttribute('aria-selected', String(on));
+      b.tabIndex = on ? 0 : -1;
+    }
+    document.title = SIDES[side].title;
+    $('meta[name="theme-color"]').content = SIDES[side].theme;
+  }
+  paint();
+  // remembered 拍攝 opened at /: say so in the address too
+  if (onServer && side === 'photo' && location.pathname === '/') history.replaceState({ side }, '', '/photo');
+
+  let moving = false;
+  // how: 'push' (a new address), 'pop' (Back/Forward already moved it)
+  async function turn(to, how = 'push') {
+    if (to === side || moving) return;
+    moving = true;
+    $('#switch').dataset.to = to;   // the switch moves at once, above the closing aperture
+    const swap = () => {
+      side = to;
+      root.dataset.world = to;
+      delete $('#switch').dataset.to;
+      paint();
+      try { localStorage.setItem('zt-world', to); } catch {}
+      if (onServer && how === 'push') history.pushState({ side: to }, '', SIDES[to].path);
+      const sec = $(`#${to}`);
+      sec.classList.remove('enter', 'fade');
+      void sec.offsetWidth;
+      sec.classList.add(calm() ? 'fade' : 'enter');
+      setTimeout(() => sec.classList.remove('enter', 'fade'), 1700);
+    };
+    if (calm()) swap(); else await aperture(swap);
+    moving = false;
+  }
+  for (const b of $$('.switch [role="tab"]')) b.addEventListener('click', () => turn(b.dataset.world));
+  // the arrow keys move between the two (a tab list)
+  $('#switch').addEventListener('keydown', (e) => {
+    if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(e.key)) return;
+    e.preventDefault();
+    const to = e.key === 'Home' ? 'daily' : e.key === 'End' ? 'photo' : side === 'daily' ? 'photo' : 'daily';
+    turn(to);
+    $(`.switch [data-world="${to}"]`).focus();
+  });
+  addEventListener('popstate', () => turn(location.pathname === '/photo' ? 'photo' : 'daily', 'pop'));
+
+  // ---------- the aperture ----------
+  // Seven blades. The opening is a regular heptagon of inradius r; each blade is what lies beyond one side of it,
+  // up to the next side's line carried on (a pinwheel), so the blades meet without overlapping. As r goes to 0 the
+  // blades turn, as a lens's do. Drawn on a canvas over everything but the switch.
+  const canvas = $('#iris');
+  const N = 7, STEP = (2 * Math.PI) / N;
+  const easeInOut = (t) => (t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2);
+  const easeOut = (t) => 1 - (1 - t) ** 4;
+  function blades(g, W, H, r, k) {
+    g.clearRect(0, 0, W, H);
+    const cx = W / 2, cy = H / 2, far = Math.hypot(W, H) * 2;
+    const spin = -0.35 + k * 1.05, rho = r / Math.cos(Math.PI / N);
+    const corner = (a) => [cx + rho * Math.cos(a), cy + rho * Math.sin(a)];
+    // the metal everywhere but the opening (seams between blades show this, not the page)
+    g.beginPath();
+    g.rect(0, 0, W, H);
+    for (let i = 0; i < N; i++) { const [x, y] = corner(spin + i * STEP - Math.PI / N); if (i) g.lineTo(x, y); else g.moveTo(x, y); }
+    g.closePath();
+    g.fillStyle = '#131315';
+    g.fill('evenodd');
+    for (let i = 0; i < N; i++) {
+      const a = spin + i * STEP;
+      const [ax, ay] = corner(a - Math.PI / N), [bx, by] = corner(a + Math.PI / N);
+      const dx = -Math.sin(a), dy = Math.cos(a);                 // along this side, A → B
+      const px = -Math.sin(a - STEP), py = Math.cos(a - STEP);   // along the side before, carried past A
+      const qa = a + Math.PI / 2 - STEP / 2;
+      g.beginPath();
+      g.moveTo(ax + px * far, ay + py * far);
+      g.lineTo(ax, ay);
+      g.lineTo(bx, by);
+      g.lineTo(bx + dx * far, by + dy * far);
+      g.lineTo(cx + Math.cos(qa) * far * 2, cy + Math.sin(qa) * far * 2);
+      g.closePath();
+      // brushed metal: lighter at the leading edge, in the shadow of the blade before it at the trailing one
+      const shade = 26 + (i % 3) * 3;
+      const lg = g.createLinearGradient(ax, ay, ax + dy * -120 + dx * 0, ay + dx * 120);
+      lg.addColorStop(0, `rgb(${shade + 14}, ${shade + 14}, ${shade + 17})`);
+      lg.addColorStop(1, `rgb(${shade - 6}, ${shade - 6}, ${shade - 4})`);
+      g.fillStyle = lg;
+      g.fill();
+      const sh = g.createLinearGradient(ax, ay, ax - py * 70, ay + px * 70);
+      sh.addColorStop(0, 'rgba(0, 0, 0, .55)');
+      sh.addColorStop(1, 'rgba(0, 0, 0, 0)');
+      g.fillStyle = sh;
+      g.fill();
+      // the leading edge catches the light
+      g.beginPath();
+      g.moveTo(ax, ay);
+      g.lineTo(bx, by);
+      g.lineTo(bx + dx * far, by + dy * far);
+      g.strokeStyle = 'rgba(255, 255, 255, .16)';
+      g.lineWidth = 1.5;
+      g.stroke();
+    }
+  }
+  function aperture(atClosed) {
+    return new Promise((done) => {
+      const W = innerWidth, H = innerHeight, dpr = Math.min(2, devicePixelRatio || 1);
+      canvas.width = Math.round(W * dpr); canvas.height = Math.round(H * dpr);
+      canvas.hidden = false;
+      const g = canvas.getContext('2d');
+      g.setTransform(dpr, 0, 0, dpr, 0, 0);
+      const R = Math.hypot(W, H) / 2 + 30;
+      const CLOSE = 460, HOLD = 110, OPEN = 640;
+      let t0 = 0, swapped = false;
+      const frame = (now) => {
+        if (!t0) t0 = now;
+        const t = now - t0;
+        let k;
+        if (t < CLOSE) k = easeInOut(t / CLOSE);
+        else if (t < CLOSE + HOLD) k = 1;
+        else k = 1 - easeOut(Math.min(1, (t - CLOSE - HOLD) / OPEN));
+        if (t >= CLOSE && !swapped) { swapped = true; atClosed(); }
+        blades(g, W, H, R * (1 - k), k);
+        if (t < CLOSE + HOLD + OPEN) requestAnimationFrame(frame);
+        else { canvas.hidden = true; g.clearRect(0, 0, W, H); done(); }
+      };
+      requestAnimationFrame(frame);
+    });
+  }
 
   // ---------- live numbers ----------
   function countUp(node, to) {
-    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches || to < 2) { node.textContent = to.toLocaleString('zh-TW'); return; }
+    if (calm() || to < 2) { node.textContent = num(to); return; }
     const t0 = performance.now(), dur = 900;
     const step = (t) => {
       const k = Math.min(1, (t - t0) / dur), e = 1 - (1 - k) ** 3;
-      node.textContent = Math.round(to * e).toLocaleString('zh-TW');
+      node.textContent = num(Math.round(to * e));
       if (k < 1) requestAnimationFrame(step);
     };
     requestAnimationFrame(step);
   }
-  // the header always shows the three numbers; 0 until the server has something
   if (onServer) {
-    fetch('api/stats', { cache: 'no-store' })
+    fetch('/api/stats', { cache: 'no-store' })
       .then((r) => (r.ok ? r.json() : null))
       .then((st) => {
-        const v = (st && st.video) || {}, p = (st && st.pdf) || {};
-        const saved = (v.savedBytes || 0) + (p.savedBytes || 0) + (((st && st.image) || {}).savedBytes || 0);
-        countUp($('[data-stat="video.files"]'), v.files || 0);
-        countUp($('[data-stat="pdf.files"]'), (p.files || 0) + (((st && st.watermark) || {}).files || 0));   // compressed + watermarked
-        countUp($('[data-stat="avatar.files"]'), (((st && st.avatar) || {}).files || 0) + (((st && st.crop) || {}).files || 0));   // looked up + cropped
-        countUp($('[data-stat="image.files"]'), (((st && st.image) || {}).files || 0) + (((st && st.exif) || {}).files || 0));   // compressed + read
-        if (saved > 0) $('[data-stat="saved"]').textContent = saved >= 1e9 ? `${(saved / 1e9).toFixed(1)} GB` : `${Math.max(1, Math.round(saved / 1e6))} MB`;
+        const f = (k) => ((st && st[k]) || {}).files || 0;
+        const set = (key, n) => { for (const node of $$(`[data-stat="${key}"]`)) countUp(node, n); };
+        set('video.files', f('video'));
+        set('pdf.files', f('pdf') + f('watermark'));      // compressed + watermarked
+        set('avatar.files', f('avatar') + f('crop'));     // looked up + cropped
+        set('photo.files', f('image') + f('exif') + f('pick'));   // compressed + read + picked
       })
       .catch(() => {});
   }
 
-  // ---------- the tools hiding behind the cards ----------
-  // Hover and keyboard focus show them by CSS alone. A finger has no hover: its first tap on an edge that peeks out
-  // slides the cards of that stack up instead of going in, the next one goes in, and a tap elsewhere hides them again.
-  const stacks = [...document.querySelectorAll('.tool-stack')].map((stack) => ({ stack, peeks: [...stack.querySelectorAll('.peek')] })).filter((x) => x.peeks.length);
-  const show = (x, open) => x.stack.classList.toggle('open', open);
-  let finger = false;
-  document.addEventListener('pointerdown', (e) => { finger = e.pointerType !== 'mouse'; }, true);
-  // on a phone the tiles lie flat (home.css), so a tap simply goes in
-  const flat = () => matchMedia('(max-width: 760px)').matches;
-  for (const x of stacks) for (const peek of x.peeks) peek.addEventListener('click', (e) => {
-    if (!finger || flat() || x.stack.classList.contains('open')) return;
-    e.preventDefault();
-    for (const y of stacks) show(y, y === x);
-  });
-  document.addEventListener('click', (e) => { for (const x of stacks) if (!x.stack.contains(e.target)) show(x, false); });
-  document.addEventListener('keydown', (e) => { finger = false; if (e.key === 'Escape') for (const x of stacks) show(x, false); });
-  // Back brings this page back as it was left: hidden cards down again, and no leftover focus from the click that left
-  // (keyboard focus stays, so a keyboard user is back where they were).
-  window.addEventListener('pageshow', (e) => {
-    if (!e.persisted) return;
-    for (const x of stacks) show(x, false);
-    const a = document.activeElement;
-    if (a && a.closest('.tool-stack') && !a.matches(':focus-visible')) a.blur();
-  });
-
-  // ---------- drop area → the right tool ----------
-  const drop = $('#drop'), pick = $('#pick'), toast = $('#toast');
-  let toastTimer;
-  function say(text, ms = 3500) {
-    toast.textContent = text; toast.hidden = false;
-    clearTimeout(toastTimer); toastTimer = setTimeout(() => { toast.hidden = true; }, ms);
-  }
-  // a camera's RAW file can't be compressed here, but its shooting data can be read
-  const kindOf = (name, type) => (/\.(cr3|cr2|crw|nef|nrw|arw|srf|sr2|raf|orf|ori|rw2|rwl|dng|pef|ptx|srw|3fr|fff|iiq|erf|kdc|dcr|mef|mos|mrw|x3f|gpr)$/i.test(name) ? 'exif'
+  // ---------- files in ----------
+  const TOOL_URL = {
+    video: ['/video', '../videotools/index.html'], pdf: ['/pdf', '../pdftools/local/index.html'], watermark: ['/watermark', '../watermarktools/index.html'],
+    avatar: ['/avatar', '../avatartools/index.html'], crop: ['/crop', '../croptools/index.html'], image: ['/image', '../imagetools/index.html'],
+    exif: ['/exif', '../exiftools/index.html'], rename: ['/rename', '../renametools/index.html'], pick: ['/pick', '../picktools/index.html'],
+  };
+  const TOOL_NAME = { video: '影片碼率壓縮', pdf: 'PDF 壓縮・拆分', watermark: 'PDF 浮水印', avatar: 'Gravatar 頭貼查詢', crop: '頭貼裁切', image: '圖片壓縮', exif: '照片參數查看', rename: '照片批次改檔名', pick: '照片挑選' };
+  const RAW = /\.(cr3|cr2|crw|nef|nrw|arw|srf|sr2|raf|orf|ori|rw2|rwl|dng|pef|ptx|srw|3fr|fff|iiq|erf|kdc|dcr|mef|mos|mrw|x3f|gpr)$/i;
+  const kindOf = (name, type) => (/\.zip$/i.test(name) || /zip/.test(type || '') ? 'zip'
+    : RAW.test(name) ? 'raw'
     : /pdf$/i.test(type || '') || /\.pdf$/i.test(name) ? 'pdf'
     : /^video\//.test(type || '') || /\.(mp4|mov|m4v|mts|m2ts|ts|mkv|webm|mxf)$/i.test(name) ? 'video'
-    : /^image\//.test(type || '') || /\.(jpe?g|png|webp|gif|avif|bmp|heic|heif)$/i.test(name) ? 'image' : null);
-  // Small files travel as themselves; a big video travels as a file handle when the browser has one (no copy).
-  const SMALL = 300e6, COPY_LIMIT = 2e9;
+    : /^image\//.test(type || '') || /\.(jpe?g|png|webp|gif|avif|bmp|heic|heif|hif)$/i.test(name) ? 'image' : 'other');
+  // what each tool can open
+  const TAKES = {
+    video: ['video'], pdf: ['pdf'], watermark: ['pdf'], avatar: [], crop: ['image'],
+    image: ['image'], exif: ['image', 'raw'], rename: ['image', 'raw', 'video', 'other'], pick: ['image', 'zip'],
+  };
+  const PHOTO_TOOLS = ['pick', 'rename', 'image', 'exif'];
+  const HIDDEN = (n) => n.startsWith('.') || /^(__MACOSX|thumbs\.db|desktop\.ini)$/i.test(n);
 
-  async function route(list) {
-    const items = list.filter((x) => x.file);
-    if (!items.length) return;
-    const kinds = new Set(items.map((x) => kindOf(x.file.name, x.file.type)));
-    if (kinds.has(null)) { say('目前只有影片、圖片和 PDF 的工具，這個檔案還沒辦法處理'); return; }
-    if (kinds.size > 1) { say('影片、圖片和 PDF 要分開處理，請一次放同一種檔案'); return; }
-    const tool = [...kinds][0];
-    drop.classList.add('busy');
-    const entries = [];
-    for (const x of items) {
-      const f = x.file;
-      if (f.size <= SMALL || (!x.handle && f.size <= COPY_LIMIT)) entries.push({ name: f.name, file: f });
-      else if (x.handle) entries.push({ name: f.name, handle: x.handle });
-      else entries.push({ name: f.name });
+  // A drop: everything asked for now (the items are gone once the event is over), folders walked after.
+  // → { tops: [{ name, handle?, dir? }], files: [{ file, path, kind }] }
+  function grab(dt) {
+    const items = [...dt.items].filter((i) => i.kind === 'file');
+    return items.map((i) => ({
+      entry: typeof i.webkitGetAsEntry === 'function' ? i.webkitGetAsEntry() : null,
+      file: i.getAsFile(),
+      handle: typeof i.getAsFileSystemHandle === 'function' ? i.getAsFileSystemHandle().catch(() => null) : null,
+    }));
+  }
+  function walk(entry, out) {
+    return new Promise((done) => {
+      if (HIDDEN(entry.name)) { done(); return; }
+      if (entry.isFile) { entry.file((f) => { out.push({ file: f, path: entry.fullPath.replace(/^\//, ''), kind: kindOf(f.name, f.type) }); done(); }, () => done()); return; }
+      const rd = entry.createReader(), kids = [];
+      const more = () => rd.readEntries(async (got) => {
+        if (got.length) { kids.push(...got); more(); return; }
+        for (let i = 0; i < kids.length; i += 64) await Promise.all(kids.slice(i, i + 64).map((k) => walk(k, out)));
+        done();
+      }, () => done());
+      more();
+    });
+  }
+  async function open(grabbed) {
+    const set = { tops: [], files: [] };
+    for (const g of grabbed) {
+      const handle = g.handle ? await g.handle : null;
+      if (g.entry && g.entry.isDirectory) {
+        set.tops.push({ name: g.entry.name, dir: handle && handle.kind === 'directory' ? handle : null, folder: true });
+        await walk(g.entry, set.files);
+      } else if (g.file && !HIDDEN(g.file.name)) {
+        set.tops.push({ name: g.file.name, handle: handle && handle.kind === 'file' ? handle : null });
+        set.files.push({ file: g.file, path: g.file.name, kind: kindOf(g.file.name, g.file.type) });
+      }
+    }
+    set.kinds = new Set(set.files.map((f) => f.kind));
+    set.folders = set.tops.some((t) => t.folder);
+    set.bytes = set.files.reduce((a, f) => a + f.file.size, 0);
+    set.count = (kinds) => set.files.filter((f) => kinds.includes(f.kind)).length;
+    return set;
+  }
+  const fromPicker = (files) => {
+    const set = { tops: files.map((f) => ({ name: f.name })), files: files.map((f) => ({ file: f, path: f.name, kind: kindOf(f.name, f.type) })) };
+    set.kinds = new Set(set.files.map((f) => f.kind));
+    set.folders = false;
+    set.bytes = files.reduce((a, f) => a + f.size, 0);
+    set.count = (kinds) => set.files.filter((f) => kinds.includes(f.kind)).length;
+    return set;
+  };
+
+  // Handing over. Handles copy nothing (a whole Drive download, a big video); without them the files themselves are
+  // stored for the tool page, which copies them, so that's kept to a sensible size.
+  const COPY_LIMIT = 2e9;
+  async function hand(tool, set) {
+    const takes = TAKES[tool];
+    const useful = set.files.filter((f) => takes.includes(f.kind));
+    const handles = set.tops.length && set.tops.every((t) => t.handle || t.dir);
+    let entries;
+    if ((tool === 'pick' || tool === 'rename') && handles) {
+      entries = set.tops.map((t) => (t.dir ? { name: t.name, dir: t.dir } : { name: t.name, handle: t.handle }));
+    } else if (!set.folders && handles && (set.bytes > 300e6 || tool === 'video')) {
+      entries = set.tops.filter((t, i) => takes.includes(set.files[i].kind)).map((t) => ({ name: t.name, handle: t.handle }));
+    } else if (useful.reduce((a, f) => a + f.file.size, 0) <= COPY_LIMIT) {
+      entries = useful.map((f) => ({ name: f.file.name, file: f.file, path: f.path }));
+    } else {
+      entries = useful.map((f) => ({ name: f.file.name }));   // too much to copy: the tool asks for them again
     }
     try { if (window.ManyHandoff && window.indexedDB) await ManyHandoff.send(tool, entries); } catch {}
     say(`帶你到「${TOOL_NAME[tool]}」…`, 8000);
-    location.href = TOOL_URL[tool];
+    location.href = TOOL_URL[tool][onServer ? 0 : 1];
   }
 
-  drop.addEventListener('dragover', (e) => {
-    e.preventDefault();
-    const it = e.dataTransfer && e.dataTransfer.items && e.dataTransfer.items[0];
-    drop.classList.add('over');
-    drop.classList.toggle('pdf', !!it && /pdf/.test(it.type));
-    drop.classList.toggle('video', !!it && /^video\//.test(it.type));
-    drop.classList.toggle('image', !!it && /^image\//.test(it.type));
+  // where a set of files goes, from the drop area (daily), the viewfinder (photo) or a tool
+  async function route(set, target) {
+    if (!set.files.length) { say('沒有找到檔案'); return; }
+    const k = set.kinds;
+    if (target) {
+      const ok = set.files.some((f) => TAKES[target].includes(f.kind));
+      if (!ok) { say(`「${TOOL_NAME[target]}」不能開這種檔案`); return; }
+      hand(target, set);
+      return;
+    }
+    const photos = set.count(['image', 'raw', 'zip']);
+    if (k.has('video') && k.size === 1) { hand('video', set); return; }
+    if (k.has('pdf') && k.size === 1) { hand('pdf', set); return; }
+    if (photos && photos === set.files.length - set.count(['other'])) {
+      if (side !== 'photo') await turn('photo');
+      ask(set);
+      return;
+    }
+    if (photos && set.folders) { if (side !== 'photo') await turn('photo'); ask(set); return; }
+    say(k.has('other') && k.size === 1 ? '這種檔案還沒有工具可以處理' : '影片、PDF 和照片要分開放，請一次放同一種');
+  }
+
+  // ---------- photos in: which tool ----------
+  const dlg = $('#ask');
+  let asking = null;
+  function ask(set) {
+    const n = set.count(['image', 'raw']), zips = set.count(['zip']), raw = set.count(['raw']);
+    // a ZIP (a Drive download): only 照片挑選 reads it as it is
+    if (zips && !n) { hand('pick', set); return; }
+    asking = set;
+    const can = { pick: n - raw > 0 || zips > 0, rename: true, image: n - raw > 0, exif: n > 0 };
+    let best = n >= 20 || zips ? 'pick' : raw === n ? 'exif' : n <= 3 ? 'exif' : 'image';
+    if (!can[best]) best = PHOTO_TOOLS.find((t) => can[t]);
+    const what = [n ? `${num(n)} 張照片` : '', zips ? `${num(zips)} 個 ZIP` : '', set.folders ? `來自 ${set.tops.filter((t) => t.folder).length} 個資料夾` : ''].filter(Boolean).join('・');
+    $('#askN').textContent = what;
+    for (const b of $$('.opt', dlg)) {
+      b.disabled = !can[b.dataset.tool];
+      b.classList.toggle('best', b.dataset.tool === best);
+    }
+    $('#askWhy').textContent = best === 'pick' ? (zips ? 'ZIP 只有照片挑選可以直接讀' : '這麼多張，通常先挑出要的')
+      : raw === n ? '只有 RAW 檔：可以看參數或改檔名，不能壓縮'
+      : n <= 3 ? '幾張照片：看看參數，或壓到上限內' : '';
+    dlg.showModal();
+    $('.opt.best', dlg).focus();
+  }
+  dlg.addEventListener('click', (e) => {
+    const b = e.target.closest('.opt');
+    if (b && !b.disabled && asking) { const set = asking; asking = null; dlg.close(); hand(b.dataset.tool, set); return; }
+    if (e.target === dlg) dlg.close();   // a click on the backdrop
   });
-  drop.addEventListener('dragleave', (e) => { if (!drop.contains(e.relatedTarget)) drop.classList.remove('over', 'pdf', 'video', 'image'); });
-  // anywhere on the page counts as the drop area
-  window.addEventListener('dragover', (e) => e.preventDefault());
-  window.addEventListener('drop', (e) => {
+  dlg.addEventListener('keydown', (e) => {
+    const i = '1234'.indexOf(e.key);
+    if (i >= 0) { const b = $$('.opt', dlg)[i]; if (b && !b.disabled) b.click(); }
+  });
+  dlg.addEventListener('close', () => { asking = null; });
+
+  // ---------- dropping ----------
+  // over a tool: that tool lights up and says so; anywhere else: the side's own drop area
+  let dragDepth = 0, lit = null;
+  const zone = () => $(side === 'photo' ? '#vf' : '#drop');
+  function light(el) {
+    if (lit === el) return;
+    if (lit) { lit.classList.remove('target'); const tag = $('.drop-tag', lit); if (tag) tag.remove(); }
+    lit = el;
+    if (el) { el.classList.add('target'); el.append(Object.assign(document.createElement('span'), { className: 'drop-tag', textContent: '放開就用這個' })); }
+  }
+  function clearDrag() {
+    dragDepth = 0;
+    light(null);
+    for (const z of $$('.drop, .vf')) z.classList.remove('over', 'pdf', 'video', 'image');
+  }
+  addEventListener('dragenter', (e) => { if (e.dataTransfer && [...e.dataTransfer.types].includes('Files')) dragDepth++; });
+  addEventListener('dragleave', () => { if (--dragDepth <= 0) clearDrag(); });
+  addEventListener('dragover', (e) => {
     e.preventDefault();
-    drop.classList.remove('over', 'pdf', 'video', 'image');
-    if (!e.dataTransfer) return;
-    // Items are only readable during the event, so ask for every handle right now.
-    const pending = [...e.dataTransfer.items].filter((it) => it.kind === 'file').map((it) => ({
-      file: it.getAsFile(),
-      handle: typeof it.getAsFileSystemHandle === 'function' ? it.getAsFileSystemHandle().catch(() => null) : null,
-    }));
-    Promise.all(pending.map(async (x) => ({ file: x.file, handle: x.handle ? await x.handle : null }))).then(route);
+    const tool = e.target.closest && e.target.closest('[data-tool]');
+    light(tool);
+    const z = zone();
+    z.classList.toggle('over', !tool);
+    const it = e.dataTransfer && e.dataTransfer.items && e.dataTransfer.items[0];
+    z.classList.toggle('pdf', !tool && !!it && /pdf/.test(it.type));
+    z.classList.toggle('video', !tool && !!it && /^video\//.test(it.type));
+    z.classList.toggle('image', !tool && !!it && /^image\//.test(it.type));
+  });
+  addEventListener('drop', async (e) => {
+    e.preventDefault();
+    const tool = e.target.closest && e.target.closest('[data-tool]');
+    const target = tool ? tool.dataset.tool : null;
+    clearDrag();
+    if (!e.dataTransfer || moving) return;
+    const grabbed = grab(e.dataTransfer);
+    const z = tool || zone();
+    z.classList.add('busy');
+    try { route(await open(grabbed), target); } finally { z.classList.remove('busy'); }
   });
 
+  // a click or a tap: the file picker (the folder picker too, in Chrome, from the viewfinder)
+  const pick = $('#pick');
   async function choose() {
-    // Chrome/Edge: the picker gives handles, so even a huge clip is handed over without copying it.
     if (typeof window.showOpenFilePicker === 'function') {
       let handles;
       try {
-        handles = await window.showOpenFilePicker({ multiple: true, types: [
-          { description: '影片', accept: { 'video/*': ['.mp4', '.mov', '.m4v', '.mts', '.m2ts', '.ts', '.mkv', '.webm', '.mxf'] } },
-          { description: 'PDF', accept: { 'application/pdf': ['.pdf'] } },
-          { description: '圖片', accept: { 'image/*': ['.jpg', '.jpeg', '.png', '.webp', '.gif', '.avif', '.bmp', '.heic', '.heif'] } },
-          { description: '相機 RAW 檔', accept: { 'image/*': ['.dng', '.cr3', '.cr2', '.nef', '.nrw', '.arw', '.raf', '.orf', '.rw2', '.pef', '.srw', '.3fr', '.iiq'] } },
-        ] });
+        handles = await window.showOpenFilePicker({ multiple: true, id: `zt-${side}`, types: side === 'photo'
+          ? [{ description: '照片', accept: { 'image/*': ['.jpg', '.jpeg', '.png', '.webp', '.heic', '.heif', '.dng', '.cr3', '.cr2', '.nef', '.arw', '.raf', '.orf', '.rw2'] } }, { description: 'ZIP', accept: { 'application/zip': ['.zip'] } }]
+          : [{ description: '影片', accept: { 'video/*': ['.mp4', '.mov', '.m4v', '.mts', '.m2ts', '.ts', '.mkv', '.webm', '.mxf'] } }, { description: 'PDF', accept: { 'application/pdf': ['.pdf'] } }] });
       } catch (e) { if (e && e.name === 'AbortError') return; handles = null; }
-      if (handles) { route(await Promise.all(handles.map(async (h) => ({ file: await h.getFile(), handle: h })))); return; }
+      if (handles) {
+        const files = await Promise.all(handles.map((h) => h.getFile()));
+        const set = fromPicker(files);
+        set.tops = handles.map((h, i) => ({ name: files[i].name, handle: h }));
+        route(set, null);
+        return;
+      }
     }
     pick.click();
   }
-  drop.addEventListener('click', choose);
-  drop.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); choose(); } });
-  pick.addEventListener('change', () => { route([...pick.files].map((file) => ({ file, handle: null }))); pick.value = ''; });
-  // Coming back with the browser's back button shouldn't leave the area stuck on "busy".
-  window.addEventListener('pageshow', () => { drop.classList.remove('busy'); toast.hidden = true; });
+  for (const z of [$('#drop'), $('#vf')]) {
+    z.addEventListener('click', choose);
+    z.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); choose(); } });
+  }
+  pick.addEventListener('change', () => { const fs = [...pick.files]; pick.value = ''; if (fs.length) route(fromPicker(fs), null); });
+
+  // Back brings this page back as it was left
+  addEventListener('pageshow', (e) => {
+    for (const z of $$('.busy')) z.classList.remove('busy');
+    $('#toast').hidden = true;
+    if (e.persisted) clearDrag();
+  });
 })();

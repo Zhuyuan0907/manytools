@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /* ZhuyuanTools static server + the public counters. No dependencies: `node server/server.js`.
    Clean URLs, each tool still in its own folder:
-     /       → home/            /video → videotools/            /pdf → pdftools/local/     /avatar → avatartools/     /image → imagetools/     /crop → croptools/     /watermark → watermarktools/     /exif → exiftools/     /rename → renametools/     /pick → picktools/     /fonts → fonts/     /shared → shared/
+     /       → home/ (its 拍攝 side at /photo)            /video → videotools/            /pdf → pdftools/local/     /avatar → avatartools/     /image → imagetools/     /crop → croptools/     /watermark → watermarktools/     /exif → exiftools/     /rename → renametools/     /pick → picktools/     /fonts → fonts/     /shared → shared/
    A tool's page is served at /video (no trailing slash) with <base href="/video/"> injected, so its relative
    asset paths keep working both here and when the folder is opened straight from disk.
    Counters keep only totals (files, seconds/pages, bytes saved) per tool — never file content:
@@ -168,6 +168,8 @@ function route(req, res, url) {
   let p;
   try { p = decodeURIComponent(url); } catch { return send(res, 400, 'bad path', 'text/plain'); }
   for (const [re, to] of LEGACY) if (re.test(p)) return redirect(res, to);
+  // the home page's 拍攝 side has its own address
+  if (p === '/photo') return serveFile(req, res, path.join(ROOT, 'home', 'index.html'));
   for (const { route: r, dir, tool, immutable } of MOUNTS) {
     if (tool) {
       if (p === r) return serveFile(req, res, path.join(dir, 'index.html'), `${r}/`);
