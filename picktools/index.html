@@ -1,0 +1,242 @@
+<!doctype html>
+<html lang="zh-Hant-TW">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#ffffff">
+<title>ZhuyuanLovePick・照片挑選</title>
+<meta name="description" content="幾千張照片也能快速挑：Google Drive 下載的 ZIP 直接放進來，用鍵盤一張一張看，P 留、X 不要，挑好的存成資料夾或 ZIP。標記會自動記住，下次接著挑。照片只在你的電腦裡處理，不會上傳。">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="ZhuyuanTools">
+<meta property="og:locale" content="zh_TW">
+<meta property="og:title" content="ZhuyuanLovePick・照片挑選">
+<meta property="og:description" content="幾千張照片也能快速挑：Google Drive 下載的 ZIP 直接放進來，用鍵盤一張一張看，P 留、X 不要，挑好的存成資料夾或 ZIP。標記會自動記住，下次接著挑。照片只在你的電腦裡處理，不會上傳。">
+<meta property="og:url" content="https://tools.zhuyuan.tw/pick">
+<meta property="og:image" content="https://tools.zhuyuan.tw/pick/assets/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" href="assets/logo.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/fonts/noto-sans-tc.css">
+<link rel="stylesheet" href="assets/app.css">
+</head>
+<body>
+<div class="app">
+  <header class="top">
+    <a class="brand" id="brand" href="../home/index.html" title="回到 ZhuyuanTools 首頁">
+      <img class="logo" src="assets/logo.svg" alt="" width="44" height="44">
+      <span class="brand-text">
+        <span class="wordmark">Zhuyuan<span class="w-love">Love</span><span class="w-tool">Pick</span></span>
+        <span class="tagline">照片挑選</span>
+      </span>
+    </a>
+    <p class="privacy">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="10" width="16" height="11" rx="2"></rect><path d="M8 10V7a4 4 0 0 1 8 0v3"></path></svg>
+      <span class="privacy-long">照片只在你的電腦裡處理，不會上傳到任何伺服器。</span><span class="privacy-short">不上傳</span>
+    </p>
+  </header>
+
+  <nav class="stepper" aria-label="步驟">
+    <p class="m-step" id="mStep" aria-hidden="true"></p>
+    <ol>
+      <li><button type="button" data-goto="1"><span class="dot">1</span><span class="lbl">放入照片</span></button></li>
+      <li><button type="button" data-goto="2"><span class="dot">2</span><span class="lbl">挑照片</span></button></li>
+      <li><button type="button" data-goto="3"><span class="dot">3</span><span class="lbl">存下來</span></button></li>
+    </ol>
+  </nav>
+
+  <main>
+    <!-- ============ STEP 1 ============ -->
+    <section class="panel" id="step1" aria-labelledby="h1t">
+      <div class="hero" id="hero">
+        <div class="hero-text">
+          <h2 class="hero-title" id="h1t">幾千張照片，<span><em>快速挑好</em></span></h2>
+          <p class="hero-count" id="heroCount" aria-live="polite">免費・免註冊・照片不上傳</p>
+        </div>
+        <div class="hero-art" aria-hidden="true">
+          <svg viewBox="0 0 300 160" width="300" height="160">
+            <g class="ha-pile">
+              <rect x="14" y="30" width="96" height="70" rx="9" class="ha-photo" transform="rotate(-8 62 65)"/>
+              <rect x="22" y="36" width="96" height="70" rx="9" class="ha-photo" transform="rotate(5 70 71)"/>
+              <rect x="18" y="44" width="96" height="70" rx="9" class="ha-photo"/>
+              <circle cx="40" cy="64" r="8" class="ha-sun"/><path d="M26 106l26-30 18 18 12-12 26 24z" class="ha-hill"/>
+              <text x="66" y="140" class="ha-cap">3,214 張</text>
+            </g>
+            <g class="ha-arrow"><path d="M134 74h30"/><path d="M156 64l10 10-10 10"/></g>
+            <g class="ha-out">
+              <rect x="184" y="22" width="52" height="38" rx="6" class="ha-keep"/><path d="M202 41l5 5 9-10" class="ha-tick"/>
+              <rect x="242" y="22" width="52" height="38" rx="6" class="ha-drop"/><path d="M262 35l12 12M274 35l-12 12" class="ha-x"/>
+              <rect x="184" y="68" width="52" height="38" rx="6" class="ha-drop"/><path d="M204 81l12 12M216 81l-12 12" class="ha-x"/>
+              <rect x="242" y="68" width="52" height="38" rx="6" class="ha-keep"/><path d="M260 87l5 5 9-10" class="ha-tick"/>
+              <text x="239" y="140" class="ha-cap ha-cap-ok">留 412 張</text>
+            </g>
+          </svg>
+        </div>
+      </div>
+      <div class="panel-body step1-body">
+        <div class="drop" id="drop" role="button" tabindex="0" aria-label="選擇照片或 ZIP 檔">
+          <input type="file" id="fileInput" multiple accept=".zip,application/zip,image/*,.heic,.heif" tabindex="-1" aria-hidden="true">
+          <input type="file" id="dirInput" webkitdirectory multiple tabindex="-1" aria-hidden="true">
+          <span class="drop-inner">
+            <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"></rect><circle cx="8.5" cy="10" r="1.6"></circle><path d="M21 16l-5-5-8 8"></path></svg>
+            <span class="drop-title"><span class="d-desk">把 ZIP 或資料夾拖進這裡</span><span class="d-mob">選擇照片</span></span>
+            <span class="drop-hint"><span class="d-desk">Google Drive 整包下載的 ZIP 不用解壓・</span>好幾個一起放也可以</span>
+          </span>
+        </div>
+        <p class="pick-more"><button type="button" class="link-btn" id="pickFiles">選 ZIP 或照片檔</button><button type="button" class="link-btn" id="pickDir">選整個資料夾</button></p>
+        <div class="sources" id="sources" hidden>
+          <ul class="src-list" id="srcList"></ul>
+          <p class="src-sum" id="srcSum"></p>
+        </div>
+        <ol class="how" id="how" aria-label="怎麼用">
+          <li><span class="how-no">1</span><b>放入照片</b><span>幾千張、好幾個 ZIP 都行</span></li>
+          <li><span class="how-no">2</span><b>用鍵盤挑</b><span>← → 換張・P 留・X 不要</span></li>
+          <li><span class="how-no">3</span><b>存下挑好的</b><span>存成資料夾或 ZIP</span></li>
+        </ol>
+        <p class="reading" id="reading" hidden><span class="spinner"></span> <span id="readingText">正在打開…</span></p>
+      </div>
+      <div class="panel-foot">
+        <span class="foot-note" id="note1">還沒有放入照片。</span>
+        <button type="button" class="btn primary" id="next1" disabled>開始挑 →</button>
+      </div>
+    </section>
+
+    <!-- ============ STEP 2 ============ -->
+    <section class="panel fill" id="step2" aria-labelledby="h2t" hidden>
+      <div class="step2-body">
+        <div class="viewer" id="viewer">
+          <div class="stage" id="stage" aria-label="照片">
+            <div class="frame" id="frame"></div>
+            <p class="st-flag" id="stFlag" aria-live="polite"></p>
+            <p class="st-zoom" id="stZoom" hidden></p>
+            <p class="st-pop" id="stPop" aria-hidden="true"></p>
+            <button type="button" class="st-nav prev" id="stPrev" aria-label="上一張" tabindex="-1"><svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg></button>
+            <button type="button" class="st-nav next" id="stNext" aria-label="下一張" tabindex="-1"><svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5l7 7-7 7"/></svg></button>
+            <p class="st-empty" id="stEmpty" hidden></p>
+          </div>
+          <div class="grid" id="grid" hidden tabindex="-1" aria-label="照片列表"><div class="grid-in" id="gridIn"></div></div>
+          <div class="strip" id="strip" aria-label="照片列"><div class="strip-in" id="stripIn"></div></div>
+          <p class="st-pos" id="stPos"></p>
+          <div class="st-tools">
+            <button type="button" class="st-btn" id="bZoom" title="放大到 100%（Z 或空白鍵）">100%</button>
+            <button type="button" class="st-btn" id="bGrid" title="一次看很多張（G）"><svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><rect x="3" y="3" width="7.5" height="7.5" rx="1.5"/><rect x="13.5" y="3" width="7.5" height="7.5" rx="1.5"/><rect x="3" y="13.5" width="7.5" height="7.5" rx="1.5"/><rect x="13.5" y="13.5" width="7.5" height="7.5" rx="1.5"/></svg><span>格狀</span></button>
+            <button type="button" class="st-btn" id="bFull" title="全螢幕（F）"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg><span>全螢幕</span></button>
+          </div>
+        </div>
+
+        <aside class="side" id="side">
+          <div class="side-head">
+            <span class="step-no" aria-hidden="true">2</span>
+            <div class="head-text">
+              <h2 id="h2t">挑照片</h2>
+              <p><kbd>←</kbd><kbd>→</kbd> 換張・<kbd>P</kbd> 留・<kbd>X</kbd> 不要</p>
+            </div>
+          </div>
+          <div class="tally" id="tally" role="radiogroup" aria-label="顯示哪些">
+            <button type="button" class="tl" data-f="all" role="radio"><span>全部</span><b id="nAll">0</b></button>
+            <button type="button" class="tl" data-f="none" role="radio"><span>還沒決定</span><b id="nNone">0</b></button>
+            <button type="button" class="tl is-keep" data-f="keep" role="radio"><span>留</span><b id="nKeep">0</b></button>
+            <button type="button" class="tl is-drop" data-f="drop" role="radio"><span>不要</span><b id="nDrop">0</b></button>
+          </div>
+          <div class="done-bar" id="doneBar" title="已經決定的"><i id="doneFill"></i></div>
+          <div class="side-sets">
+            <label class="side-sel" id="folderWrap"><span>資料夾</span><select id="folder"></select></label>
+            <div class="sort-row"><span>順序</span>
+              <div class="seg" role="radiogroup" aria-label="順序">
+                <label><input type="radio" name="sort" value="time" checked><span>拍攝時間</span></label>
+                <label><input type="radio" name="sort" value="folder"><span>資料夾</span></label>
+              </div>
+            </div>
+          </div>
+          <dl class="info" id="info"></dl>
+          <div class="marks">
+            <button type="button" class="mk no" id="bDrop" title="不要（X、↓ 或 Delete）"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>不要<kbd>X</kbd></button>
+            <button type="button" class="mk yes" id="bKeep" title="留（P 或 ↑）"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>留<kbd>P</kbd></button>
+          </div>
+          <div class="side-opts">
+            <label class="tog"><input type="checkbox" id="auto" checked><span class="tog-ui" aria-hidden="true"></span>標完自動跳下一張</label>
+            <button type="button" class="link-btn" id="bKeys">快捷鍵</button>
+          </div>
+          <div class="side-foot">
+            <button type="button" class="btn back" data-goto="1" aria-label="加照片"><span aria-hidden="true">←</span><span class="lbl">加照片</span></button>
+            <button type="button" class="btn primary" id="next2" disabled>存下來 →</button>
+          </div>
+        </aside>
+      </div>
+    </section>
+
+    <!-- ============ STEP 3 ============ -->
+    <section class="panel" id="step3" aria-labelledby="h3t" hidden>
+      <div class="panel-head">
+        <span class="step-no" aria-hidden="true">3</span>
+        <div class="head-text">
+          <h2 id="h3t">存下挑好的照片</h2>
+          <p id="takeLine"></p>
+        </div>
+      </div>
+      <div class="panel-body step3-body">
+        <div class="set-col" id="outSets">
+          <div class="set inline">
+            <span class="set-label" id="lblTake">存哪些</span>
+            <div class="seg" role="radiogroup" aria-labelledby="lblTake">
+              <label><input type="radio" name="take" value="keep" checked><span id="takeKeep">標「留」的</span></label>
+              <label><input type="radio" name="take" value="notdrop"><span id="takeNot">沒標「不要」的</span></label>
+            </div>
+          </div>
+          <div class="set inline">
+            <span class="set-label" id="lblLay">資料夾</span>
+            <div class="seg" role="radiogroup" aria-labelledby="lblLay">
+              <label><input type="radio" name="lay" value="flat" checked><span>全部放一起</span></label>
+              <label><input type="radio" name="lay" value="dirs"><span>照原本的資料夾分</span></label>
+            </div>
+          </div>
+          <p class="help" id="outHelp"></p>
+        </div>
+        <div class="big" id="big" hidden>
+          <p class="big-num"><b id="bigNum">0</b><span id="bigOf"></span></p>
+          <p class="big-what" id="bigWhat"></p>
+          <div class="bar" id="bar"><i id="barFill"></i></div>
+        </div>
+        <ol class="fails" id="fails" hidden></ol>
+        <div class="after" id="after" hidden>
+          <button type="button" class="btn" id="again">再存一次</button>
+          <button type="button" class="btn ghost" data-goto="2"><span aria-hidden="true">←</span> 回去繼續挑</button>
+        </div>
+      </div>
+      <div class="panel-foot">
+        <button type="button" class="btn back" data-goto="2" id="back3" aria-label="回去挑"><span aria-hidden="true">←</span><span class="lbl">回去挑</span></button>
+        <span class="foot-note" id="note3"></span>
+        <button type="button" class="btn ghost" id="goZip" hidden>改成下載 ZIP</button>
+        <button type="button" class="btn primary" id="go" disabled>存下來 →</button>
+      </div>
+    </section>
+  </main>
+</div>
+
+<dialog class="keys" id="keys" aria-labelledby="keysT">
+  <h3 id="keysT">快捷鍵</h3>
+  <dl>
+    <dt><kbd>←</kbd> <kbd>→</kbd></dt><dd>上一張、下一張</dd>
+    <dt><kbd>P</kbd> 或 <kbd>↑</kbd></dt><dd>留</dd>
+    <dt><kbd>X</kbd> 或 <kbd>↓</kbd></dt><dd>不要（<kbd>Delete</kbd> 也可以）</dd>
+    <dt><kbd>U</kbd></dt><dd>取消標記</dd>
+    <dt>加按 <kbd>Shift</kbd></dt><dd>標完不跳下一張</dd>
+    <dt><kbd>Z</kbd> 或空白鍵</dt><dd>放大到 100%，換張也維持放大；再按一次回全圖</dd>
+    <dt><kbd>G</kbd></dt><dd>格狀看很多張，再按一次回大圖</dd>
+    <dt><kbd>Shift</kbd> 點選</dt><dd>格狀裡選一段，一起標</dd>
+    <dt><kbd>F</kbd></dt><dd>全螢幕</dd>
+    <dt><kbd>⌘</kbd> <kbd>Z</kbd></dt><dd>復原（Windows：<kbd>Ctrl</kbd> <kbd>Z</kbd>）</dd>
+  </dl>
+  <p class="help">標記會記在這個瀏覽器裡，下次放入同一批照片會接著挑。</p>
+  <form method="dialog"><button class="btn primary">知道了</button></form>
+</dialog>
+
+<div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+
+<script src="/shared/zip.js"></script>
+<script src="/exif/assets/meta.js"></script>
+<script src="assets/app.js"></script>
+<script src="/shared/mobile-nav.js"></script>
+<script src="/shared/tools-nav.js" data-tool="pick"></script>
+</body>
+</html>

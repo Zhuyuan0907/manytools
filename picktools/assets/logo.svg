@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="ZhuyuanLovePick">
+  <defs>
+    <linearGradient id="zlp-bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#bb62de"/>
+      <stop offset="1" stop-color="#8530ad"/>
+    </linearGradient>
+  </defs>
+  <rect width="64" height="64" rx="15" fill="url(#zlp-bg)"/>
+  <!-- two photos: the one behind set aside, the one in front kept (a heart on it) -->
+  <rect x="9" y="15" width="30" height="24" rx="4" fill="#e7c6f3" transform="rotate(-10 24 27)"/>
+  <rect x="19" y="21" width="36" height="28" rx="4.5" fill="#fff"/>
+  <circle cx="29" cy="30" r="3.4" fill="#ffb21e"/>
+  <path d="M22.5 46l9.5-10.5 6 6 4.5-4.5 9 9z" fill="#c58ade"/>
+  <path transform="translate(42.2 40.6) scale(.5)" d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" fill="#ff5a4e" stroke="#fff" stroke-width="2.4"/>
+</svg>

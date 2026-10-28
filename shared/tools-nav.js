@@ -16,6 +16,7 @@
     ['image', '圖片壓縮', '/image', '../imagetools/index.html', 'photo'],
     ['exif', '照片參數查看', '/exif', '../exiftools/index.html', 'photo'],
     ['rename', '照片批次改檔名', '/rename', '../renametools/index.html', 'photo'],
+    ['pick', '照片挑選', '/pick', '../picktools/index.html', 'photo'],
     ['avatar', 'Gravatar 頭貼查詢', '/avatar', '../avatartools/index.html', 'avatar'],
     ['crop', '頭貼裁切', '/crop', '../croptools/index.html', 'avatar'],
   ];

@@ -3,7 +3,9 @@
    ManyZip.files([{ name, file: File|Blob }], onProgress?) → Promise<Blob>: the same for files of any size and number
    (ZIP64 past 4 GB or 65,535 files). Each file is read once, a piece at a time, for its checksum; the Blob only
    points at the files, so nothing big is held in memory and the browser streams it from disk when it saves.
-   onProgress(bytesDone, bytesAll). Used by the rename tool. */
+   onProgress(bytesDone, bytesAll). Used by the rename tool.
+   An entry can also be { name, raw: { data: Blob, method, crc, size }, lastModified }: a file taken as it is out of
+   another ZIP (its packed bytes, packing method and checksum), so nothing is unpacked or read twice (the pick tool). */
 (() => {
   'use strict';
   const CRC = (() => { const t = new Uint32Array(256); for (let n = 0; n < 256; n++) { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1; t[n] = c >>> 0; } return t; })();
@@ -68,36 +70,38 @@
   const u64 = (dv, at, v) => { dv.setUint32(at, v % 4294967296, true); dv.setUint32(at + 4, Math.floor(v / 4294967296), true); };
   async function zipFiles(list, onProgress) {
     const enc = new TextEncoder(), parts = [], central = [];
-    const all = list.reduce((a, x) => a + x.file.size, 0);
+    const all = list.reduce((a, x) => a + (x.raw ? x.raw.data.size : x.file.size), 0);
     let done = 0, offset = 0, last = 0;
     const tick = (n) => { done += n; const now = Date.now(); if (onProgress && now - last > 120) { last = now; onProgress(done, all); } };
     for (const f of list) {
-      const name = enc.encode(f.name), size = f.file.size, crc = await crcOf(f.file, tick);
-      const t = new Date(f.file.lastModified || Date.now());
+      const raw = f.raw, data = raw ? raw.data : f.file, name = enc.encode(f.name);
+      const size = raw ? raw.size : f.file.size, csize = data.size, method = raw ? raw.method : 0;
+      const crc = raw ? (tick(csize), raw.crc) : await crcOf(f.file, tick);
+      const t = new Date(f.lastModified || (f.file && f.file.lastModified) || Date.now());
       const dosTime = (t.getHours() << 11) | (t.getMinutes() << 5) | (t.getSeconds() >> 1);
       const dosDate = ((Math.max(1980, t.getFullYear()) - 1980) << 9) | ((t.getMonth() + 1) << 5) | t.getDate();
-      const big = size >= BIG, far = offset >= BIG;
+      const big = size >= BIG || csize >= BIG, far = offset >= BIG;
       const local = new DataView(new ArrayBuffer(30 + (big ? 20 : 0)));
-      local.setUint32(0, 0x04034b50, true); local.setUint16(4, big ? 45 : 20, true); local.setUint16(6, 0x0800, true);
+      local.setUint32(0, 0x04034b50, true); local.setUint16(4, big ? 45 : 20, true); local.setUint16(6, 0x0800, true); local.setUint16(8, method, true);
       local.setUint16(10, dosTime, true); local.setUint16(12, dosDate, true); local.setUint32(14, crc, true);
-      local.setUint32(18, big ? BIG : size, true); local.setUint32(22, big ? BIG : size, true); local.setUint16(26, name.length, true);
-      if (big) { local.setUint16(28, 20, true); local.setUint16(30, 1, true); local.setUint16(32, 16, true); u64(local, 34, size); u64(local, 42, size); }
-      parts.push(new Uint8Array(local.buffer, 0, 30), name, big ? new Uint8Array(local.buffer, 30, 20) : null, f.file);
+      local.setUint32(18, big ? BIG : csize, true); local.setUint32(22, big ? BIG : size, true); local.setUint16(26, name.length, true);
+      if (big) { local.setUint16(28, 20, true); local.setUint16(30, 1, true); local.setUint16(32, 16, true); u64(local, 34, size); u64(local, 42, csize); }
+      parts.push(new Uint8Array(local.buffer, 0, 30), name, big ? new Uint8Array(local.buffer, 30, 20) : null, data);
       // the central entry: ZIP64 fields only for what doesn't fit in 32 bits
       const extra = (big ? 16 : 0) + (far ? 8 : 0);
       const c = new DataView(new ArrayBuffer(46 + (extra ? 4 + extra : 0)));
-      c.setUint32(0, 0x02014b50, true); c.setUint16(4, 45, true); c.setUint16(6, big || far ? 45 : 20, true); c.setUint16(8, 0x0800, true);
+      c.setUint32(0, 0x02014b50, true); c.setUint16(4, 45, true); c.setUint16(6, big || far ? 45 : 20, true); c.setUint16(8, 0x0800, true); c.setUint16(10, method, true);
       c.setUint16(12, dosTime, true); c.setUint16(14, dosDate, true); c.setUint32(16, crc, true);
-      c.setUint32(20, big ? BIG : size, true); c.setUint32(24, big ? BIG : size, true); c.setUint16(28, name.length, true);
+      c.setUint32(20, big ? BIG : csize, true); c.setUint32(24, big ? BIG : size, true); c.setUint16(28, name.length, true);
       c.setUint16(30, extra ? 4 + extra : 0, true); c.setUint32(42, far ? BIG : offset, true);
       if (extra) {
         let q = 50;
         c.setUint16(46, 1, true); c.setUint16(48, extra, true);
-        if (big) { u64(c, q, size); u64(c, q + 8, size); q += 16; }
+        if (big) { u64(c, q, size); u64(c, q + 8, csize); q += 16; }
         if (far) u64(c, q, offset);
       }
       central.push(new Uint8Array(c.buffer, 0, 46), name, extra ? new Uint8Array(c.buffer, 46) : null);
-      offset += 30 + name.length + (big ? 20 : 0) + size;
+      offset += 30 + name.length + (big ? 20 : 0) + csize;
     }
     const cdSize = central.reduce((a, x) => a + (x ? x.length : 0), 0), n = list.length;
     const z64 = n >= 0xffff || offset >= BIG || cdSize >= BIG;
