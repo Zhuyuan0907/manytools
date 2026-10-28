@@ -142,13 +142,13 @@
       <div class="lead">
         <div class="lead-text">
           <h1 class="in" style="--i:0"><span>拍完照，</span><span class="soft">剩下的交給這裡。</span></h1>
-          <p class="sub in" style="--i:1"><span>挑選、改名、壓縮、看參數，</span><span>全在你的瀏覽器處理，不會上傳</span></p>
+          <p class="sub in" style="--i:1"><span><span class="desk-tool">挑選、</span>改名、壓縮、看參數，</span><span>全在你的瀏覽器處理，不會上傳</span></p>
           <p class="nums in" style="--i:2" hidden>已處理 <span class="n-c"><b data-stat="photo.files">0</b> 張照片</span></p>
         </div>
         <div class="drop in" style="--i:1" id="dropPhoto" data-zone="photo" role="button" tabindex="0" aria-label="選擇照片，再選要做什麼">
-          <span class="stack" aria-hidden="true"><img src="assets/tool-pick.svg" alt=""><img src="assets/tool-image.svg" alt=""><img src="assets/tool-exif.svg" alt=""></span>
+          <span class="stack" aria-hidden="true"><img class="desk-tool" src="assets/tool-pick.svg" alt=""><img src="assets/tool-image.svg" alt=""><img src="assets/tool-exif.svg" alt=""></span>
           <b class="drop-title"><span class="d-desk">把照片拖進這裡</span><span class="d-mob">選擇照片</span></b>
-          <span class="drop-hint"><span class="d-desk">會問你要做什麼・也可以直接拖到工具卡上</span><span class="d-mob">一次選很多張・ZIP 也可以</span></span>
+          <span class="drop-hint"><span class="d-desk">會問你要做什麼・也可以直接拖到工具卡上</span><span class="d-mob">一次選很多張</span></span>
           <span class="drop-formats">JPG・HEIC・RAW<i class="sep">｜</i>Google Drive 的 ZIP、整個資料夾也行</span>
         </div>
       </div>
@@ -156,7 +156,7 @@
       <nav class="shelf" aria-label="拍攝工具">
         <div class="group g-sort" style="--n:2">
           <h2 class="g-label in" style="--i:2">整理</h2>
-          <a class="tool pick in" style="--i:3" href="/pick" data-local="../picktools/index.html" data-tool="pick">
+          <a class="tool pick in desk-tool" style="--i:3" href="/pick" data-local="../picktools/index.html" data-tool="pick">
             <img class="ico" src="/pick/assets/logo.svg" alt="" width="40" height="40">
             <span class="art" aria-hidden="true">
               <svg viewBox="0 0 300 160">
@@ -222,7 +222,7 @@
   <p class="ask-n" id="askN"></p>
   <h2 id="askT">要做什麼？</h2>
   <div class="ask-opts" id="askOpts">
-    <button type="button" class="opt pick" data-tool="pick"><kbd>1</kbd><b>挑照片</b><span>留下好的，存成資料夾</span></button>
+    <button type="button" class="opt pick desk-tool" data-tool="pick"><kbd>1</kbd><b>挑照片</b><span>留下好的，存成資料夾</span></button>
     <button type="button" class="opt rename" data-tool="rename"><kbd>2</kbd><b>改名稱</b><span>IMG_4678 → 竺原-4678</span></button>
     <button type="button" class="opt image" data-tool="image"><kbd>3</kbd><b>壓縮</b><span>壓到指定大小以內</span></button>
     <button type="button" class="opt exif" data-tool="exif"><kbd>4</kbd><b>看參數</b><span>光圈、快門、ISO、鏡頭</span></button>

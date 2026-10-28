@@ -93,6 +93,17 @@ html[data-world="daily"] #photo, html[data-world="photo"] #daily { display: none
 .on-pad, .on-phone { display: none; }
 @media (hover: none) and (pointer: coarse) and (min-width: 641px) { .on-pc { display: none; } .on-pad { display: inline; } }
 @media (max-width: 640px), (orientation: landscape) and (max-height: 500px) { .on-pc, .on-pad { display: none; } .on-phone { display: inline; } }
+/* 照片挑選 is for a computer (or a tablet): a phone (a finger on a small screen) doesn't get it offered at all */
+@media (pointer: coarse) and (max-width: 640px), (pointer: coarse) and (orientation: landscape) and (max-height: 500px) {
+  .desk-tool { display: none !important; }
+  .stack .desk-tool + img { display: block !important; }
+}
+/* the drop area's icons without 照片挑選's: 圖片壓縮 and 照片參數 overlap as the pair did */
+@media (pointer: coarse) and (max-width: 640px) {
+  .stack .desk-tool + img { margin-left: 0 !important; transform: rotate(-6deg) !important; }
+  .stack .desk-tool + img + img { display: block !important; margin-left: -16px; transform: rotate(8deg) !important; }
+}
+@media (pointer: coarse) and (orientation: landscape) and (max-height: 500px) { .stack .desk-tool + img { transform: none !important; } }
 
 /* the drop area (wide screens: the same height on both sides, so the headline stays put when switching) */
 @media (min-width: 1101px) { .drop { min-height: clamp(170px, 30vh, 290px); } }

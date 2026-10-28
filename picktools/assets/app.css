@@ -343,6 +343,16 @@ main { min-height: 0; display: flex; flex-direction: column; }
 .ha-x { fill: none; stroke: #c9b8d3; stroke-width: 3; stroke-linecap: round; }
 .ha-arrow path { fill: none; stroke: var(--accent); stroke-width: 4; stroke-linecap: round; stroke-linejoin: round; }
 
+/* a phone: only the note */
+.is-phone .stepper, .is-phone main > .panel:not(.phone-note) { display: none !important; }
+.phone-note { display: grid; justify-items: center; align-content: center; gap: 12px; padding: 32px 24px; text-align: center; }
+.phone-note img { border-radius: 16px; box-shadow: 0 8px 20px color-mix(in srgb, var(--accent) 28%, transparent); margin-bottom: 4px; }
+.phone-note h2 { font-size: 1.35rem; }
+.phone-note p { color: var(--ink-2); max-width: 22em; }
+.pn-url { display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 4px 10px; padding: 10px 16px; border-radius: 12px; background: var(--accent-soft); }
+.pn-url b { color: var(--accent-strong); font-family: var(--mono); font-size: .95rem; }
+.phone-note .btn { margin-top: 6px; height: 46px; padding: 0 22px; }
+
 /* keyboard keys, in text */
 kbd { display: inline-block; min-width: 1.6em; padding: 0 5px; border-radius: 5px; border: 1px solid var(--line-strong); border-bottom-width: 2px; background: var(--surface); color: var(--ink-2); font: 600 .74rem/1.5 var(--mono); text-align: center; vertical-align: 1px; }
 

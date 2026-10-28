@@ -29,6 +29,16 @@
   const fmtBytes = (b) => (b >= 1e9 ? `${(b / 1e9).toFixed(1)} GB` : b >= 1e6 ? `${(b / 1e6).toFixed(1)} MB` : `${Math.max(1, Math.round(b / 1e3))} KB`);
   const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
   const PHONE = matchMedia('(max-width: 640px), (pointer: coarse) and (max-width: 900px)').matches;
+  // a phone (a finger on a small screen, as the home page tells): not offered this tool, only told to use a computer
+  if (matchMedia('(pointer: coarse) and (max-width: 640px), (pointer: coarse) and (orientation: landscape) and (max-height: 500px)').matches) {
+    document.body.classList.add('is-phone');
+    $('#phoneNote').hidden = false;
+    $('#pnBack').href = onServer ? '/photo' : '../home/index.html';
+    $('#pnCopy').addEventListener('click', () => {
+      const url = 'https://tools.zhuyuan.tw/pick';
+      (navigator.clipboard ? navigator.clipboard.writeText(url) : Promise.reject()).then(() => toast('網址複製好了'), () => toast(url));
+    });
+  }
   // Safari (and every browser on an iPhone) shows HEIC itself; elsewhere the photo tool's libheif worker turns it into a picture
   const WEBKIT = /AppleWebKit/.test(navigator.userAgent) && !/Chrome\/|Chromium\/|Android/.test(navigator.userAgent);
   // saving straight into a folder: Chrome and Edge on a computer

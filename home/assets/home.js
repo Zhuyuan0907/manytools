@@ -291,13 +291,15 @@
   // ---------- photos in: which tool ----------
   const dlg = $('#ask');
   let asking = null;
+  // 照片挑選 is for a computer: a phone isn't offered it (the CSS hides it the same way)
+  const PHONE = matchMedia('(pointer: coarse) and (max-width: 640px), (pointer: coarse) and (orientation: landscape) and (max-height: 500px)');
   function ask(set) {
-    const n = set.count(['image', 'raw']), zips = set.count(['zip']), raw = set.count(['raw']);
+    const n = set.count(['image', 'raw']), zips = set.count(['zip']), raw = set.count(['raw']), phone = PHONE.matches;
     // a ZIP (a Drive download): only 照片挑選 reads it as it is
-    if (zips && !n) { hand('pick', set); return; }
+    if (zips && !n) { if (phone) say('ZIP 要用電腦開「照片挑選」，手機請選照片'); else hand('pick', set); return; }
     asking = set;
-    const can = { pick: n - raw > 0 || zips > 0, rename: true, image: n - raw > 0, exif: n > 0 };
-    let best = n >= 20 || zips ? 'pick' : raw === n ? 'exif' : n <= 3 ? 'exif' : 'image';
+    const can = { pick: !phone && (n - raw > 0 || zips > 0), rename: true, image: n - raw > 0, exif: n > 0 };
+    let best = !phone && (n >= 20 || zips) ? 'pick' : raw === n ? 'exif' : n <= 3 ? 'exif' : 'image';
     if (!can[best]) best = PHOTO_TOOLS.find((t) => can[t]);
     const what = [n ? `${num(n)} 張照片` : '', zips ? `${num(zips)} 個 ZIP` : '', set.folders ? `來自 ${set.tops.filter((t) => t.folder).length} 個資料夾` : ''].filter(Boolean).join('・');
     $('#askN').textContent = what;
