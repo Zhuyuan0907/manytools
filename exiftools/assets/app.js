@@ -1162,7 +1162,39 @@
   const views = new Map(); // id → { img, ow, oh }: picture at screen size, size it was decoded from
   let fullRes = null; // { id, img } the one zoomed into
   const sizeOf = (img) => [img.naturalWidth || img.width, img.naturalHeight || img.height];
-  const release = (img) => { if (!img) return; if (img.close) img.close(); else if (img.getContext) { img.width = 0; img.height = 0; } };
+  const release = (img) => {
+    if (!img) return;
+    const p = pyramids.get(img);
+    if (p) { pyramids.delete(img); for (const l of p.slice(1)) l.close(); }
+    if (img.close) img.close(); else if (img.getContext) { img.width = 0; img.height = 0; }
+  };
+  // a picture at ½, ¼ … down to 600 px (made once, by assets/halve.js off the page, from the picture's file): a frame
+  // while zooming draws from the one at most twice its size on screen with the plain fast scaling, which then looks
+  // as good as the finest — the finest scaling of a 24-megapixel picture every frame is what made zooming stutter.
+  // A HEIC (decoded by libheif, no file a worker could read) goes without.
+  const pyramids = new WeakMap(), sourceOf = new WeakMap();
+  let halver = null, halveSeq = 0;
+  const halving = new Map();
+  function pyramid(img) {
+    let p = pyramids.get(img);
+    if (p) return p;
+    p = [img];
+    pyramids.set(img, p);
+    const blob = sourceOf.get(img), [w, h] = sizeOf(img);
+    if (!blob || Math.max(w, h) < 1200) return p;
+    (async () => {
+      try {
+        if (!halver) {
+          halver = new Worker('assets/halve.js');
+          halver.onmessage = ({ data: d }) => { const done = halving.get(d.id); halving.delete(d.id); if (done) done(d.levels); };
+        }
+        const id = ++halveSeq;
+        const levels = await new Promise((resolve) => { halving.set(id, resolve); halver.postMessage({ id, blob, w, h }); });
+        if (pyramids.get(img) === p) p.push(...levels); else for (const l of levels) l.close();   // let go of meanwhile
+      } catch { /* no halvings: the finest scaling, as before */ }
+    })();
+    return p;
+  }
   function orientOf(it) {
     if (!it.pv || it.pv.orient) return 1; // a file the browser shows itself, or a preview with its own EXIF: the browser turns it
     const o = num(it, 'Orientation', { groups: ['IFD0', '*maker', 'XMP-tiff'] });
@@ -1184,6 +1216,7 @@
     }
     if (!img && blob instanceof File && HEIC.test(blob.name)) return heicDecode(blob, maxSide, p3);
     if (!img) return null;
+    if (!WEBKIT) sourceOf.set(img, blob);   // see pyramid
     const [ow, oh] = sizeOf(img);
     if (WEBKIT && img instanceof HTMLImageElement) {
       const k = maxSide ? Math.min(1, maxSide / Math.max(ow, oh)) : 1;
@@ -1208,6 +1241,7 @@
       c.drawImage(img, 0, 0, w, h);
     }
     release(img);
+    if (!WEBKIT) sourceOf.set(small, blob);
     return { img: small, ow, oh };
   }
   // HEIC where the browser has no decoder (Chrome, Edge, Firefox): libheif as WebAssembly in a worker of its own
@@ -1295,8 +1329,10 @@
   // One for the stage, one for the full-screen view; the same photo, its own zoom.
   // The zoom (zoomed, s, cx, cy) says where the picture should be; what is on screen (L.view: scale and top-left
   // corner) glides there like Lightroom's: a zoom about one fixed screen point (the clicked spot stays under the
-  // pointer while the picture grows), easing out. Dragging and pinching follow the fingers at once.
-  const ZOOM_MS = 260, WHEEL_MS = 150;
+  // pointer while the picture grows). Every frame closes the same share of what is left (τ ms; there in about 3τ),
+  // so a wheel turned fast just moves the goal further and the motion stays even, with no new start per notch.
+  // Dragging and pinching follow the fingers at once.
+  const ZOOM_TAU = 70, WHEEL_TAU = 55;
   const CALM = matchMedia('(prefers-reduced-motion: reduce)');
   function makeLoupe(box, cv, bar) {
     const L = { it: null, v: null, o: 1, iw: 0, ih: 0, zoomed: false, s: 0, cx: 0, cy: 0, ox: 0, oy: 0, fitS: 1, pad: 8, view: null, anim: null };
@@ -1334,14 +1370,18 @@
       const need = s * D * Math.max(L.iw, L.ih) > Math.max(...sizeOf(L.v.img)) * 1.05;
       const hi = need && fullRes && fullRes.id === L.it.id ? fullRes.img : null;
       if (need && !hi) loadFull(L.it);
+      // moving: the smallest of its halvings still at least as big as on screen, plain scaling; still: the finest
+      let pic = hi || L.v.img;
+      const lv = L.anim ? pyramid(pic) : null;
+      if (lv) for (const l of lv) if (Math.max(...sizeOf(l)) >= Math.max(dw, dh) * D) pic = l;
       ctx.imageSmoothingEnabled = true;
-      ctx.imageSmoothingQuality = 'high';
+      ctx.imageSmoothingQuality = !lv ? 'high' : lv.length > 1 || Math.max(...sizeOf(pic)) <= 2 * Math.max(dw, dh) * D ? 'low' : 'medium';
       ctx.save();
       ctx.translate(Math.round(ox * D), Math.round(oy * D));
       // the drop shadow of a picture that fits fades as it grows past twice that
       const shade = clamp(2 - s / L.fitS, 0, 1);
       if (shade > 0) { ctx.shadowColor = `rgba(0, 0, 0, ${(0.38 * shade).toFixed(3)})`; ctx.shadowBlur = 22 * D; ctx.shadowOffsetY = 5 * D; }
-      drawOriented(ctx, hi || L.v.img, L.o, Math.round(dw * D), Math.round(dh * D));
+      drawOriented(ctx, pic, L.o, Math.round(dw * D), Math.round(dh * D));
       ctx.restore();
     }
     L.paint = () => {
@@ -1362,30 +1402,39 @@
       draw();
       showZoom();
     };
-    // glide from what is on screen to where the zoom says, in ms
-    L.glide = (ms) => {
+    // glide from what is on screen to where the zoom says (tau: see ZOOM_TAU; 0: at once)
+    L.glide = (tau) => {
       if (!L.v || !box.clientWidth) return;
       const to = layout();
       box.classList.toggle('zoomed', L.zoomed);
       showZoom();
-      if (!L.view || !ms || CALM.matches) { L.stop(); L.view = to; draw(); return; }
-      L.anim = { from: { ...L.view }, to, t0: performance.now(), ms };
+      // headed past what the screen-size picture holds: start on the full one now, not halfway there
+      if (to.s * DPR() * Math.max(L.iw, L.ih) > Math.max(...sizeOf(L.v.img)) * 1.05 && !(fullRes && fullRes.id === L.it.id)) loadFull(L.it);
+      if (!L.view || !tau || CALM.matches) { L.stop(); L.view = to; draw(); return; }
+      L.anim = { to, tau, last: L.anim ? L.anim.last : 0 };
       if (!L.araf) L.araf = requestAnimationFrame(step);
     };
     function step(now) {
       L.araf = 0;
       const a = L.anim;
       if (!a || !L.v) return;
-      const t = clamp((now - a.t0) / a.ms, 0, 1), e = 1 - (1 - t) ** 3;   // a frame's time can be a little before the click
-      const { from, to } = a, r = to.s / from.s;
-      if (Math.abs(r - 1) < 1e-4) L.view = { s: to.s, ox: from.ox + (to.ox - from.ox) * e, oy: from.oy + (to.oy - from.oy) * e };
-      else {
-        // the one screen point the zoom leaves where it is; the scale moves evenly on a log scale
-        const fx = (to.ox - from.ox * r) / (1 - r), fy = (to.oy - from.oy * r) / (1 - r);
-        const s = from.s * r ** e, k = s / from.s;
-        L.view = { s, ox: fx - (fx - from.ox) * k, oy: fy - (fy - from.oy) * k };
+      const dt = a.last ? clamp(now - a.last, 0, 64) : 16;
+      a.last = now;
+      const k = 1 - Math.exp(-dt / a.tau), f = dt / 16;
+      const v = L.view, to = a.to, r = to.s / v.s, lr = Math.log(r);
+      if (Math.abs(r - 1) < 1e-4) {
+        // a move only; the last pixels at a steady pace, not ever smaller steps
+        const d = Math.hypot(to.ox - v.ox, to.oy - v.oy), q = d ? Math.min(1, Math.max(d * k, 1.5 * f) / d) : 1;
+        L.view = q >= 1 ? { ...to } : { s: to.s, ox: v.ox + (to.ox - v.ox) * q, oy: v.oy + (to.oy - v.oy) * q };
+      } else {
+        // the one screen point the zoom leaves where it is (the same every frame while the goal stays); the scale
+        // moves evenly on a log scale, the last 5 % or so at a steady pace so it lands instead of creeping
+        const q = Math.min(1, Math.max(Math.abs(lr) * k, 0.012 * f) / Math.abs(lr));
+        const fx = (to.ox - v.ox * r) / (1 - r), fy = (to.oy - v.oy * r) / (1 - r);
+        const s = v.s * r ** q, m = s / v.s;
+        L.view = q >= 1 ? { ...to } : { s, ox: fx - (fx - v.ox) * m, oy: fy - (fy - v.oy) * m };
       }
-      if (t >= 1) { L.view = { ...to }; L.anim = null; }
+      if (L.view === to || (L.view.s === to.s && L.view.ox === to.ox && L.view.oy === to.oy)) L.anim = null;
       draw();
       if (L.anim) L.araf = requestAnimationFrame(step);
     }
@@ -1407,19 +1456,19 @@
       $('.z-fit', bar).classList.toggle('on', !L.zoomed);
       $('.z-100', bar).classList.toggle('on', L.zoomed && Math.abs(L.percent() - 100) < 1);
     }
-    // zoom to scale s keeping the picture point under (x, y) — box coordinates — where it is on screen; in ms
-    L.zoomAt = (s, x = box.clientWidth / 2, y = box.clientHeight / 2, ms = ZOOM_MS) => {
+    // zoom to scale s keeping the picture point under (x, y) — box coordinates — where it is on screen
+    L.zoomAt = (s, x = box.clientWidth / 2, y = box.clientHeight / 2, tau = ZOOM_TAU) => {
       if (!L.v) return;
       const cur = L.view || { s: L.zoomed ? L.s : L.fitS, ox: L.ox, oy: L.oy };
       const px = (x - cur.ox) / cur.s, py = (y - cur.oy) / cur.s;
       const ns = clamp(s, L.fitS, Math.max(L.fitS, L.max()));
-      if (ns <= L.fitS * 1.001) { L.zoomed = false; dropFull(); L.glide(ms); return; }
+      if (ns <= L.fitS * 1.001) { L.zoomed = false; dropFullLater(); L.glide(tau); return; }
       L.zoomed = true;
       L.s = ns;
       if (!zoomHinted) { zoomHinted = true; try { localStorage.setItem('exif-zoomed', '1'); } catch {} }
       L.cx = px - (x - box.clientWidth / 2) / ns;
       L.cy = py - (y - box.clientHeight / 2) / ns;
-      L.glide(ms);
+      L.glide(tau);
     };
     // a click: fit ↔ 100 % (a picture smaller than the screen: twice its fit)
     L.toggle = (x, y) => {
@@ -1431,7 +1480,9 @@
     let down = null, pinch = null, lastTap = 0;
     const local = (e) => { const r = box.getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top]; };
     box.addEventListener('pointerdown', (e) => {
-      if (!L.v || e.button > 0) return;
+      // the buttons on the picture (全圖, 100%, 全螢幕) are theirs: before, a press on one was taken as a click on the
+      // picture (the pointer captured), so 全螢幕 zoomed to 100 % and 全圖 zoomed in from fit
+      if (!L.v || e.button > 0 || e.target.closest('button, .zoom-bar')) return;
       L.stop();   // a glide still going ends where it was headed, and the drag starts from there
       try { box.setPointerCapture(e.pointerId); } catch {}
       pts.set(e.pointerId, local(e));
@@ -1488,7 +1539,7 @@
       const k = Math.exp(-e.deltaY * (e.ctrlKey ? 0.012 : 0.0018));
       const notch = !e.ctrlKey && e.deltaMode === 0 && Math.abs(e.deltaY) >= 50;
       const base = L.anim ? L.anim.to.s : L.view ? L.view.s : (L.zoomed ? L.s : L.fitS);
-      L.zoomAt(base * k, x, y, notch || e.deltaMode ? WHEEL_MS : 0);
+      L.zoomAt(base * k, x, y, notch || e.deltaMode ? WHEEL_TAU : 0);
     }, { passive: false });
     if (bar) {
       $('.z-fit', bar).addEventListener('click', () => L.fit());
@@ -1506,14 +1557,18 @@
     const f = await decodeBlob(it.fk ? await bigOf(it) : blobOf(it), FULL_MAX, isP3(it));
     fullLoading = 0;
     if (!f) return;
-    // still wanted?
-    const on = [stageLoupe, fullLoupe].some((L) => L.it === it && L.zoomed);
+    // still on screen? (zoomed back out meanwhile: kept a while, like any full picture)
+    const on = [stageLoupe, fullLoupe].some((L) => L.it === it);
     if (!on) { release(f.img); return; }
-    dropFull();
+    if (fullRes) { release(fullRes.img); fullRes = null; }
     fullRes = { id: it.id, img: f.img };
+    if (![stageLoupe, fullLoupe].some((L) => L.it === it && L.zoomed)) dropFullLater();
     stageLoupe.paint();
     if (!$('#full').hidden) fullLoupe.paint();
   }
+  // back to fit: the full picture stays a while (zooming in again, often right away, needs no new decode)
+  let fullTimer = 0;
+  function dropFullLater() { clearTimeout(fullTimer); fullTimer = setTimeout(dropFull, SMALL_DEVICE ? 4000 : 20000); }
   function dropFull() {
     if (!fullRes) return;
     if ([stageLoupe, fullLoupe].some((L) => L && L.it && L.it.id === fullRes.id && L.zoomed)) return;
@@ -1562,13 +1617,18 @@
   }
 
   // ---------- full screen ----------
+  // The whole photo as big as the screen goes, on black (Lightroom's F): the browser's own full screen where it has
+  // one (not iPhone: there the page's own view, which fills the window anyway). 100 % is for the pixels.
   function openFull() {
     const it = cur();
     if (!it || !it.done || it.noPicture) return;
     $('#full').hidden = false;
     document.documentElement.classList.add('full-open');
+    if (document.fullscreenEnabled && !document.fullscreenElement) $('#full').requestFullscreen().catch(() => {});
     showFull();
   }
+  // Esc in the browser's full screen is the browser's: it leaves full screen, and the view closes with it
+  document.addEventListener('fullscreenchange', () => { if (!document.fullscreenElement && !$('#full').hidden) closeFull(); });
   async function showFull() {
     const it = cur();
     if ($('#full').hidden || !it) return;
@@ -1580,6 +1640,7 @@
     if (it === cur()) fullLoupe.set(it, v);
   }
   function closeFull() {
+    if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
     $('#full').hidden = true;
     document.documentElement.classList.remove('full-open');
     fullLoupe.set(null, null);

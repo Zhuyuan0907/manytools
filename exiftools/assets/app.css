@@ -141,7 +141,7 @@ main { min-height: 0; display: flex; flex-direction: column; }
 .zoom-bar button.on { background: rgba(255, 255, 255, .2); color: #fff; }
 .z-pct { padding: 0 6px; font-variant-numeric: tabular-nums; color: #ffd27a; font-weight: 700; }
 .z-hint { padding: 0 8px 0 10px; color: #e9ebee; }
-.z-full-t { display: none; }
+.zoom-bar .z-full { display: inline-flex; align-items: center; gap: 5px; }
 .z-pct:empty { display: none; }
 .stage-msg { display: grid; gap: 4px; justify-items: center; text-align: center; color: #c9ced6; font-size: .9rem; padding: 0 24px; max-width: 360px; }
 .stage-msg b { color: #fff; font-size: 1rem; }
