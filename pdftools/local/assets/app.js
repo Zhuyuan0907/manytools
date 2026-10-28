@@ -15,8 +15,9 @@
   const state = {
     step: 1,
     sources: [],                 // { id, file, name, status, error, pdf, numPages, password, offset, draft, wrong, perms }
-    splitMode: 'single',
+    splitMode: 'single',         // 'single' | 'split' | 'direct' (no compression, for taking passwords off)
     modeChosen: false,           // has the student picked one/many files in step 2 yet
+    directEach: true,            // 直接輸出 with several files: each on its own (else merged)
     parts: [],                   // split editor: output files { id, name, custom, text (page ranges) }
     project: null,
     total: 0,
@@ -224,7 +225,7 @@
     if (step === 1) return true;
     const srcOk = state.sources.length > 0 && state.sources.every((s) => s.status === 'ready');
     if (step === 2) return srcOk && libsOk;
-    if (step === 3) return canReach(2) && outputsPlan().length > 0;
+    if (step === 3) return canReach(2) && outputsPlan().length > 0 && state.splitMode !== 'direct';
     if (step === 4) return canReach(2) && !!state.run;
     return false;
   }
@@ -260,7 +261,7 @@
     if (b && !b.disabled) go(+b.dataset.goto);
   });
   $('#next1').addEventListener('click', () => go(2));
-  $('#next2').addEventListener('click', () => go(3));
+  $('#next2').addEventListener('click', () => (state.splitMode === 'direct' ? startRun() : go(3)));
 
   // ======================= step 2: one file or several =======================
   // The split editor keeps one list of output files ("parts"), each with a name and its pages.
@@ -324,7 +325,13 @@
   function outputsPlan() {
     if (!state.total) return [];
     let plan;
-    if (state.splitMode === 'single') {
+    if (state.splitMode === 'direct' && state.directEach) {
+      // each file as itself, under its own name
+      plan = state.project.sources.map((src) => ({
+        title: stripPdf(src.name), filename: /\.pdf$/i.test(src.name) ? src.name : src.name + '.pdf', label: `全部 ${src.numPages} 頁`,
+        pages: Array.from({ length: src.numPages }, (_, k) => src.offset + k), src,
+      }));
+    } else if (state.splitMode !== 'split') {
       const name = state.project.sources.length > 1 ? '備審資料_合併' : `${baseName()}_壓縮`;
       plan = [{ title: baseName(), filename: name + '.pdf', pages: allPages(), label: `全部 ${state.total} 頁` }];
     } else {
@@ -342,17 +349,27 @@
     return plan;
   }
 
-  // Step 2 opens as two big choices. "多份檔案" opens the split editor, which has its own "返回".
+  // Step 2 opens as two big choices, three when a file had a password or protection. "多份檔案" opens the split
+  // editor and "直接輸出" its two questions, each with its own "返回".
   function renderStep2() {
-    const split = state.splitMode === 'split';
+    const canDirect = state.project.sources.some((s) => s.password || s.perms);
+    if (!canDirect && state.splitMode === 'direct') state.splitMode = 'single';
+    const split = state.splitMode === 'split', direct = state.splitMode === 'direct';
     const panel = $('#step2');
     panel.classList.toggle('fill', split);
     panel.classList.toggle('editing', split);
-    $('#pickMode').hidden = split;
+    $('#h2sub').textContent = canDirect ? '分項上傳選「多份檔案」，只要拿掉密碼選「直接輸出」' : '學校要求分項上傳時，選「多份檔案」。';
+    $('#pickMode').hidden = split || direct;
+    $('#pickMode').classList.toggle('three', canDirect);
+    $('#chooseDirect').hidden = !canDirect;
     $('#splitArea').hidden = !split;
-    $('#next2').hidden = !split;
-    $('#chooseSingle').classList.toggle('selected', !split && state.modeChosen);
+    $('#directArea').hidden = !direct;
+    $('#next2').hidden = !split && !direct;
+    $('#next2').textContent = direct ? '直接輸出 →' : '下一步：壓縮設定 →';
+    $('#chooseSingle').classList.toggle('selected', state.splitMode === 'single' && state.modeChosen);
     $('#chooseSplit').classList.toggle('selected', split);
+    $('#chooseDirect').classList.toggle('selected', direct);
+    if (direct) renderDirect();
     if (split) {
       if (!state.parts.length) state.parts = [newPart(allPages())];
       $('#byFile').hidden = state.project.sources.length < 2;
@@ -364,15 +381,45 @@
   $('#chooseSingle').addEventListener('click', () => { state.splitMode = 'single'; state.modeChosen = true; renderStep2(); go(3); });
   $('#chooseSplit').addEventListener('click', () => { state.splitMode = 'split'; state.modeChosen = true; renderStep2(); });
   $('#backToSingle').addEventListener('click', () => { state.splitMode = 'single'; renderStep2(); $('#chooseSingle').focus(); });
+  $('#chooseDirect').addEventListener('click', () => { state.splitMode = 'direct'; state.modeChosen = true; renderStep2(); });
+  $('#backFromDirect').addEventListener('click', () => { state.splitMode = 'single'; renderStep2(); $('#chooseDirect').focus(); });
+
+  // 直接輸出: no compression and two questions (several files apart or merged; the output with no password or a
+  // new one), then the files that will come out. The password is the same setting as step 3's.
+  function renderDirect() {
+    const srcs = state.project.sources;
+    $('#dEachSet').hidden = srcs.length < 2;
+    $('#lblEach').textContent = `這 ${srcs.length} 個檔案要`;
+    $(`input[name="dEach"][value="${state.directEach ? 'each' : 'merge'}"]`).checked = true;
+    $(`input[name="dPw"][value="${S.lockOut ? 'new' : 'none'}"]`).checked = true;
+    $('#dPwSet').hidden = !S.lockOut;
+    if (document.activeElement !== $('#dPw')) $('#dPw').value = S.outPw;
+    syncPwHelp();
+    const what = (src) => (S.lockOut ? (src.password ? '換成新密碼' : '加上新密碼')
+      : src.password ? '拿掉密碼' : src.perms ? '拿掉保護' : '本來就沒有密碼，不會變');
+    $('#directOut').replaceChildren(...outputsPlan().map((p) => el('li', {},
+      el('b', { class: 'do-name', title: p.filename, text: p.filename }),
+      el('span', { class: 'do-meta', text: `${p.label}・${p.src ? what(p.src) : S.lockOut ? '加上新密碼' : '沒有密碼'}` }))));
+  }
+  $('#directArea').addEventListener('change', (ev) => {
+    const t = ev.target;
+    if (t.name === 'dEach') state.directEach = t.value === 'each';
+    else if (t.name === 'dPw') { S.lockOut = t.value === 'new'; if (S.lockOut) setTimeout(() => $('#dPw').focus(), 0); }
+    else return;
+    renderDirect();
+    updateStep2Footer();
+  });
+  $('#dPw').addEventListener('input', (ev) => { S.outPw = ev.target.value; renderDirect(); updateStep2Footer(); });
 
   function updateStep2Footer() {
     const n = outputsPlan().length;
     $('#secCount').textContent = String(state.parts.length);
     $('#mSecCount').textContent = String(state.parts.length);
     const bad = state.splitMode === 'split' && sections().some((s) => s.error);
-    $('#note2').textContent = state.splitMode === 'split'
-      ? (bad ? '有頁碼需要修正' : `將輸出 ${n} 個檔案`) : '點一下就會進到下一步';
-    $('#next2').disabled = !n || bad;
+    const needPw = state.splitMode === 'direct' && S.lockOut && !outPassword();
+    $('#note2').textContent = state.splitMode === 'direct' ? (needPw ? '請輸入要設定的密碼' : `將輸出 ${n} 個 PDF・不壓縮`)
+      : state.splitMode === 'split' ? (bad ? '有頁碼需要修正' : `將輸出 ${n} 個檔案`) : '點一下就會進到下一步';
+    $('#next2').disabled = !n || bad || needPw;
     renderStepper();
   }
 
@@ -627,7 +674,9 @@
   };
   // the password as the PDF standard has it (full-width ＡＢＣ１２３ becomes ABC123): what every reader accepts
   const outPassword = () => (S.lockOut ? S.outPw.normalize('NFKC') : '');
-  const snapshot = () => ({ targetMB: targetMB(), mode: S.mode, format: S.format, dpi: S.dpi, quality: S.quality, colors: S.colors, gray: S.gray, keepOriginal: S.keepOriginal, password: outPassword() });
+  const snapshot = () => (state.splitMode === 'direct'
+    ? { targetMB: Infinity, mode: 'auto', format: 'jpeg', dpi: S.dpi, quality: S.quality, colors: S.colors, gray: false, keepOriginal: true, password: outPassword(), direct: true }
+    : { targetMB: targetMB(), mode: S.mode, format: S.format, dpi: S.dpi, quality: S.quality, colors: S.colors, gray: S.gray, keepOriginal: S.keepOriginal, password: outPassword() });
 
   // Coloured part of a slider track (WebKit has no ::range-progress).
   const fill = (r) => r.style.setProperty('--fill', `${((r.value - r.min) / (r.max - r.min)) * 100}%`);
@@ -659,6 +708,7 @@
     $('#targetHelp').textContent = none ? '頁面原封不動：只拿掉密碼、合併或拆分' : '保守計算，上傳系統一定收得下。';
     $('#lockOut').checked = S.lockOut;
     $('#pwSet').hidden = !S.lockOut;
+    if (document.activeElement !== $('#outPw')) $('#outPw').value = S.outPw;
     syncPwHelp();
     const manual = S.mode === 'manual';
     $('#rowDpi').hidden = !manual;
@@ -689,20 +739,25 @@
   $('#customMB').addEventListener('input', (ev) => { S.customMB = parseFloat(ev.target.value); Core.store.set('customMB', ev.target.value); renderPlan(); });
   // the password to set is shown while typed (forgetting it locks the person out), hidden on request
   $('#outPw').addEventListener('input', (ev) => { S.outPw = ev.target.value; syncPwHelp(); renderPlan(); });
-  let showOutPw = true;
-  function syncOutEye() {
-    const b = $('#outPwEye');
-    b.setAttribute('aria-pressed', String(showOutPw)); b.title = showOutPw ? '隱藏密碼' : '顯示密碼'; b.innerHTML = showOutPw ? EYE_OFF : EYE;
-    $('#outPw').type = showOutPw ? 'text' : 'password';
+  function pairEye(input, button) {
+    let shown = true;
+    const sync = () => {
+      input.type = shown ? 'text' : 'password';
+      button.setAttribute('aria-pressed', String(shown)); button.setAttribute('aria-label', '顯示密碼');
+      button.title = shown ? '隱藏密碼' : '顯示密碼'; button.innerHTML = shown ? EYE_OFF : EYE;
+    };
+    button.addEventListener('click', () => { shown = !shown; sync(); });
+    sync();
   }
-  $('#outPwEye').addEventListener('click', () => { showOutPw = !showOutPw; syncOutEye(); });
-  syncOutEye();
+  pairEye($('#outPw'), $('#outPwEye'));
+  pairEye($('#dPw'), $('#dPwEye'));
   function syncPwHelp() {
-    const help = $('#pwHelp'), pw = outPassword();
-    help.hidden = !S.lockOut;
-    if (!S.lockOut) return;
-    // full-width letters and digits (a Chinese keyboard's) are the ordinary ones in a PDF password: say which it is
-    help.replaceChildren(el('span', { text: pw && pw !== S.outPw ? `密碼會是「${pw}」（全形字當半形）。` : '忘了就打不開，請記下來。' }), el('span', { text: '要上傳學校系統的檔案先別加' }));
+    const pw = outPassword();
+    for (const help of [$('#pwHelp'), $('#dPwHelp')]) {
+      help.hidden = !S.lockOut;
+      // full-width letters and digits (a Chinese keyboard's) are the ordinary ones in a PDF password: say which it is
+      if (S.lockOut) help.replaceChildren(el('span', { text: pw && pw !== S.outPw ? `密碼會是「${pw}」（全形字當半形）。` : '忘了就打不開，請記下來。' }), el('span', { text: '要上傳學校系統的檔案先別加' }));
+    }
   }
   $('#dpi').addEventListener('input', (ev) => { fill(ev.target); S.dpi = parseInt(ev.target.value, 10); $('#dpiOut').textContent = S.dpi + ' DPI'; Core.store.set('dpi', ev.target.value); });
   $('#quality').addEventListener('input', (ev) => { fill(ev.target); S.quality = parseInt(ev.target.value, 10); $('#qualityOut').textContent = S.quality; Core.store.set('quality', ev.target.value); });
@@ -803,7 +858,8 @@
     const t0 = performance.now();
     renderCard(o);
     try {
-      o.result = await Engine.buildOutput(state.project, { title: o.title, pages: o.pages }, o.settings, run.job, (f, text) => progressCard(o, f, text));
+      o.result = o.settings.direct && o.src ? await unlockedCopy(run, o)
+        : await Engine.buildOutput(state.project, { title: o.title, pages: o.pages }, o.settings, run.job, (f, text) => progressCard(o, f, text));
       if (o.settings.password) {
         progressCard(o, 0.99, '加上密碼…');
         try {
@@ -818,6 +874,22 @@
       else { o.status = 'error'; o.error = (e && e.message) || String(e); console.error(e); }
     }
     if (state.run === run) { renderCard(o); renderRunHeader(); }
+  }
+
+  // 直接輸出, one file on its own: the whole file with the protection taken off (forms, attachments, everything else
+  // stays), or the file itself when it had none. Should it not decrypt here, a copy of its pages as usual.
+  async function unlockedCopy(run, o) {
+    const src = o.src;
+    if (!src.password && !src.perms) return { blob: src.file, size: src.file.size, method: 'original', over: false, missing: [] };
+    try {
+      progressCard(o, 0.3, '拿掉密碼…');
+      const doc = await PdfCrypt.load(new Uint8Array(await src.file.arrayBuffer()), src.password);
+      const bytes = await doc.save({ useObjectStreams: true });
+      return { blob: new Blob([bytes], { type: 'application/pdf' }), size: bytes.length, method: 'unlocked', over: false, missing: [] };
+    } catch (e) {
+      console.warn('whole-file decryption failed, copying the pages instead', e);
+      return Engine.buildOutput(state.project, { title: o.title, pages: o.pages }, o.settings, run.job, (f, text) => progressCard(o, f, text));
+    }
   }
 
   async function rerunOne(o, patch) {
@@ -846,6 +918,11 @@
     if (!run) return;
     const done = run.outputs.filter((o) => o.status === 'done');
     const over = done.filter((o) => o.result.over).length;
+    // 直接輸出 skipped step 3: back goes to step 2
+    const direct = run.outputs[0].settings.direct, back = $('#back4');
+    back.dataset.goto = direct ? '2' : '3';
+    back.setAttribute('aria-label', direct ? '回去修改' : '回去修改設定');
+    back.querySelector('.lbl').textContent = direct ? '回去修改' : '回去修改設定';
     const lim = fmtLimit(run.outputs[0].settings.targetMB);
     let text;
     if (run.running) {
@@ -963,6 +1040,7 @@
       const phrase = {
         original: noLimit ? '跟原檔一樣' : '原檔就符合上限',
         lossless: noLimit ? '頁面原封不動' : '保留原始品質',
+        unlocked: '其他內容原封不動',
         smart: '文字清晰，只壓縮圖片',
         compressed: r.setting && r.setting.dpi < 96 ? '已轉成圖片，請預覽看小字' : '已轉成圖片',
       }[r.method];
@@ -990,7 +1068,7 @@
     if (r.method === 'smart') bits.push(`${r.images} 張圖片・${r.setting.dpi} DPI・品質 ${Math.round(r.setting.q * 100)}`);
     if (r.method === 'compressed') bits.push(describeSetting(r.setting));
     if (st.gray && (r.method === 'compressed' || r.method === 'smart')) bits.push('灰階');
-    if (r.method !== 'original') bits.push(r.linkCount ? `保留 ${r.linkCount} 個連結` : '沒有連結');
+    if (r.method !== 'original' && r.method !== 'unlocked') bits.push(r.linkCount ? `保留 ${r.linkCount} 個連結` : '沒有連結');
     bits.push(`原始 ${fmtMB(state.project.sources.reduce((a, s) => a + s.file.size, 0))}`);
     bits.push(`花了 ${r.seconds < 60 ? Math.max(1, Math.round(r.seconds)) + ' 秒' : (r.seconds / 60).toFixed(1) + ' 分鐘'}`);
     main.append(el('details', { class: 'out-more' }, el('summary', { text: '詳細' }), el('ul', {}, bits.map((b) => el('li', { text: b })))));

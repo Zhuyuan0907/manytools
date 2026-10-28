@@ -110,7 +110,7 @@
         <span class="step-no" aria-hidden="true">2</span>
         <div class="head-text">
           <h2 id="h2t">要上傳一份檔案，還是多份？</h2>
-          <p>學校要求分項上傳時，選「多份檔案」。</p>
+          <p id="h2sub">學校要求分項上傳時，選「多份檔案」。</p>
         </div>
       </div>
       <div class="panel-body step2-body">
@@ -127,6 +127,47 @@
             <span class="mc-desc">依學校要求拆成好幾份</span>
             <span class="mc-go">開始拆分 →</span>
           </button>
+          <!-- only when a file had a password or protection: people who came just to take it off -->
+          <button type="button" class="mode-card" id="chooseDirect" hidden>
+            <span class="mc-art" aria-hidden="true"><svg width="64" height="64" viewBox="0 0 64 64" fill="none"><rect x="14" y="28" width="36" height="28" rx="6" fill="#fff" stroke="currentColor" stroke-width="3"/><path d="M22 28v-8a10 10 0 0 1 19.4-3.4" stroke="currentColor" stroke-width="3" stroke-linecap="round"/><path d="M32 39v6" stroke="currentColor" stroke-width="3.4" stroke-linecap="round"/></svg></span>
+            <span class="mc-title">直接輸出</span>
+            <span class="mc-desc">不壓縮，只拿掉密碼</span>
+            <span class="mc-go">選這個 →</span>
+          </button>
+        </div>
+
+        <div class="direct-area" id="directArea" hidden>
+          <div class="split-top">
+            <button type="button" class="btn back-single" id="backFromDirect" title="回到三個選項"><span aria-hidden="true">←</span> 返回</button>
+            <h2 class="split-title">直接輸出，不壓縮</h2>
+          </div>
+          <div class="direct-body">
+            <div class="direct-qs">
+              <div class="set" id="dEachSet">
+                <div class="set-label" id="lblEach"></div>
+                <div class="seg" role="radiogroup" aria-labelledby="lblEach">
+                  <label><input type="radio" name="dEach" value="each" checked><span>各自輸出，檔名不變</span></label>
+                  <label><input type="radio" name="dEach" value="merge"><span>合成一份</span></label>
+                </div>
+              </div>
+              <div class="set">
+                <div class="set-label" id="lblDPw">輸出的檔案要密碼嗎？</div>
+                <div class="seg" role="radiogroup" aria-labelledby="lblDPw">
+                  <label><input type="radio" name="dPw" value="none" checked><span>不用密碼</span></label>
+                  <label><input type="radio" name="dPw" value="new"><span>設一個新密碼</span></label>
+                </div>
+                <div class="pw-set" id="dPwSet" hidden>
+                  <input type="text" id="dPw" class="pw-in" placeholder="要設定的密碼" autocomplete="off" spellcheck="false" autocapitalize="off" maxlength="64" aria-label="要設定的開啟密碼">
+                  <button type="button" class="icon-btn pw-eye" id="dPwEye"></button>
+                </div>
+                <p class="help pw-help" id="dPwHelp" hidden></p>
+              </div>
+            </div>
+            <div class="direct-list">
+              <div class="set-label">會輸出</div>
+              <ol class="direct-out" id="directOut" aria-label="會輸出的檔案"></ol>
+            </div>
+          </div>
         </div>
 
         <div class="split-area" id="splitArea" hidden>
@@ -212,9 +253,9 @@
               <label class="switch"><input type="checkbox" id="lockOut"><span class="track" aria-hidden="true"></span><span class="sw-text"><b>加上開啟密碼</b><span class="help">打開檔案要先輸入密碼</span></span></label>
               <div class="pw-set" id="pwSet" hidden>
                 <input type="text" id="outPw" class="pw-in" placeholder="要設定的密碼" autocomplete="off" spellcheck="false" autocapitalize="off" maxlength="64" aria-label="要設定的開啟密碼">
-                <button type="button" class="icon-btn pw-eye" id="outPwEye" aria-pressed="true" aria-label="顯示密碼" title="隱藏密碼"></button>
+                <button type="button" class="icon-btn pw-eye" id="outPwEye"></button>
               </div>
-              <p class="help" id="pwHelp" hidden></p>
+              <p class="help pw-help" id="pwHelp" hidden></p>
             </div>
           </div>
           <details class="set-col adv" id="adv" open>
@@ -301,7 +342,7 @@
         <button type="button" class="btn small ghost restart" id="restart"><span aria-hidden="true">↺</span> 換一份資料重新開始</button>
       </div>
       <div class="panel-foot">
-        <button type="button" class="btn back" data-goto="3" aria-label="回去修改設定"><span aria-hidden="true">←</span><span class="lbl">回去修改設定</span></button>
+        <button type="button" class="btn back" id="back4" data-goto="3" aria-label="回去修改設定"><span aria-hidden="true">←</span><span class="lbl">回去修改設定</span></button>
         <span class="foot-note" id="note4"></span>
         <button type="button" class="btn primary" id="zipAll" hidden>全部下載（ZIP）</button>
       </div>

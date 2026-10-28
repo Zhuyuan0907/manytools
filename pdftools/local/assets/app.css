@@ -274,9 +274,9 @@ button.qm-item:hover { background: var(--surface-2); }
 .pw-set { display: flex; gap: 8px; margin-left: 56px; }
 .pw-set input { flex: 0 1 240px; min-width: 0; height: 36px; padding: 0 12px; border: 1px solid var(--line-strong); border-radius: 9px; background: var(--surface); font-size: 1rem; }
 #pwHelp { margin-left: 56px; }
-.settings #pwHelp:not([hidden]) { display: block; }   /* stays on short screens, where the other help lines go */
-#pwHelp { white-space: normal; }
-#pwHelp span { display: inline-block; }
+.settings .pw-help:not([hidden]) { display: block; }   /* stays on short screens, where the other help lines go */
+.pw-help { white-space: normal; }
+.pw-help span { display: inline-block; }
 .sw-text { display: grid; gap: 1px; line-height: 1.45; }
 .plan { color: var(--ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .plan b { color: var(--ink); }
@@ -384,6 +384,18 @@ button.qm-item:hover { background: var(--surface-2); }
 
 /* ================= step 2: two big choices ================= */
 .pick-mode { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; max-width: 920px; width: 100%; margin: 4px auto 0; }
+.pick-mode.three { grid-template-columns: repeat(3, minmax(0, 1fr)); max-width: 1120px; }
+/* 直接輸出: the two questions beside the files that will come out */
+.direct-area { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.direct-body { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 0 40px; }
+.direct-list { min-height: 0; display: flex; flex-direction: column; gap: 8px; padding-top: 14px; }
+.direct-out { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; align-content: start; overflow: auto; min-height: 0; }
+.direct-out li { display: grid; gap: 1px; padding: 10px 14px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); }
+.do-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.do-meta { color: var(--muted); font-size: .84rem; }
+.direct-qs > .set { border-top: 0; }
+.direct-qs > .set:not([hidden]) ~ .set { border-top: 1px solid var(--line); }
+.direct-qs .pw-set { margin-left: 0; }
 .mode-card {
   display: grid; justify-items: center; align-content: start; gap: 8px; text-align: center; min-height: 260px; padding: 28px 24px;
   border: 2px solid var(--line); border-radius: 20px; background: var(--surface); cursor: pointer; color: var(--ink);
@@ -635,7 +647,8 @@ input[type="range"]::-moz-range-thumb { width: 18px; height: 18px; border-radius
   .how { grid-template-columns: 1fr; gap: 8px; }
   .how li { padding: 10px 12px; }
   #step1.has-files .hero-title { font-size: 1.15rem; }
-  .pick-mode { grid-template-columns: 1fr; gap: 12px; }
+  .pick-mode, .pick-mode.three { grid-template-columns: 1fr; gap: 12px; }
+  .direct-body { grid-template-columns: 1fr; }
   .mode-card { min-height: 0; grid-template-columns: auto 1fr; grid-template-areas: "art title" "art desc" "art go"; justify-items: start; text-align: left; gap: 2px 14px; padding: 18px 16px; border-radius: 16px; }
   .mode-card .mc-art { grid-area: art; width: 64px; height: 64px; border-radius: 18px; margin: 0; align-self: center; }
   .mode-card .mc-art svg { width: 44px; height: 44px; }
