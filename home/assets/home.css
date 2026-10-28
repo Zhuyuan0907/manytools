@@ -118,7 +118,7 @@ html[data-world="photo"] .nums b { color: var(--amber); }
   border-radius: 24px; background: #fff; border: 2px dashed #c3cedb; cursor: pointer; outline-offset: 4px;
   box-shadow: var(--shadow); transition: border-color .15s, background-color .15s, transform .15s;
 }
-.drop:hover, .drop.over { border-color: var(--ink-2); transform: translateY(-2px); }
+.drop.over { border-color: var(--ink-2); transform: translateY(-2px); }
 .drop.over.video { border-color: var(--blue); background: var(--blue-soft); }
 .drop.over.pdf { border-color: var(--green); background: var(--green-soft); }
 .drop.over.image { border-color: var(--orange); background: var(--orange-soft); }
@@ -126,8 +126,8 @@ html[data-world="photo"] .nums b { color: var(--amber); }
 .stack img { width: 58px; height: 58px; border-radius: 15px; box-shadow: 0 6px 16px rgba(23, 32, 44, .14); transition: transform .2s; display: block; }
 .stack img:first-child { transform: rotate(-8deg); }
 .stack img:last-child { transform: rotate(8deg); }
-.drop:hover .stack img:first-child, .drop.over .stack img:first-child { transform: rotate(-14deg) translateY(-4px); }
-.drop:hover .stack img:last-child, .drop.over .stack img:last-child { transform: rotate(14deg) translateY(-4px); }
+.drop.over .stack img:first-child { transform: rotate(-14deg) translateY(-4px); }
+.drop.over .stack img:last-child { transform: rotate(14deg) translateY(-4px); }
 .drop-title { font-size: 1.3rem; }
 .drop-hint { color: var(--ink-2); }
 .drop-formats { color: var(--muted); font-size: .8rem; letter-spacing: .02em; }
@@ -151,6 +151,8 @@ html[data-world="photo"] .nums b { color: var(--amber); }
 .tool.avatar { --c: var(--violet); --cs: var(--violet-strong); --soft: var(--violet-soft); }
 .tool.crop { --c: var(--pink); --cs: var(--pink-strong); --soft: var(--pink-soft); }
 .tool .ico { display: none; }
+.tool > .art { grid-row: 1; grid-column: 1; }
+.tool > .tool-text { grid-row: 2; grid-column: 1; }
 .art {
   display: grid; place-items: center; height: 112px; padding: 10px 14px; background-color: var(--soft);
   background-image: linear-gradient(color-mix(in srgb, var(--c) 10%, transparent) 1px, transparent 1px), linear-gradient(90deg, color-mix(in srgb, var(--c) 10%, transparent) 1px, transparent 1px);
@@ -165,11 +167,10 @@ html[data-world="photo"] .nums b { color: var(--amber); }
 .tool-desc { color: var(--ink-2); font-size: .85rem; white-space: nowrap; }
 /* the way in: a round arrow on the seam between picture and words */
 .go {
-  position: absolute; right: 12px; top: calc(112px - 19px); width: 38px; height: 38px; border-radius: 50%; display: grid; place-items: center;
+  grid-row: 2; grid-column: 1; justify-self: end; align-self: start; position: relative; margin: -19px 12px 0 0;
+  width: 38px; height: 38px; border-radius: 50%; display: grid; place-items: center;
   background: var(--c); color: #fff; box-shadow: 0 4px 12px color-mix(in srgb, var(--c) 35%, transparent); transition: transform .2s, background .2s;
 }
-.tool:hover { border-color: color-mix(in srgb, var(--c) 40%, var(--line)); box-shadow: 0 2px 4px rgba(23, 32, 44, .05), 0 18px 40px rgba(23, 32, 44, .12); transform: translateY(-3px); }
-.tool:hover .go { background: var(--cs); transform: translateX(3px); }
 .tool:active { transform: translateY(-1px); }
 /* a file held over a tool: let go and that tool opens with it */
 .tool.target, .frame.target { border-color: var(--c); box-shadow: 0 0 0 3px color-mix(in srgb, var(--c) 35%, transparent), 0 18px 40px rgba(23, 32, 44, .14); transform: translateY(-4px); }
@@ -220,12 +221,12 @@ html[data-world="photo"] .nums b { color: var(--amber); }
 .vf-hint { color: var(--ink-2); font-size: .92rem; }
 .vf-read { position: absolute; left: 0; right: 0; bottom: 16px; display: flex; justify-content: center; align-items: center; gap: 18px; font: 600 .76rem var(--mono); letter-spacing: .08em; color: rgba(241, 237, 230, .5); }
 .vf-dot { width: 8px; height: 8px; border-radius: 50%; background: rgba(241, 237, 230, .25); transition: background .2s, box-shadow .2s; }
-.vf:hover, .vf.over { background: rgba(255, 255, 255, .045); }
-.vf:hover .vf-c, .vf.over .vf-c { --vf: #f1ede6; }
-.vf:hover .vf-c.tl, .vf.over .vf-c.tl { left: 22px; top: 22px; }
-.vf:hover .vf-c.tr, .vf.over .vf-c.tr { right: 22px; top: 22px; }
-.vf:hover .vf-c.bl, .vf.over .vf-c.bl { left: 22px; bottom: 22px; }
-.vf:hover .vf-c.br, .vf.over .vf-c.br { right: 22px; bottom: 22px; }
+.vf.over { background: rgba(255, 255, 255, .045); }
+.vf.over .vf-c { --vf: #f1ede6; }
+.vf.over .vf-c.tl { left: 22px; top: 22px; }
+.vf.over .vf-c.tr { right: 22px; top: 22px; }
+.vf.over .vf-c.bl { left: 22px; bottom: 22px; }
+.vf.over .vf-c.br { right: 22px; bottom: 22px; }
 .vf.over .vf-af { width: 40px; height: 28px; margin: 5px 0 11px; border-color: #5fd68b; box-shadow: 0 0 0 1px rgba(95, 214, 139, .25); }
 .vf.over .vf-af::after { background: #5fd68b; }
 .vf.over .vf-dot { background: #5fd68b; box-shadow: 0 0 10px rgba(95, 214, 139, .6); }
@@ -260,8 +261,7 @@ html[data-world="photo"] .nums b { color: var(--amber); }
 .f-name { font-size: 1.12rem; line-height: 1.4; white-space: nowrap; color: var(--ink); }
 .f-desc { color: var(--ink-2); font-size: .84rem; white-space: nowrap; }
 /* held up to the light */
-.frame:hover { background: #1a1816; transform: translateY(-4px); box-shadow: 0 0 0 1px color-mix(in srgb, var(--c) 55%, transparent), 0 14px 30px rgba(0, 0, 0, .45); }
-.frame:hover .f-name { color: #fff; }
+/* (held up to the light on hover: see the hover block below) */
 .frame:active { transform: translateY(-1px); }
 .frame.target { background: #1a1816; }
 /* the frames' pictures */
@@ -317,6 +317,31 @@ html[data-world="photo"] .nums b { color: var(--amber); }
 .ask-x { height: 38px; padding: 0 18px; border-radius: 10px; border: 1px solid rgba(255, 255, 255, .14); background: none; color: #d8d2c8; font: inherit; font-weight: 600; cursor: pointer; }
 .ask-x:hover { background: rgba(255, 255, 255, .06); }
 
+/* ================= a mouse: what lights up under it (a finger's tap would leave these stuck on) ================= */
+@media (hover: hover) {
+  .drop:hover { border-color: var(--ink-2); transform: translateY(-2px); }
+  .drop:hover .stack img:first-child { transform: rotate(-14deg) translateY(-4px); }
+  .drop:hover .stack img:last-child { transform: rotate(14deg) translateY(-4px); }
+  .tool:hover { border-color: color-mix(in srgb, var(--c) 40%, var(--line)); box-shadow: 0 2px 4px rgba(23, 32, 44, .05), 0 18px 40px rgba(23, 32, 44, .12); transform: translateY(-3px); }
+  .tool:hover .go { background: var(--cs); transform: translateX(3px); }
+  .vf:hover { background: rgba(255, 255, 255, .045); }
+  .vf:hover .vf-c { --vf: #f1ede6; }
+  .vf:hover .vf-c.tl { left: 22px; top: 22px; }
+  .vf:hover .vf-c.tr { right: 22px; top: 22px; }
+  .vf:hover .vf-c.bl { left: 22px; bottom: 22px; }
+  .vf:hover .vf-c.br { right: 22px; bottom: 22px; }
+  /* held up to the light */
+  .frame:hover { background: #1a1816; transform: translateY(-4px); box-shadow: 0 0 0 1px color-mix(in srgb, var(--c) 55%, transparent), 0 14px 30px rgba(0, 0, 0, .45); }
+  .frame:hover .f-name { color: #fff; }
+}
+/* a finger: the words say tap, not drag; the advice to use Chrome is for computers */
+@media (hover: none) and (pointer: coarse) {
+  .d-desk { display: none; }
+  .d-mob { display: inline; }
+  .foot span:first-child { display: none; }
+  .foot { justify-content: center; }
+}
+
 /* ================= the aperture between the sides, and what comes in after it ================= */
 .iris { position: fixed; inset: 0; width: 100%; height: 100%; z-index: 90; touch-action: none; }
 @media (prefers-reduced-motion: no-preference) {
@@ -335,7 +360,9 @@ html[data-world="photo"] .nums b { color: var(--amber); }
 .toast { position: fixed; left: 50%; top: 18px; transform: translateX(-50%); z-index: 95; max-width: calc(100vw - 32px); padding: 10px 18px; border-radius: 12px; background: #17202c; color: #fff; font-size: .92rem; box-shadow: 0 8px 24px rgba(0, 0, 0, .2); }
 html[data-world="photo"] .toast { background: #f1ede6; color: #141311; }
 
-/* ================= sizes ================= */
+/* ================= sizes =================
+   wide ≥ 1101 (above) · big screens: zoomed by home.js · ultra-wide (21:9, 32:9) · 901–1100 laptops, iPads on
+   their side · 641–900 small tablets, unfolded foldables · ≤ 640 phones · phones on their side · two screens */
 /* tall screens: use the room */
 @media (min-height: 880px) and (min-width: 1200px) {
   .world { gap: 56px; }
@@ -345,13 +372,12 @@ html[data-world="photo"] .toast { background: #f1ede6; color: #141311; }
   .stack img { width: 68px; height: 68px; border-radius: 17px; }
   .drop-title, .vf-title { font-size: 1.5rem; }
   .art { height: 136px; }
-  .go { top: calc(136px - 19px); }
   .tool-name { font-size: 1.3rem; }
   .f-art { height: 164px; }
   .f-name { font-size: 1.25rem; }
 }
 /* short screens */
-@media (max-height: 800px) and (min-width: 761px) {
+@media (max-height: 800px) and (min-width: 641px) {
   .lead h1 { font-size: clamp(2rem, .8rem + 2.8vw, 3.1rem); }
   .lead-text { gap: 9px; }
   .drop { padding: 14px 22px; gap: 4px; }
@@ -359,27 +385,52 @@ html[data-world="photo"] .toast { background: #f1ede6; color: #141311; }
   .stack img { width: 46px; height: 46px; }
   .vf { padding: 26px 24px 40px; }
   .art { height: 96px; }
-  .go { top: calc(96px - 19px); }
   .f-art { height: 124px; }
   .strip { padding: 28px 12px; }
 }
-@media (max-height: 700px) and (min-width: 761px) {
+@media (max-height: 700px) and (min-width: 641px) {
   .world { gap: 20px; }
   .art { height: 84px; }
-  .go { top: calc(84px - 19px); }
   .tool-text { padding: 10px 14px 13px; }
   .f-art { height: 108px; padding-top: 10px; }
   .f-text { padding: 6px 12px 11px; }
   .vf-af { display: none; }
 }
+@media (max-height: 620px) and (min-width: 641px) {
+  .app { gap: 10px; padding-top: 10px; padding-bottom: 10px; }
+  .lead h1 { font-size: clamp(1.8rem, .6rem + 2.6vw, 2.6rem); }
+  .nums { display: none; }
+  .art { height: 72px; }
+  .go { width: 34px; height: 34px; margin-top: -17px; }
+  .f-art { height: 88px; }
+  .strip { padding: 24px 10px; }
+  .vf { padding: 20px 20px 34px; }
+  .foot { display: none; }
+}
 
-/* 761–1100 (iPads, small laptops): the everyday tools in three columns, each group's tools one under another, side-on */
-@media (max-width: 1100px) and (min-width: 761px) {
+/* ultra-wide (21:9, 32:9): the screen is wide and not tall — the words and the drop area on the left, the tools
+   on the right, side by side */
+@media (min-aspect-ratio: 21/10) and (min-width: 1900px) {
+  .app { max-width: 2600px; padding-left: 48px; padding-right: 48px; }
+  .world { grid-template-columns: minmax(380px, 1fr) minmax(0, 2.15fr); align-items: center; column-gap: clamp(48px, 4vw, 96px); }
+  .lead { grid-template-columns: 1fr; gap: 26px; }
+  .drop, .vf { min-height: 220px; }
+  .art { height: 168px; }
+  .tool-name { font-size: 1.36rem; }
+  .tool-desc { font-size: .92rem; }
+  .f-art { height: 176px; }
+  .f-name { font-size: 1.3rem; }
+}
+
+/* 901–1100 (laptops, iPads on their side): the everyday tools in three columns, each group's tools one under
+   another, side-on */
+@media (max-width: 1100px) and (min-width: 641px) {
   .app { padding: 16px 24px 18px; }
   .lead { gap: 28px; }
   .shelf { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .group { grid-template-columns: minmax(0, 1fr); }
   .tool { grid-template-rows: auto; grid-template-columns: 40% minmax(0, 1fr); }
+  .tool > .tool-text { grid-row: 1; grid-column: 2; }
   .art { height: auto; min-height: 92px; padding: 8px; }
   .tool-text { align-content: center; padding: 12px 12px 12px 14px; }
   .word { font-size: .7rem; }
@@ -391,27 +442,67 @@ html[data-world="photo"] .toast { background: #f1ede6; color: #141311; }
   .f-desc { font-size: .78rem; white-space: normal; }
   .f-text { padding: 6px 11px 12px; }
 }
-/* iPad held upright: room to spare, so the everyday cards keep their pictures on top */
-@media (max-width: 1100px) and (min-width: 761px) and (min-height: 1000px) {
-  .world { gap: 48px; }
+/* 641–900 (small tablets, unfolded foldables) and any tablet held upright: the cards keep their pictures on top */
+@media (max-width: 900px) and (min-width: 641px), (max-width: 1100px) and (min-width: 641px) and (min-height: 880px) {
   .tool { grid-template-rows: auto 1fr; grid-template-columns: none; }
-  .art { height: 104px; }
-  .go { display: grid; top: calc(104px - 19px); }
-  .tool-text { padding: 12px 14px 16px; }
-  .tool-name { font-size: 1.12rem; }
-  .f-art { height: 110px; }
-  .lead h1 { font-size: 2.6rem; }
+  .tool > .tool-text { grid-row: 2; grid-column: 1; }
+  .art { height: 96px; min-height: 0; }
+  .go { display: grid; width: 34px; height: 34px; margin: -17px 10px 0 0; }
+  .tool-text { align-content: start; padding: 10px 12px 13px; }
+  .tool-name { font-size: 1rem; }
+  .word { font-size: .68rem; }
+}
+@media (max-width: 900px) and (min-width: 641px) {
+  .lead h1 { font-size: clamp(1.8rem, .8rem + 2.6vw, 2.4rem); }
+  .lead { gap: 20px; }
+  .sub span { display: inline; }
+  .drop-formats { display: none; }
+  .stack img { width: 44px; height: 44px; }
+  .vf-read { gap: 10px; font-size: .7rem; }
+  .film-edge span:last-child { display: none; }
+  .strip { gap: 8px; padding: 26px 8px; }
+  .f-art { height: 86px; padding: 10px 6px 4px; }
+  .f-text { padding: 6px 9px 11px; }
+  .f-name { font-size: .94rem; white-space: normal; }
+  .f-desc { font-size: .74rem; }
+}
+/* unfolded foldables on their side, small tablets held flat: short as well as narrow */
+@media (max-width: 900px) and (min-width: 641px) and (max-height: 700px) {
+  .app { padding-top: 12px; padding-bottom: 12px; gap: 10px; }
+  .world { gap: 16px; }
+  .lead h1 { font-size: 1.75rem; }
+  .nums, .drop-formats, .vf-read { display: none; }
+  .drop { padding: 12px 16px; }
+  .vf { padding: 18px 16px; }
+  .stack img { width: 38px; height: 38px; }
+  .art { height: 70px; padding: 6px 10px; }
+  .tool-text { padding: 8px 10px 10px; }
+  .f-art { height: 72px; }
+  .strip { padding: 22px 8px; }
+  .foot { display: none; }
+}
+/* tablets upright: room to spare. 製播 has one tool beside columns of two: its card grows, the picture fills it */
+@media (max-width: 1100px) and (min-width: 641px) and (min-height: 880px) {
+  .g-video .tool { grid-template-rows: minmax(0, 1fr) auto; }
+  .g-video .art { height: auto; min-height: 112px; }
+  .g-video .art svg { height: auto; width: 100%; max-height: 220px; }
+  .world { gap: 44px; }
+  .lead h1 { font-size: clamp(2.2rem, 1rem + 2.8vw, 2.8rem); }
+  .art { height: 112px; }
+  .tool-name { font-size: 1.1rem; }
+  .f-art { height: 120px; }
+  .vf { min-height: 220px; }
 }
 
 /* ================= phones: lists, and the switch under the thumb ================= */
-@media (max-width: 760px) {
+@media (max-width: 640px) {
   .app { padding: 12px 16px calc(92px + env(safe-area-inset-bottom)); gap: 12px; grid-template-rows: auto auto auto; }
   main { align-content: start; }
   .world { gap: 18px; align-content: start; }
   .brand { font-size: 1.1rem; }
   .brand img { width: 34px; height: 34px; border-radius: 9px; }
   .switch {
-    position: fixed; z-index: 80; left: 50%; bottom: calc(14px + env(safe-area-inset-bottom)); transform: translateX(-50%);
+    position: fixed; left: 50%; bottom: calc(14px + env(safe-area-inset-bottom)); transform: translateX(-50%);
     width: min(320px, calc(100vw - 48px)); padding: 5px; box-shadow: inset 0 0 0 1px var(--line-strong), 0 10px 30px rgba(23, 32, 44, .18);
     -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px); background: rgba(255, 255, 255, .88);
   }
@@ -421,7 +512,7 @@ html[data-world="photo"] .toast { background: #f1ede6; color: #141311; }
 
   .lead { grid-template-columns: 1fr; gap: 14px; }
   .lead-text { gap: 6px; }
-  .lead h1 { font-size: 1.85rem; }
+  .lead h1 { font-size: 1.75rem; }
   .sub { font-size: .9rem; line-height: 1.5; }
   .nums { font-size: .8rem; }
   .d-desk { display: none; }
@@ -430,25 +521,24 @@ html[data-world="photo"] .toast { background: #f1ede6; color: #141311; }
   .drop .stack { grid-row: span 2; margin: 0; padding: 0; gap: 0; }
   .stack img { width: 42px; height: 42px; border-radius: 11px; }
   .stack img:not(:first-child) { display: none; }
-  .stack img:first-child, .drop:hover .stack img:first-child { transform: none; }
+  .stack img:first-child { transform: none !important; }
   .drop-title { font-size: 1.05rem; }
   .drop-hint { font-size: .84rem; }
   .drop-formats { display: none; }
 
   /* each group: its name, then a row per tool — icon, name and what it does, an arrow */
-  .shelf { grid-template-columns: 1fr; gap: 14px; }
-  .group { grid-template-columns: 1fr; gap: 8px; }
+  .shelf { grid-template-columns: 1fr; gap: 12px; }
+  .group { grid-template-columns: 1fr; gap: 7px; }
   .g-label { font-size: .76rem; }
   .tool { grid-template-rows: auto; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 0 12px; padding: 10px 12px; border-radius: 14px; }
   .tool .art { display: none; }
-  .tool .ico { display: block; width: 40px; height: 40px; border-radius: 10px; }
-  .tool-text { padding: 0; }
+  .tool .ico { display: block; grid-column: 1; grid-row: 1; width: 40px; height: 40px; border-radius: 10px; }
+  .tool > .tool-text { grid-column: 2; grid-row: 1; padding: 0; }
   .word { display: none; }
   .tool-name { font-size: 1.02rem; line-height: 1.35; }
-  .tool-desc { font-size: .8rem; }
-  .go { position: static; width: 32px; height: 32px; box-shadow: none; }
+  .tool-desc { font-size: .8rem; white-space: normal; }
+  .go { grid-column: 3; grid-row: 1; align-self: center; margin: 0; width: 32px; height: 32px; box-shadow: none; }
   .go svg { width: 16px; height: 16px; }
-  .tool:hover { transform: none; }
 
   /* the viewfinder, low; the strip stands up: holes down both sides, a frame per row */
   .vf { grid-template-columns: auto minmax(0, 1fr); justify-items: start; align-items: center; text-align: left; gap: 2px 14px; padding: 18px 20px; min-height: 0; }
@@ -470,8 +560,7 @@ html[data-world="photo"] .toast { background: #f1ede6; color: #141311; }
   .f-no { top: 4px; left: 6px; font-size: .66rem; }
   .f-text { padding: 8px 12px; }
   .f-name { font-size: 1.02rem; }
-  .f-desc { font-size: .8rem; }
-  .frame:hover { transform: none; }
+  .f-desc { font-size: .8rem; white-space: normal; }
   .foot { font-size: .72rem; justify-content: center; text-align: center; gap: 0 10px; }
 
   .ask { padding: 22px 18px 16px; }
@@ -479,7 +568,7 @@ html[data-world="photo"] .toast { background: #f1ede6; color: #141311; }
   .opt { padding: 12px 14px 12px 48px; }
   .opt kbd { top: 50%; margin-top: -12px; }
 }
-@media (max-width: 760px) and (max-height: 700px) {
+@media (max-width: 640px) and (max-height: 700px) {
   .lead h1 { font-size: 1.6rem; }
   .sub { display: none; }
   .world { gap: 14px; }
@@ -489,6 +578,71 @@ html[data-world="photo"] .toast { background: #f1ede6; color: #141311; }
 @media (max-width: 380px) {
   .lead h1 { font-size: 1.6rem; }
   .frame { grid-template-columns: 96px minmax(0, 1fr); }
+  .drop-hint, .vf-hint { font-size: .8rem; }
+}
+/* a narrow folded phone's cover screen (about 344 wide): even less */
+@media (max-width: 350px) {
+  .app { padding-left: 12px; padding-right: 12px; }
+  .brand-text .tagline { display: none; }
+  .lead h1 { font-size: 1.45rem; }
+  .tool { gap: 0 10px; padding: 8px 10px; }
+  .tool .ico { width: 34px; height: 34px; }
+  .frame { grid-template-columns: 84px minmax(0, 1fr); }
+  .strip { padding: 10px 26px; }
+}
+
+/* phones on their side: little height — the words shrink, the everyday tools sit three across as rows */
+@media (orientation: landscape) and (max-height: 500px) and (max-width: 1000px) {
+  .app { padding: 10px max(20px, env(safe-area-inset-right)) 12px max(20px, env(safe-area-inset-left)); gap: 10px; grid-template-rows: auto auto auto; }
+  .switch { position: relative; left: auto; bottom: auto; transform: none; width: auto; padding: 4px; }
+  .switch button { height: 36px; font-size: .92rem; }
+  .switch-thumb { top: 4px; bottom: 4px; left: 4px; width: calc(50% - 4px); }
+  .world { gap: 14px; align-content: start; }
+  .lead { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 18px; }
+  .lead h1 { font-size: 1.5rem; }
+  .sub, .drop-formats, .vf-read, .nums { display: none; }
+  .drop, .vf { grid-template-columns: auto minmax(0, 1fr); justify-items: start; align-items: center; text-align: left; gap: 2px 12px; padding: 12px 14px; }
+  .drop .stack { grid-row: span 2; margin: 0; padding: 0; gap: 0; }
+  .stack img { width: 38px; height: 38px; border-radius: 10px; }
+  .stack img:not(:first-child) { display: none; }
+  .stack img:first-child { transform: none !important; }
+  .vf .vf-af { grid-row: span 2; width: 38px; height: 28px; margin: 0; display: block; }
+  .drop-title, .vf-title { font-size: 1rem; }
+  .drop-hint, .vf-hint { font-size: .8rem; }
+  .shelf { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+  .group { grid-template-columns: 1fr; gap: 6px; }
+  .tool { grid-template-rows: auto; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: 0 10px; padding: 8px 10px; border-radius: 12px; }
+  .tool .art, .tool .go, .word, .tool-desc { display: none; }
+  .tool .ico { display: block; grid-column: 1; grid-row: 1; width: 32px; height: 32px; border-radius: 8px; }
+  .tool > .tool-text { grid-column: 2; grid-row: 1; padding: 0; }
+  .tool-name { font-size: .92rem; white-space: normal; line-height: 1.3; }
+  .film-edge { display: none; }
+  .strip { gap: 8px; padding: 22px 8px; }
+  .f-art { height: 64px; padding: 6px 4px 2px; }
+  .f-text { padding: 4px 8px 8px; }
+  .f-name { font-size: .88rem; white-space: normal; }
+  .f-desc { display: none; }
+  .foot { display: none; }
+}
+
+/* two screens (Surface Duo, dual-screen and some folding phones spanned across the fold): the words and the drop
+   area on one screen, the tools on the other, nothing on the hinge */
+@media (horizontal-viewport-segments: 2) {
+  .app { max-width: none; padding-left: 0; padding-right: 0; }
+  .top { padding: 0 20px; }
+  .world {
+    grid-template-columns: calc(env(viewport-segment-right 0 0) - 40px) calc(100vw - env(viewport-segment-left 1 0) - 40px);
+    column-gap: calc(env(viewport-segment-left 1 0) - env(viewport-segment-right 0 0) + 40px); padding: 0 20px; align-items: center;
+  }
+  .lead { grid-template-columns: 1fr; gap: 18px; }
+  .shelf { grid-template-columns: 1fr; }
+  .group { grid-template-columns: 1fr 1fr; }
+  .g-video .tool { grid-column: span 2; }
+  .strip { grid-template-columns: 1fr 1fr; }
+  .switch { position: relative; left: auto; bottom: auto; transform: none; width: auto; }
+}
+@media (vertical-viewport-segments: 2) {
+  .world { row-gap: calc(env(viewport-segment-top 0 1) - env(viewport-segment-bottom 0 0) + 28px); align-content: space-between; }
 }
 @media (prefers-reduced-motion: reduce) {
   .switch-thumb, .tool, .frame, .vf-c, .vf-af { transition: none; }
