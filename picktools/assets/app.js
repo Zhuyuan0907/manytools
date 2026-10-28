@@ -23,7 +23,7 @@
     return n;
   };
   const onServer = /^https?:$/.test(location.protocol);
-  if (onServer) $('#brand').href = '/';
+  if (onServer) $('#brand').href = '/photo';   // the home page's 拍攝 side
   const num = (n) => n.toLocaleString('zh-TW');
   const fmtBytes = (b) => (b >= 1e9 ? `${(b / 1e9).toFixed(1)} GB` : b >= 1e6 ? `${(b / 1e6).toFixed(1)} MB` : `${Math.max(1, Math.round(b / 1e3))} KB`);
   const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
@@ -155,7 +155,20 @@
     });
   }
 
-  // list: [{ entry } | { file }] from a drop or the file boxes
+  // a folder handle from the home page (Chrome, Edge): walked the same way
+  async function walkDir(h, prefix, found, src) {
+    const files = [], subs = [];
+    for await (const [name, k] of h.entries()) { if (HIDDEN(name)) continue; (k.kind === 'file' ? files : subs).push([name, k]); }
+    for (let i = 0; i < files.length; i += 64) {
+      await Promise.all(files.slice(i, i + 64).map(async ([name, k]) => {
+        try { const f = await k.getFile(); addPhoto(found, src, `${prefix}/${name}`, f.size, f.lastModified, f); } catch {}
+      }));
+    }
+    reading(`正在打開… ${num(found.size)} 張`);
+    for (const [name, k] of subs) await walkDir(k, `${prefix}/${name}`, found, src);
+  }
+
+  // list: [{ entry } | { file, path? } | { dir }] from a drop, the file boxes or the home page
   let loading = false;
   async function add(list) {
     if (loading || export_.busy) return;
@@ -169,6 +182,14 @@
     const loose = { id: ++srcSeq, name: '', kind: 'files', n: 0 };
     try {
       for (const x of list) {
+        if (x.dir) {
+          const src = { id: ++srcSeq, name: x.dir.name, kind: 'folder', n: 0 };
+          const before = found.size;
+          await walkDir(x.dir, x.dir.name, found, src);
+          src.n = found.size - before;
+          if (src.n) added.push(src);
+          continue;
+        }
         if (x.entry && x.entry.isDirectory) {
           const src = { id: ++srcSeq, name: x.entry.name, kind: 'folder', n: 0 };
           const before = found.size;
@@ -189,8 +210,8 @@
           if (src.n) added.push(src);
           continue;
         }
-        // a file of a folder chosen in the file box carries its folder in webkitRelativePath
-        const rel = f.webkitRelativePath || '';
+        // a file of a folder chosen in the file box carries its folder in webkitRelativePath (from the home page: path)
+        const rel = (x.path && x.path.includes('/') ? x.path : f.webkitRelativePath) || '';
         if (rel) {
           const top = rel.split('/')[0];
           let src = added.find((s) => s.kind === 'folder' && s.name === top && s.box);
@@ -1185,6 +1206,24 @@
   }
 
   markReady.then(() => { renderStep1(); renderStepper(); });
+  // photos dropped on the home page (/shared/handoff.js): files, or on Chrome and Edge file and folder handles
+  if (window.ManyHandoff && window.indexedDB) {
+    ManyHandoff.takeAll('pick').then(async (entries) => {
+      if (!entries || !entries.length) return;
+      const list = [], missed = [];
+      for (const e of entries) {
+        try {
+          if (e.dir) list.push({ dir: e.dir });
+          else if (e.handle) list.push({ file: await e.handle.getFile() });
+          else if (e.file) list.push({ file: e.file, path: e.path });
+          else missed.push(e.name);
+        } catch { missed.push(e.name); }
+      }
+      await markReady.catch(() => {});
+      if (list.length) await add(list);
+      if (missed.length) toast(`有 ${num(missed.length)} 個沒辦法從首頁帶過來，請在這裡再放一次`, 6000);
+    }).catch(() => {});
+  }
   loadStats();
   renderStep1();
   renderStepper();

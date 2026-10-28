@@ -18,7 +18,7 @@
     return n;
   };
   const onServer = /^https?:$/.test(location.protocol);
-  if (onServer) $('#brand').href = '/';
+  if (onServer) $('#brand').href = '/photo';   // the home page's 拍攝 side
   const fmtBytes = (b) => (b >= 1e9 ? `${(b / 1e9).toFixed(2)} GB` : b >= 1e6 ? `${(b / 1e6).toFixed(1)} MB` : `${Math.max(1, Math.round(b / 1e3))} KB`);
   const fmtLimit = (b) => `${+(b / 1e6).toFixed(1)} MB`;
   const pct = (a, b) => Math.max(0, Math.round((1 - a / b) * 100));

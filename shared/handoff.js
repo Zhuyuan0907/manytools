@@ -2,8 +2,10 @@
    Home page:  ManyHandoff.send(tool, entries) keeps them in IndexedDB, then the page navigates to the tool.
    Tool page:  <script src="/shared/handoff.js" data-tool="video" data-input="#fileInput"></script> (after the
                tool's own scripts) picks them up on load, clears the record and feeds the tool's file input.
-   An entry is { name, file } (the File itself; fine for normal sizes) or { name, handle } (a file handle from
-   Chrome/Edge, so a multi-GB video isn't copied). Records older than ten minutes are ignored. */
+   An entry is { name, file } (the File itself; fine for normal sizes; path: where it was in a dropped folder),
+   { name, handle } (a file handle from Chrome/Edge, so a multi-GB video isn't copied) or { name, dir } (a folder
+   handle, for the photo picking and renaming tools, which read it with ManyHandoff.takeAll). Records older than
+   ten minutes are ignored. */
 (() => {
   'use strict';
   const DB = 'manytools-handoff', STORE = 'pending', KEY = 'next', MAX_AGE = 10 * 60 * 1000;
@@ -30,14 +32,20 @@
     await run('readwrite', (st) => st.put({ tool, at: Date.now(), entries }, KEY));
   }
 
-  async function take(tool) {
+  // the entries as they were sent (or null), and the record is gone
+  async function takeAll(tool) {
     let rec;
     try { rec = await run('readonly', (st) => st.get(KEY)); } catch { return null; }
     if (!rec) return null;
     await run('readwrite', (st) => st.delete(KEY)).catch(() => {});
     if (rec.tool !== tool || Date.now() - rec.at > MAX_AGE) return null;
+    return rec.entries || [];
+  }
+  async function take(tool) {
+    const entries = await takeAll(tool);
+    if (!entries) return null;
     const files = [], missed = [];
-    for (const e of rec.entries || []) {
+    for (const e of entries) {
       if (e.file) { files.push(e.file); continue; }
       try { files.push(await e.handle.getFile()); } catch { missed.push(e.name); }
     }
@@ -54,7 +62,7 @@
     setTimeout(() => n.remove(), 6000);
   }
 
-  window.ManyHandoff = { send, take };
+  window.ManyHandoff = { send, take, takeAll };
 
   // On a tool page: pick up what the home page left and hand it to the tool's own file input.
   const me = document.currentScript;

@@ -22,7 +22,7 @@
     return n;
   };
   const onServer = /^https?:$/.test(location.protocol);
-  if (onServer) $('#brand').href = '/';
+  if (onServer) $('#brand').href = '/photo';   // the home page's 拍攝 side
   const num = (n) => n.toLocaleString('zh-TW');
   const fmtBytes = (b) => (b >= 1e9 ? `${(b / 1e9).toFixed(1)} GB` : b >= 1e6 ? `${(b / 1e6).toFixed(1)} MB` : `${Math.max(1, Math.round(b / 1e3))} KB`);
   const PHONE = matchMedia('(max-width: 640px), (pointer: coarse) and (max-width: 900px)').matches;
@@ -97,8 +97,8 @@
     for (const x of list) {
       if (x.entry) await walk(x.entry, '');
       else if (x.file && !JUNK.test(x.file.name)) {
-        // a folder chosen in the file box: its own name first in webkitRelativePath
-        const rel = (x.file.webkitRelativePath || '').split('/').slice(1, -1).join('/');
+        // a folder chosen in the file box: its own name first in webkitRelativePath (from the home page: path)
+        const rel = ((x.path && x.path.includes('/') ? x.path : x.file.webkitRelativePath) || '').split('/').slice(1, -1).join('/');
         entries.push(entryOf(rel, x.file.name, x.file));
       }
     }
@@ -325,7 +325,7 @@
       } else {
         const entries = await readEntries(list);
         const top = list.length === 1 && list[0].entry && list[0].entry.isDirectory ? list[0].entry.name
-          : (list[0] && list[0].file && list[0].file.webkitRelativePath ? list[0].file.webkitRelativePath.split('/')[0] : '');
+          : (list[0] && list[0].file && (list[0].path || list[0].file.webkitRelativePath || '').includes('/') ? (list[0].path || list[0].file.webkitRelativePath).split('/')[0] : '');
         src = { kind, name: top, roots: [], entries, dirs: null };
       }
     } catch (e) {
@@ -726,6 +726,32 @@
       const st = r.ok ? await r.json() : null;
       if (st && st.files > 0) fill($('#heroCount'), '已幫大家改了 ', el('b', { class: 'hero-num', text: num(st.files) }), ' 個檔名');
     } catch {}
+  }
+
+  // files dropped on the home page (/shared/handoff.js). Folders come as handles on Chrome and Edge: renamed in place.
+  async function filesIn(h, prefix, out) {
+    for await (const [name, k] of h.entries()) {
+      if (k.kind === 'file') { if (!JUNK.test(name)) out.push({ file: await k.getFile(), path: `${prefix}/${name}` }); } else if (!JUNK_DIR.test(name)) await filesIn(k, `${prefix}/${name}`, out);
+    }
+    return out;
+  }
+  if (window.ManyHandoff && window.indexedDB) {
+    ManyHandoff.takeAll('rename').then(async (entries) => {
+      if (!entries || !entries.length) return;
+      if (CAN_MOVE && entries.every((e) => e.dir)) { load(entries.map((e) => ({ handle: e.dir, name: e.name })), 'dir'); return; }
+      const list = [];
+      let missed = 0;
+      for (const e of entries) {
+        try {
+          if (e.dir) list.push(...await filesIn(e.dir, e.name, []));
+          else if (e.handle) list.push({ file: await e.handle.getFile() });
+          else if (e.file) list.push({ file: e.file, path: e.path });
+          else missed++;
+        } catch { missed++; }
+      }
+      if (list.length) load(list, 'files');
+      if (missed) toast(`有 ${num(missed)} 個沒辦法從首頁帶過來，請在這裡再選一次`, 6000);
+    }).catch(() => {});
   }
 
   modeText();
