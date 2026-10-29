@@ -301,13 +301,15 @@
     const can = { pick: !phone && (n - raw > 0 || zips > 0), rename: true, image: n - raw > 0, exif: n > 0 };
     let best = !phone && (n >= 20 || zips) ? 'pick' : raw === n ? 'exif' : n <= 3 ? 'exif' : 'image';
     if (!can[best]) best = PHOTO_TOOLS.find((t) => can[t]);
-    const what = [n ? `${num(n)} 張照片` : '', zips ? `${num(zips)} 個 ZIP` : '', set.folders ? `來自 ${set.tops.filter((t) => t.folder).length} 個資料夾` : ''].filter(Boolean).join('・');
+    // a phone with photos and a ZIP: the photos go on, the ZIP can't (said below, not counted up here)
+    const what = [n ? `${num(n)} 張照片` : '', zips && !phone ? `${num(zips)} 個 ZIP` : '', set.folders ? `來自 ${set.tops.filter((t) => t.folder).length} 個資料夾` : ''].filter(Boolean).join('・');
     $('#askN').textContent = what;
     for (const b of $$('.opt', dlg)) {
       b.disabled = !can[b.dataset.tool];
       b.classList.toggle('best', b.dataset.tool === best);
     }
-    $('#askWhy').textContent = best === 'pick' ? (zips ? 'ZIP 只有照片挑選可以直接讀' : '這麼多張，通常先挑出要的')
+    $('#askWhy').textContent = phone && zips ? `ZIP 要用電腦開「照片挑選」，這次只會用到這 ${num(n)} 張照片`
+      : best === 'pick' ? (zips ? 'ZIP 只有照片挑選可以直接讀' : '這麼多張，通常先挑出要的')
       : raw === n ? '只有 RAW 檔：可以看參數或改名稱，不能壓縮'
       : n <= 3 ? '幾張照片：看看參數，或壓到上限內' : '';
     dlg.showModal();

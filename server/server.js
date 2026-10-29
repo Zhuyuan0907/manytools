@@ -66,7 +66,8 @@ const LEGACY = [
   [/^\/exiftools(\/(index\.html)?)?$/, '/exif'],
   [/^\/renametools(\/(index\.html)?)?$/, '/rename'],
   [/^\/picktools(\/(index\.html)?)?$/, '/pick'],
-  [/^\/pick\/second\.html$/, '/pick/second'],
+  [/^\/pick\/second(\.html|\/)$/, '/pick/second'],
+  [/^\/pick\/demo\/(index\.html)?$/, '/pick/demo'],
   [/^\/photo\/$/, '/photo'],
 ];
 
@@ -185,7 +186,8 @@ function demoPhotos() {
     }
     return list;
   })();
-  demoReady.catch(() => { demoReady = null; });   // no demo.zip (yet): try again next time
+  // no demo.zip (yet): try again next time; a broken one: once per start, not on every request
+  demoReady.catch((e) => { if (e.code === 'ENOENT') demoReady = null; else console.error('照片挑選 demo:', e.message); });
   return demoReady;
 }
 // a ZIP's photos (stored or deflated; ZIP64 sizes too) into a folder, flat, by their own names
@@ -204,6 +206,7 @@ async function unzipPhotos(zipFile, dir) {
       cdSize = Number(r.readBigUInt64LE(40)); cdOff = Number(r.readBigUInt64LE(48));
     }
     const cd = await read(cdOff, cdSize);
+    const used = new Set();
     for (let q = 0; q + 46 <= cd.length && cd.readUInt32LE(q) === 0x02014b50;) {
       const method = cd.readUInt16LE(q + 10), nl = cd.readUInt16LE(q + 28), xl = cd.readUInt16LE(q + 30), cl = cd.readUInt16LE(q + 32);
       const usize0 = cd.readUInt32LE(q + 24);
@@ -216,14 +219,21 @@ async function unzipPhotos(zipFile, dir) {
       }
       const name = path.basename(cd.toString('utf8', q + 46, q + 46 + nl).replace(/\\/g, '/'));
       q += 46 + nl + xl + cl;
-      if (!DEMO_PHOTO.test(name) || name.startsWith('.') || (method !== 0 && method !== 8)) continue;
-      const lh = await read(lho, 30);
-      const at = lho + 30 + lh.readUInt16LE(26) + lh.readUInt16LE(28);
-      const src = fs.createReadStream(zipFile, { start: at, end: at + csize - 1 });
-      const out = fs.createWriteStream(path.join(dir, name));
-      await new Promise((ok, fail) => {
-        (method === 8 ? src.pipe(zlib.createInflateRaw()) : src).on('error', fail).pipe(out).on('finish', ok).on('error', fail);
-      });
+      if (!DEMO_PHOTO.test(name) || name.startsWith('.') || (method !== 0 && method !== 8) || !csize || !usize0) continue;
+      // the same name in two folders: the second one gets " (2)"
+      let file = name;
+      for (let k = 2; used.has(file.toLowerCase()); k++) file = name.replace(/(\.[^.]+)$/, ` (${k})$1`);
+      used.add(file.toLowerCase());
+      // one bad photo is left out, not the whole demo
+      try {
+        const lh = await read(lho, 30);
+        const at = lho + 30 + lh.readUInt16LE(26) + lh.readUInt16LE(28);
+        const steps = [fs.createReadStream(zipFile, { start: at, end: at + csize - 1 }), ...(method === 8 ? [zlib.createInflateRaw()] : []), fs.createWriteStream(path.join(dir, file))];
+        await require('stream').promises.pipeline(steps);
+      } catch (e) {
+        console.error(`照片挑選 demo: ${name} left out (${e.message})`);
+        await fs.promises.rm(path.join(dir, file), { force: true });
+      }
     }
   } finally { await fh.close(); }
 }
@@ -236,10 +246,13 @@ function sendRanged(req, res, file, size, type, cache) {
     if (start > end) { res.writeHead(416, { ...HEADERS, 'Content-Range': `bytes */${size}` }); return res.end(); }
     code = 206;
   }
-  res.writeHead(code, { ...HEADERS, 'Content-Type': type, 'Cache-Control': cache, 'Accept-Ranges': 'bytes', 'Content-Length': end - start + 1,
-    ...(code === 206 ? { 'Content-Range': `bytes ${start}-${end}/${size}` } : {}) });
-  if (req.method === 'HEAD') return res.end();
-  fs.createReadStream(file, { start, end }).pipe(res);
+  const head = { ...HEADERS, 'Content-Type': type, 'Cache-Control': cache, 'Accept-Ranges': 'bytes', 'Content-Length': end - start + 1,
+    ...(code === 206 ? { 'Content-Range': `bytes ${start}-${end}/${size}` } : {}) };
+  if (req.method === 'HEAD' || !size) { res.writeHead(code, head); return res.end(); }
+  // a file gone or unreadable is a 404, not the server's end; a client that leaves closes the file
+  const rs = fs.createReadStream(file, { start, end });
+  rs.once('error', () => { if (!res.headersSent) send(res, 404, 'not found', 'text/plain; charset=utf-8'); });
+  rs.once('open', () => { res.writeHead(code, head); require('stream').pipeline(rs, res, () => {}); });
 }
 // the demo page: the pick tool, called what it is when shared
 const demoPage = (html) => html

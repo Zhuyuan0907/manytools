@@ -432,8 +432,9 @@
     }
     flash(f, list.length);
     if (advance && list.length === 1) {
-      if (pos < view.length - 1 || !matches(view[pos])) go(1);
-      else toast('這是最後一張了');
+      const last = pos >= view.length - 1;
+      if (!last || !matches(view[pos])) go(1);
+      if (last && view.length) toast('這是最後一張了');
     }
     refresh();
   }
@@ -474,18 +475,27 @@
     if (stay) { const i = view.indexOf(stay); pos = i >= 0 ? i : Math.min(lowerBound(stay), Math.max(0, view.length - 1)); }
     sel.clear();
   }
-  // A photo that no longer fits the filter (marked while only unmarked ones show) stays until you move off it.
+  // Photos that no longer fit the filter (marked while only unmarked ones show, one or a grid's selection) stay until
+  // you move off them.
   function go(d) {
     if (!view.length) return;
     let next = pos + d;
-    const from = view[pos];
-    if (from && !matches(from)) { view.splice(pos, 1); viewGen++; if (d > 0) next = pos; }
+    if (view.some((it) => !matches(it))) {
+      const from = view[pos], before = view.slice(0, pos).filter(matches).length;
+      view = view.filter(matches); viewGen++;
+      next = before + d - (from && !matches(from) && d > 0 ? 1 : 0);
+    }
     pos = clamp(next, 0, Math.max(0, view.length - 1));
     sel.clear();
     show();
     refresh();
   }
-  function goTo(i) { const from = view[pos]; if (from && i !== pos && !matches(from)) { view.splice(pos, 1); viewGen++; if (i > pos) i--; } pos = clamp(i, 0, Math.max(0, view.length - 1)); show(); refresh(); }
+  function goTo(i) {
+    const to = view[i];
+    if (view.some((it) => it !== to && !matches(it))) { view = view.filter((it) => it === to || matches(it)); viewGen++; if (to) i = view.indexOf(to); }
+    pos = clamp(i, 0, Math.max(0, view.length - 1));
+    show(); refresh();
+  }
 
   // ---------- steps ----------
   const STEP_NAMES = ['放入照片', '挑照片', '存下來'];
@@ -503,7 +513,8 @@
     document.body.classList.toggle('culling', n === 2);
     if (n === 2) { if (was !== 2) { if (!current()) rebuildView(firstOpen()); requestAnimationFrame(() => { layout(); show(); refresh(); }); tip(); } }
     else if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
-    if (n === 3) renderStep3();
+    // back in step 3 after a save: ready to save again (unless a save is still going)
+    if (n === 3) { if (was !== 3 && !export_.busy) fresh3(); else renderStep3(); }
     renderStepper();
   }
   document.addEventListener('click', (e) => { const b = e.target.closest('[data-goto]'); if (b && !b.disabled) goto(+b.dataset.goto); });
@@ -526,11 +537,13 @@
     $('#step1').classList.toggle('busy', !!text);
     if (text) $('#readingText').textContent = text;
   }
-  function counts() {
+  function counts(list = items) {
     let keep = 0, drop = 0;
-    for (const it of items) { const f = flagOf(it); if (f === 1) keep++; else if (f === -1) drop++; }
-    return { all: items.length, keep, drop, none: items.length - keep - drop };
+    for (const it of list) { const f = flagOf(it); if (f === 1) keep++; else if (f === -1) drop++; }
+    return { all: list.length, keep, drop, none: list.length - keep - drop };
   }
+  // the filter's numbers: in the folder chosen
+  const shownCounts = () => (S.folder ? counts(items.filter(inFolder)) : counts());
   function renderStep1() {
     const n = items.length, c = counts();
     $('#step1').classList.toggle('has-files', n > 0);
@@ -558,7 +571,7 @@
     placeDirs(); sortItems();
     if (S.folder && !items.some((it) => it.dir === S.folder)) S.folder = '';
     rebuildView(firstOpen());
-    renderStep1(); renderStepper();
+    renderStep1(); renderStepper(); queueSecond();
   }
   function clearMarks() {
     const c = counts();
@@ -568,7 +581,7 @@
     save(ch.map((x) => [x.it.key, 0]));
     undo.push({ ch, at: null });
     rebuildView(items[0]);
-    renderStep1();
+    renderStep1(); queueSecond();
     toast('旗標清掉了（挑照片時按 ⌘Z 可以復原）');
   }
   const drop = $('#drop');
@@ -619,8 +632,8 @@
     if (Z.on) zoomAtSpot(false);
     else { Z.k = 1; Z.x = 0; Z.y = 0; apply(false); }
   }
-  // 100 %: a pixel of the photo on a pixel of the screen (at least twice the fitted size)
-  const k100 = () => { const it = current(); return Math.max(2, (it && it.w ? it.w / fit.w : 1) / dpr()); };
+  // 100 %: a pixel of the photo on a pixel of the screen (a photo about the screen's size or smaller: twice the fitted size)
+  const k100 = () => { const it = current(), k = (it && it.w ? it.w / fit.w : 1) / dpr(); return k > 1.2 ? k : 2; };
   function apply(animate) {
     frame.classList.toggle('glide', !!animate);
     frame.style.transform = `translate(${Z.x}px, ${Z.y}px) scale(${Z.k})`;
@@ -772,10 +785,11 @@
     } else stage.classList.remove('loading');
     info(it);
     drawStrip(); drawGrid(); queueSecond();
-    // the next ones (and the one before), once you stop for a moment
+    // the next ones (and the one before), once you stop for a moment: as many as the pictures kept, so none of them
+    // pushes out the next; a demo photo is a download, so only the next one
     clearTimeout(preTimer);
     preTimer = setTimeout(async () => {
-      for (const d of [1, 2, -1, 3]) {
+      for (const d of it.url ? [1] : [1, 2, -1, 3].slice(0, KEEP - 1)) {
         if (gen !== showGen) return;
         const n = view[pos + d];
         if (n) await pic(n).ready;
@@ -857,7 +871,8 @@
         it.thumb = await new Promise((r) => c.toBlob(r, 'image/jpeg', 0.8));
         it.turn = 1;
         for (const n of $$(`[data-k="${CSS.escape(it.key)}"] img`)) { n.src = thumbUrl(it); n.style.transform = ''; }
-        if (swWant.delete(it.key)) sendThumbs([it]);
+        // the second window gets it too (asked for or not), so it has it after this page closes
+        if (swWant.delete(it.key) || swOpen()) sendThumbs([it]);
       } catch { /* stays blank */ }
     }
     thumbBusy = false;
@@ -911,6 +926,8 @@
   }
   function drawGrid(follow = true) {
     if (S.step !== 2 || !S.grid) return;
+    // nothing in this filter: say so here too (the photo's own message is hidden with it)
+    if (!view.length) { gridIn.style.height = `${grid.clientHeight}px`; gridIn.replaceChildren(el('p', { class: 'st-empty', text: $('#stEmpty').textContent })); return; }
     const { cw, ch } = gridSize(), H = grid.clientHeight;
     const rows = Math.ceil(view.length / cols);
     gridIn.style.height = `${rows * ch + 16}px`;
@@ -935,8 +952,10 @@
     const c = e.target.closest('.gcell');
     if (!c) return;
     const i = +c.dataset.i, it = view[i];
+    // a double-click opens it: taken from the second click, as the first one redraws the cells and no dblclick comes
+    if (e.detail === 2 && !e.shiftKey && !e.metaKey && !e.ctrlKey) { sel.clear(); goTo(i); setGrid(false); return; }
     if (e.shiftKey) {
-      const a = view.indexOf(anchor || current()), lo = Math.min(a, i), hi = Math.max(a, i);
+      const a = view.indexOf(rangeFrom()), lo = Math.min(a, i), hi = Math.max(a, i);
       sel.clear();
       for (let k = lo; k <= hi; k++) sel.add(view[k]);
       pos = i;
@@ -944,10 +963,11 @@
       if (!sel.size && current()) sel.add(current());
       if (sel.has(it)) sel.delete(it); else sel.add(it);
       pos = i; anchor = it;
-    } else { sel.clear(); pos = i; anchor = it; }
+    } else { sel.clear(); anchor = it; goTo(i); return; }
     show(); refresh();
   });
-  grid.addEventListener('dblclick', (e) => { if (e.target.closest('.gcell')) setGrid(false); });
+  // where a Shift range starts: the photo it started from while that selection lasts, else the one you're on
+  const rangeFrom = () => (sel.size > 1 && view.includes(anchor) ? anchor : (anchor = current()));
   function setGrid(on) {
     if (S.grid === on || !items.length) return;
     S.grid = on;
@@ -972,9 +992,14 @@
   // thumbnails it asks for, as copies (they outlive this page). From there: clicks and keys, taken as if pressed here.
   const bc = 'BroadcastChannel' in window ? new BroadcastChannel('zt-pick') : null;
   const ME = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 7)}`;
-  let swSeen = 0, viewGen = 0, sentGen = -1, sentAny = false, swQueued = false;
+  let swSeen = 0, swLapse = 0, viewGen = 0, sentGen = -1, sentAny = false, swQueued = false, usedAt = 0;
   const swWant = new Set();
   const swOpen = () => Date.now() - swSeen < 6000;
+  // when this page was last used: with two pick pages open, the second window follows the one used last
+  for (const t of ['focus', 'keydown', 'pointerdown']) addEventListener(t, () => { usedAt = Date.now(); }, true);
+  // held while this page lives: the second window waits on it, so it knows when this page is gone even if 'bye' isn't
+  // heard (Firefox can drop it when the tab's process closes)
+  if (navigator.locks) navigator.locks.request(`zt-pick-main-${ME}`, () => new Promise(() => {})).catch(() => {});
   const post = (type, extra) => { if (bc) bc.postMessage({ type, from: ME, ...extra }); };
   function secondButton() {
     const on = swOpen();
@@ -996,13 +1021,13 @@
   }
   function sendList() {
     sentGen = viewGen; sentAny = true;
-    post('list', { list: view.map((it) => [it.key, it.name, it.dir]), filter: S.filter });
+    post('list', { list: view.map((it) => [it.key, it.name, it.dir]), filter: S.filter, used: document.hasFocus() ? Date.now() : usedAt });
   }
   function sendState() {
     const flags = new Int8Array(view.length);
     view.forEach((it, i) => { flags[i] = flagOf(it); });
     const picked = S.grid && sel.size > 1 ? view.reduce((a, it, i) => (sel.has(it) ? (a.push(i), a) : a), []) : [];
-    post('state', { len: view.length, pos, flags, sel: picked, counts: counts(), filter: S.filter });
+    post('state', { len: view.length, pos, flags, sel: picked, counts: shownCounts(), filter: S.filter });
   }
   async function sendThumbs(list) {
     const out = [];
@@ -1022,12 +1047,15 @@
         const was = swOpen();
         swSeen = Date.now();
         if (!was) secondButton();
+        // and off again when it stops being heard (closed without a word, or gone with its process)
+        clearTimeout(swLapse); swLapse = setTimeout(secondButton, 6100);
         // a second window that just opened (or hadn't been heard from): what we have
         if ((m.type === 'hello' || !was) && items.length) { sentGen = -1; queueSecond(); }
         return;
       }
       if (m.type === 'gone') { swSeen = 0; secondButton(); return; }
       if (m.to !== ME) return;
+      if (m.type !== 'want') usedAt = Date.now();   // used from the second window: still the page in use
       if (m.type === 'want') {
         const ready = [];
         for (const k of m.keys) { const it = byKey.get(k); if (!it) continue; if (it.thumb) ready.push(it); else { swWant.add(k); wantThumb(it); } }
@@ -1035,12 +1063,15 @@
       } else if (m.type === 'go') { if (S.step === 2 && view[m.i]) { sel.clear(); goTo(m.i); } }
       else if (m.type === 'loupe') { if (S.grid) setGrid(false); }
       else if (m.type === 'key') {
+        // the shortcuts open here: a key from there closes them, as it would here
+        const d = $('#keys');
+        if (d.open) { if (m.key === 'Escape' || m.key === '?' || m.key === 'Enter') d.close(); return; }
         onKey({ key: m.key, shiftKey: m.shift, metaKey: m.meta, ctrlKey: m.ctrl, altKey: m.alt, target: document.body, preventDefault() {}, getModifierState: (x) => x === 'CapsLock' && m.caps });
       }
     };
     post('hello-main');
     // the window you're using is the one it follows
-    addEventListener('focus', () => { if (items.length && swOpen()) { sentGen = -1; queueSecond(); } });
+    addEventListener('focus', () => { if ((items.length || sentAny) && swOpen()) { sentGen = -1; queueSecond(); } });
     addEventListener('pagehide', () => post('bye'));
   }
   $('#bSecond').addEventListener('click', toggleSecond);
@@ -1063,8 +1094,8 @@
   // ---------- the filmstrip's header: counts, filter, folder, order ----------
   function refresh() {
     if (S.step !== 2) return;
-    const c = counts();
-    $('#nAll').textContent = num(c.all); $('#nNone').textContent = num(c.none); $('#nKeep').textContent = num(c.keep); $('#nDrop').textContent = num(c.drop);
+    const c = counts(), f = shownCounts();
+    $('#nAll').textContent = num(f.all); $('#nNone').textContent = num(f.none); $('#nKeep').textContent = num(f.keep); $('#nDrop').textContent = num(f.drop);
     for (const b of $$('.tl')) { const on = b.dataset.f === S.filter; b.classList.toggle('on', on); b.setAttribute('aria-checked', String(on)); }
     $('#doneFill').style.width = `${c.all ? ((c.keep + c.drop) / c.all) * 100 : 0}%`;
     $('#doneBar').title = `決定了 ${num(c.keep + c.drop)}／${num(c.all)} 張`;
@@ -1174,19 +1205,22 @@
   // ---------- keys ----------
   function onKey(e) {
     if (S.step !== 2 || $('#keys').open) return;
-    if (e.target.closest && e.target.closest('input[type="text"], select, textarea')) return;
+    // the folder or order menu still focused (opened, then closed without a change): the culling keys are for the photos
+    const menu = e.target.closest && e.target.closest('select');
+    if (menu && !e.metaKey && !e.ctrlKey && !e.altKey && /^(ArrowLeft|ArrowRight|Home|End|Delete|Backspace|[pPxXuU`0iIzZgGeEfF?])$/.test(e.key)) menu.blur();
+    else if (e.target.closest && e.target.closest('input[type="text"], select, textarea')) return;
     const k = e.key, mod = e.metaKey || e.ctrlKey;
     if (mod && !e.altKey && (k === 'z' || k === 'Z') && !e.shiftKey) { e.preventDefault(); doUndo(); return; }
     if (mod || e.altKey) return;
-    if (!view.length && !/^[gGiI?]$/.test(k)) return;
+    if (!view.length && !/^([gGiIeE?]|Enter|Escape)$/.test(k)) return;
     const advance = S.auto || e.shiftKey || (e.getModifierState && e.getModifierState('CapsLock'));
     const one = () => (sel.size > 1 && S.grid ? targets() : [current()]);
     let done = true;
     switch (k) {
       case 'ArrowRight': if (S.grid && e.shiftKey) extend(1); else go(1); break;
       case 'ArrowLeft': if (S.grid && e.shiftKey) extend(-1); else go(-1); break;
-      case 'ArrowUp': if (S.grid) { if (e.shiftKey) extend(-cols); else go(-cols); } else mark(one(), 1, advance); break;
-      case 'ArrowDown': if (S.grid) { if (e.shiftKey) extend(cols); else go(cols); } else mark(one(), -1, advance); break;
+      case 'ArrowUp': if (S.grid) { if (e.shiftKey) extend(-cols); else go(-cols); } else done = false; break;
+      case 'ArrowDown': if (S.grid) { if (e.shiftKey) extend(cols); else go(cols); } else done = false; break;
       case 'p': case 'P': mark(one(), 1, advance); tipDone(); break;
       case 'x': case 'X': case 'Delete': case 'Backspace': mark(one(), -1, advance); tipDone(); break;
       case 'u': case 'U': case '0': mark(one(), 0, advance); tipDone(); break;
@@ -1208,9 +1242,7 @@
   }
   document.addEventListener('keydown', onKey);
   function extend(d) {
-    if (!sel.size && current()) sel.add(current());
-    if (!anchor) anchor = current();
-    const a = view.indexOf(anchor), i = clamp(pos + d, 0, view.length - 1);
+    const a = view.indexOf(rangeFrom()), i = clamp(pos + d, 0, view.length - 1);
     sel.clear();
     for (let k = Math.min(a, i); k <= Math.max(a, i); k++) sel.add(view[k]);
     pos = i;
@@ -1241,20 +1273,21 @@
     for (const [name, v] of [['take', S.take], ['lay', S.lay]]) { const r = $(`input[name="${name}"][value="${v}"]`); if (r) r.checked = true; }
     const dirs = new Set(list.map((it) => it.dir));
     $$('input[name="lay"]').forEach((r) => { r.disabled = dirs.size < 2; });
-    fill($('#takeLine'), el('b', { text: `${num(list.length)} 張` }), `・${fmtBytes(bytes)}・`, list.length === 1 ? '直接下載這張' : CAN_DIR ? '存進你選的資料夾' : '打包成 ZIP 下載');
+    fill($('#takeLine'), el('b', { text: `${num(list.length)} 張` }), ...(list.length ? [`・${fmtBytes(bytes)}・`, list.length === 1 ? '直接下載這張' : CAN_DIR ? '存進你選的資料夾' : '打包成 ZIP 下載'] : []));
     const same = list.length - new Set(list.map((it) => it.name.toLowerCase())).size;
-    $('#outHelp').textContent = list.length === 1 ? '' : CAN_DIR
+    $('#outHelp').textContent = list.length <= 1 ? '' : CAN_DIR
       ? `選一個資料夾（可以新建一個空的），照片會原封不動複製進去${same && S.lay === 'flat' ? `；同名的 ${num(same)} 張會加上 -2` : ''}。資料夾裡已經有的同一張會跳過，所以多挑幾張再存一次也可以。`
       : `照片原封不動打包${same && S.lay === 'flat' ? `；同名的 ${num(same)} 張會加上 -2` : ''}。用電腦版 Chrome 或 Edge 可以直接存進資料夾，不用再解壓。`;
     const go = $('#go');
     go.disabled = !list.length;
-    go.textContent = list.length === 1 ? '下載這張 →' : CAN_DIR ? '選資料夾，存進去 →' : `下載 ZIP（${num(list.length)} 張）→`;
-    $('#goZip').hidden = !(CAN_DIR && list.length > 1);
+    go.textContent = !list.length ? '存下來 →' : list.length === 1 ? '下載這張 →' : CAN_DIR ? '選資料夾，存進去 →' : `下載 ZIP（${num(list.length)} 張）→`;
+    $('#goZip').hidden = go.hidden || !(CAN_DIR && list.length > 1);
     $('#note3').textContent = !list.length ? (S.take === 'keep' ? '還沒有標「留用」的照片' : '每一張都標了「排除」') : '';
   }
   $('#go').addEventListener('click', () => { const list = takeList(); if (list.length === 1) saveOne(list[0]); else if (CAN_DIR) saveDir(list); else saveZip(list); });
   $('#goZip').addEventListener('click', () => saveZip(takeList()));
-  $('#again').addEventListener('click', () => { $('#after').hidden = true; $('#big').hidden = true; $('#outSets').hidden = false; $('#fails').hidden = true; renderStep3(); renderFoot3(true); });
+  function fresh3() { $('#after').hidden = true; $('#big').hidden = true; $('#outSets').hidden = false; $('#fails').hidden = true; renderFoot3(true); renderStep3(); }
+  $('#again').addEventListener('click', fresh3);
   function renderFoot3(on) { $('#go').hidden = !on; $('#goZip').hidden = !on || !(CAN_DIR && takeList().length > 1); $('#back3').disabled = !on; }
   function progress() {
     const e = export_;
@@ -1343,20 +1376,28 @@
     begin(list.length, '打包中…');
     window.addEventListener('beforeunload', hold);
     try {
-      const entries = [];
+      const entries = [], net = list.filter((it) => !it.z && !it.file).length;
+      let got = 0;
       for (const it of list) {
         const { dir, name } = names.get(it), path = dir ? `${dir}/${name}` : name;
         if (it.z) { const at = await dataStart(it.z); entries.push({ name: path, raw: { data: it.z.zip.slice(at, at + it.z.csize), method: it.z.method, crc: it.z.crc, size: it.z.size }, lastModified: it.z.mod }); }
-        else entries.push({ name: path, file: it.file || await blobOf(it) });
+        else if (it.file) entries.push({ name: path, file: it.file });
+        else {
+          // a demo photo: downloaded first, one by one (one that doesn't come is left out, and listed)
+          fill($('#bigWhat'), `下載照片 ${num(++got)}／${num(net)}…`);
+          try { entries.push({ name: path, file: await blobOf(it) }); } catch { export_.fails.push({ name: it.name, why: '下載不到' }); }
+        }
       }
-      const all = entries.reduce((a, x) => a + (x.raw ? x.raw.data.size : x.file.size), 0);
-      const blob = await ManyZip.files(entries, (d) => { export_.done = Math.min(list.length, Math.round((d / all) * list.length)); progress(); });
+      if (!entries.length) throw new Error('nothing to pack');
+      if (got) fill($('#bigWhat'), '打包中…');
+      const all = entries.reduce((a, x) => a + (x.raw ? x.raw.data.size : x.file.size), 0), n = entries.length;
+      const blob = await ManyZip.files(entries, (d) => { export_.done = Math.min(n, Math.round((d / all) * n)); progress(); });
       export_.done = list.length;
-      download(blob, `挑好的照片-${list.length}張.zip`);
-      finish(['開始下載了：', el('b', { text: `${num(list.length)} 張` }), `，${fmtBytes(blob.size)}`]);
+      download(blob, `挑好的照片-${n}張.zip`);
+      finish(['開始下載了：', el('b', { text: `${num(n)} 張` }), `，${fmtBytes(blob.size)}`]);
     } catch (e) {
       console.error(e);
-      export_.fails.push({ name: 'ZIP', why: '打包失敗' });
+      if (!export_.fails.length) export_.fails.push({ name: 'ZIP', why: '打包失敗' });
       finish(['沒有打包成功']);
     }
     window.removeEventListener('beforeunload', hold);
@@ -1408,7 +1449,8 @@
     reading('');
     if (!list.length) { toast('示範照片還沒準備好，請晚一點再試', 6000); return; }
     await markReady.catch(() => {});
-    await add(list.map((x) => ({ url: `demo/${encodeURIComponent(x.name)}`, name: x.name, size: x.size, mod: x.mtime })));
+    // ?v: a new demo.zip is new photos to the browser's (and Cloudflare's) cache, though the names stay
+    await add(list.map((x) => ({ url: `demo/${encodeURIComponent(x.name)}?v=${Math.round(x.mtime)}`, name: x.name, size: x.size, mod: x.mtime })));
   }
   if (DEMO && !ON_PHONE) startDemo();
   loadStats();

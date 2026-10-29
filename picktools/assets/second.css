@@ -15,7 +15,7 @@
 * { box-sizing: border-box; }
 html, body { height: 100%; margin: 0; }
 body {
-  display: grid; grid-template-rows: auto minmax(0, 1fr); overflow: hidden; background: var(--bg); color: var(--text);
+  display: grid; grid-template-rows: auto minmax(0, 1fr); grid-template-columns: minmax(0, 1fr); overflow: hidden; background: var(--bg); color: var(--text);
   font: 15px/1.5 var(--font); -webkit-font-smoothing: antialiased; user-select: none; -webkit-user-select: none;
 }
 [hidden] { display: none !important; }
@@ -34,7 +34,7 @@ button { font: inherit; }
 .size { display: flex; gap: 2px; flex: none; }
 .bar button { height: 28px; min-width: 32px; padding: 0 9px; display: inline-grid; place-items: center; border: 0; border-radius: 5px; background: none; color: var(--dim); cursor: pointer; }
 .bar button:hover { background: #3a3a3d; color: var(--hi); }
-.bar .full { color: var(--text); font-size: .92rem; }
+.bar .full { flex: none; color: var(--text); font-size: .92rem; }
 
 .grid { position: relative; overflow-y: auto; outline: none; scrollbar-color: #48484c transparent; }
 .grid-in { position: relative; }
@@ -47,6 +47,7 @@ button { font: inherit; }
 .c.cur .no { color: rgba(255, 255, 255, .16); }
 .pic { position: relative; flex: 1 1 auto; min-height: 0; display: grid; place-items: center; overflow: hidden; container-type: size; }
 .pic img { display: block; width: min(100cqw, 100cqh); height: min(100cqw, 100cqh); object-fit: contain; }
+.pic img:not([src]) { visibility: hidden; }   /* no thumbnail (yet): the cell, not a broken-picture frame */
 .c.is-drop img { opacity: .3; }
 .name { flex: none; height: 22px; font-size: .8rem; line-height: 22px; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .c.is-keep::before, .c.is-drop::before { content: ""; position: absolute; left: 6px; top: 6px; z-index: 1; width: 22px; height: 22px; border-radius: 5px; background: rgba(18, 18, 19, .72); }
@@ -55,4 +56,6 @@ button { font: inherit; }
 
 .empty { position: fixed; inset: 42px 0 0; display: grid; place-items: center; align-content: center; padding: 24px; text-align: center; color: var(--dim); font-size: 1.05rem; line-height: 1.8; pointer-events: none; }
 /* the pick tool's window went away: the grid stays, this says what happens next */
-.state { flex: none; padding: 3px 12px; border-radius: 999px; background: #3a3020; color: #f0c674; font-size: .86rem; }
+.state { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; padding: 3px 12px; border-radius: 999px; background: #3a3020; color: #f0c674; font-size: .86rem; }
+/* narrow: the note's words before the counts (the counts are of a page that has closed) */
+@media (max-width: 1000px) { .state:not([hidden]) ~ .counts { display: none; } }
