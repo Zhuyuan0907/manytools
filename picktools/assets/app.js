@@ -503,6 +503,7 @@
     const to = view[i];
     if (view.some((it) => it !== to && !matches(it))) { view = view.filter((it) => it === to || matches(it)); viewGen++; if (to) i = view.indexOf(to); }
     pos = clamp(i, 0, Math.max(0, view.length - 1));
+    sel.clear();
     show(); refresh();
   }
 
@@ -1232,6 +1233,7 @@
   strip.addEventListener('wheel', (e) => { e.preventDefault(); scrollStrip(stripX + (Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY) * (e.deltaMode === 1 ? 30 : 1)); }, { passive: false });
   $('#filmPrev').addEventListener('click', () => scrollStrip(stripX - strip.clientWidth + CELL, true));
   $('#filmNext').addEventListener('click', () => scrollStrip(stripX + strip.clientWidth - CELL, true));
+  filmBar.addEventListener('click', () => {});   // a tap target to a finger's touch adjustment (not the cells above it)
   filmBar.addEventListener('pointerdown', (e) => {
     const T = filmBar.clientWidth, tw = filmThumb.offsetWidth, total = view.length * CELL, W = strip.clientWidth;
     const per = Math.max(1, total - W) / Math.max(1, T - tw), r = filmBar.getBoundingClientRect(), tx = filmThumb.getBoundingClientRect().left - r.left;
@@ -1642,7 +1644,11 @@
     resizeTimer = requestAnimationFrame(() => { if (S.step === 2) { layout(); stripPos = -1; drawStrip(); drawGrid(); } });
     // once it's done resizing: the photo again, so a preview made for a smaller window is made bigger
     clearTimeout(resizeShow);
-    resizeShow = setTimeout(() => { const it = current(), v = it && previews.get(it); if (S.step === 2 && v && !S.grid && !Z.on && v.long < pvLong(it) * 0.85) show(); }, 300);
+    resizeShow = setTimeout(() => {
+      if (S.step !== 2 || S.grid) return;
+      const it = current(), v = it && previews.get(it);
+      if (v && !Z.on && v.long < pvLong(it) * 0.85) show(); else pvPlan();   // the next ones remade at the new size too
+    }, 300);
   }).observe($('#viewer'));
 
   // ---------- keys ----------
