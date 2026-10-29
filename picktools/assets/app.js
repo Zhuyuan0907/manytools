@@ -1,9 +1,9 @@
 /* ZhuyuanLovePick — culling thousands of photos in the browser: what a photo team gets from Google Drive, picked by
    keyboard. Three steps: 1 ZIPs (Drive's download, as it is), folders or photos in → 2 one photo at a time, the way
    Lightroom Classic's Library does it: P 留用, X 排除, U takes the flag off, ← →, Z for 100 % (it stays on while you
-   go through a burst), G for a grid, I for the photo's details in the corner → 3 the kept ones sorted (your
-   categories, the photographers found in the photos) and saved into folders by them (Chrome, Edge) or a ZIP, one
-   photo as itself.
+   go through a burst), G for a grid, I for the photo's details in the corner → 3 the kept ones where they were, in a
+   Finder window (the photographers sort into folders themselves), then saved with their folders into a folder
+   (Chrome, Edge) or a ZIP, one photo as itself.
    A ZIP is read where it lies: its directory, then each photo's first part for the time, camera and the little
    thumbnail the camera put in it. A photo is unpacked only to be shown or saved. Photos are sorted by when they were
    taken, everyone's together. The marks are kept in this browser (IndexedDB) by name and size, so the same photos
@@ -141,7 +141,6 @@
   //       thumb (Blob | null: none in the file | undefined: not read), turn (the thumbnail still needs the photo's
   //       orientation), n (place in the sorted list) }
   let items = [];
-  let itemsGen = 0;   // bumped when photos come in or go
   const byKey = new Map();
   let sources = [];   // { id, name, kind: 'zip' | 'folder' | 'files', n }
   let skipped = { raw: 0, other: 0, same: 0 };
@@ -159,7 +158,7 @@
     if (!PHOTO.test(name)) { if (RAW.test(name)) skipped.raw++; else if (!/^(thumbs\.db|desktop\.ini|\.ds_store)$/i.test(name)) skipped.other++; return; }
     const key = keyOf(name, size);
     if (byKey.has(key) || found.has(key)) { skipped.same++; return; }
-    found.set(key, { key, name, path, dir: '', size, mod, src, file: file || null, z: z || null, url: url || null, heic: HEIC.test(name), t: null, when: '', cam: '', artist: '', serial: '', lens: '', ss: '', fn: '', iso: '', fl: '', orient: 1, w: 0, h: 0, thumb: undefined, turn: 1, n: 0 });
+    found.set(key, { key, name, path, dir: '', size, mod, src, file: file || null, z: z || null, url: url || null, heic: HEIC.test(name), t: null, when: '', cam: '', lens: '', ss: '', fn: '', iso: '', fl: '', orient: 1, w: 0, h: 0, thumb: undefined, turn: 1, n: 0 });
   }
   // a dropped folder, walked
   function walk(entry, found, src) {
@@ -268,7 +267,6 @@
       await readAll(fresh);
       for (const it of fresh) byKey.set(it.key, it);
       items = items.concat(fresh);
-      itemsGen++;
       sources = sources.concat(added.filter((s) => s.n));
       const inChosen = S.folder ? items.find((it) => it.dir === S.folder) : null;
       placeDirs();
@@ -360,9 +358,6 @@
       it.when = `${d.getMonth() + 1}/${d.getDate()} ${pad2(d.getHours())}:${pad2(d.getMinutes())}:${pad2(d.getSeconds())}（檔案時間）`;
     }
     it.cam = String(valOf(m.Model) || '').replace(/\s+/g, ' ').trim();
-    // who took it, as the camera was told (step 3's photographers), and which camera it was
-    it.artist = String(valOf(m.Artist) || '').replace(/\s+/g, ' ').trim().slice(0, 40);
-    it.serial = String(valOf(m.SerialNumber) || '').replace(/\s+/g, '').slice(0, 40);
     it.lens = String(valOf(m.LensModel) || valOf(m.Lens) || '').replace(/\s+/g, ' ').trim();
     // as Lightroom writes them: 1/250 秒 (ƒ / 4.0)，ISO 2500 / 85 mm
     if (m.ExposureTime) it.ss = String(m.ExposureTime.val).replace(/ ?s$/, '');
@@ -398,9 +393,7 @@
   }
 
   // ---------- marks, kept in this browser ----------
-  // In one store: the flags by the photo's key, and step 3's categories by 'c|' and its key.
   const marks = new Map();   // key → 1 留用 | -1 排除
-  const sorts = new Map();   // key → the id of the category it's in
   const db = (() => {
     let p = null;
     const open = () => p || (p = new Promise((res, rej) => {
@@ -414,11 +407,11 @@
         const d = await open();
         await new Promise((res) => {
           const rq = d.transaction('marks').objectStore('marks').openCursor();
-          rq.onsuccess = () => { const c = rq.result; if (c) { if (c.key.startsWith('c|')) sorts.set(c.key.slice(2), c.value); else marks.set(c.key, c.value); c.continue(); } else res(); };
+          rq.onsuccess = () => { const c = rq.result; if (c) { if (!c.key.startsWith('c|')) marks.set(c.key, c.value); c.continue(); } else res(); };   // ('c|': a day's categories, no more)
           rq.onerror = () => res();
         });
       },
-      async put(list) {   // [[key, 1 | -1 | 0]], [['c|' + key, a category's id | '']]
+      async put(list) {   // [[key, 1 | -1 | 0]]
         const d = await open(), tx = d.transaction('marks', 'readwrite'), st = tx.objectStore('marks');
         for (const [k, v] of list) { if (v) st.put(v, k); else st.delete(k); }
         await new Promise((r) => { tx.oncomplete = tx.onerror = tx.onabort = r; });
@@ -471,10 +464,10 @@
 
   // ---------- what's shown: the filter, the folder, the order ----------
   const SAVED = 'zt-pick';
-  // step 3: cat (the category shown: 'all', 'none' or its id), who (the photographer shown), tile (the thumbnails' size),
-  // tree (how the folders go), credit (the photographer's name before each file's)
-  const S = { step: 1, filter: 'all', folder: '', sort: 'time', auto: true, info: true, tip: true, grid: false, take: 'keep', flags: false, film: true, cat: 'all', who: '', tile: 168, tree: 'cat-who', credit: false };
-  const KEPT = ['sort', 'auto', 'info', 'tip', 'flags', 'film', 'tile', 'tree', 'credit'];
+  // step 3: fdir (the folder open, '' the top), fview ('icons' | 'list'), fsort ('name' | 'time' | 'size') and fdesc,
+  // fall (the photos not picked shown too), ftile (the icons' size)
+  const S = { step: 1, filter: 'all', folder: '', sort: 'time', auto: true, info: true, tip: true, grid: false, take: 'keep', flags: false, film: true, fdir: '', fview: 'icons', fsort: 'name', fdesc: false, fall: false, ftile: 150 };
+  const KEPT = ['sort', 'auto', 'info', 'tip', 'flags', 'film', 'fview', 'fsort', 'fdesc', 'ftile'];
   try { const o = JSON.parse(localStorage.getItem(SAVED)) || {}; for (const k of KEPT) if (k in o) S[k] = o[k]; } catch {}
   const remember = () => { try { localStorage.setItem(SAVED, JSON.stringify(Object.fromEntries(KEPT.map((k) => [k, S[k]])))); } catch {} };
   let view = [];   // the photos shown, in order
@@ -518,7 +511,7 @@
   }
 
   // ---------- steps ----------
-  const STEP_NAMES = ['放入照片', '挑照片', '分類存檔'];
+  const STEP_NAMES = ['放入照片', '挑照片', '檢視下載'];
   function allowed(n) {
     if (export_.busy) return n === 3;
     if (n === 1) return true;
@@ -564,7 +557,7 @@
     S.step = n;
     for (let i = 1; i <= 3; i++) $(`#step${i}`).hidden = i !== n;
     document.body.classList.toggle('culling', n === 2);
-    document.body.classList.toggle('sorting', n === 3);
+    document.body.classList.toggle('reviewing', n === 3);
     if (n !== 3) closePeek();
     if (n === 2) { if (was !== 2) { if (!current()) rebuildView(firstOpen()); requestAnimationFrame(() => { layout(); show(); refresh(); }); tip(); } }
     else if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
@@ -623,7 +616,6 @@
     if (loading) return;
     sources = sources.filter((x) => x !== s);
     items = items.filter((it) => { if (it.src !== s) return true; byKey.delete(it.key); forget(it); return false; });
-    itemsGen++;
     placeDirs(); sortItems();
     if (S.folder && !items.some((it) => it.dir === S.folder)) S.folder = '';
     rebuildView(firstOpen());
@@ -1160,7 +1152,7 @@
   }
   // a thumbnail made: into the filmstrip's and the grid's cells, and to the second window
   function thumbArrived(it) {
-    for (const n of $$(`#gridIn [data-k="${CSS.escape(it.key)}"] img, #boardIn [data-k="${CSS.escape(it.key)}"] img`)) { n.src = thumbUrl(it); n.style.transform = ''; }
+    for (const n of $$(`#gridIn [data-k="${CSS.escape(it.key)}"] img, #fdIn [data-k="${CSS.escape(it.key)}"] img`)) { n.src = thumbUrl(it); n.style.transform = ''; }
     if (pkAt === it) { const t = $('#pkFrame .pk-th'); if (t) { t.src = thumbUrl(it); t.style.cssText = ''; } }
     const sc = stripCells.get(it);
     if (sc) fitThumb(sc, it);
@@ -1486,7 +1478,7 @@
   function refresh() {
     if (S.step !== 2) return;
     const c = counts();
-    for (const b of $$('.go2')) { b.disabled = !allowed(3); b.textContent = c.keep ? `分類 ${num(c.keep)} 張 →` : '分類存檔 →'; }
+    for (const b of $$('.go2')) { b.disabled = !allowed(3); b.textContent = c.keep ? `檢視 ${num(c.keep)} 張 →` : '檢視下載 →'; }
     drawStrip();
     if (S.grid) drawGrid();
     queueSecond();
@@ -1620,7 +1612,7 @@
   document.addEventListener('change', (e) => {
     const r = e.target;
     if (r.type !== 'radio') return;
-    if (r.name === 'take') { S.take = r.value; sortChanged(); }
+    if (r.name === 'take') { S.take = r.value; refresh3(); }
   });
   $('#auto').checked = S.auto;
   $('#auto').addEventListener('change', (e) => { S.auto = e.target.checked; remember(); e.target.blur(); });
@@ -1754,558 +1746,326 @@
     show(); refresh();
   }
 
-  // ---------- step 3: sorting the kept ones, then saving them ----------
-  // On the left what stays put: which photos (留用, or all but 排除), the categories, the photographers. On the right
-  // the photos in step 2's order, in parts (a break of five minutes or more, or another folder), the only thing that
-  // scrolls. At the bottom how the folders go. A category is yours (議程, 攤位, 幕後花絮…): the list is kept in this
-  // browser for the next event, the first nine have number keys, and the category a photo is in is kept like its flag.
-  // Photos are selected like files (a click; Shift, a range; ⌘ / Ctrl, one more; a tap on a tablet adds one) and put
-  // in one with its number key, by dragging them onto it, or with its 放入 button.
+  // ---------- step 3: the picked photos where they were, as a Finder window ----------
+  // The photographers sort their photos into folders themselves (攤位, 議程, 幕後花絮…) and picking leaves them there.
+  // So step 3 shows the folders the way Finder does: the tree on the left (how many are picked in each), the open
+  // folder on the right (its folders, then its photos; icons or a list), back / forward and its name above, the path
+  // below. Space looks at a photo big (Quick Look); P, X (Delete), U still flag. Saved as they are, folders kept: into a
+  // folder you pick (Chrome, Edge) or a ZIP; or only the folder that's open.
   const export_ = { busy: false, n: 0, done: 0, skipped: 0, fails: [], to: '' };
-  const takeList = () => items.filter((it) => (S.take === 'keep' ? flagOf(it) === 1 : flagOf(it) !== -1));
-  const CAT_COLORS = ['#2f6fdf', '#e0661f', '#1f9a5a', '#c2378a', '#7553e6', '#b38600', '#13919e', '#d23f3f', '#5d7a1c', '#8a5a3c'];
-  const IDEAS = ['議程', '攤位', '幕後花絮', '大合照', '工作人員', '場地佈置', '交流時間', '其他'];
-  let cats = [];   // [{ id, name, c: its colour }]
-  try { const v = JSON.parse(localStorage.getItem('zt-pick-cats')); if (Array.isArray(v)) cats = v.filter((x) => x && x.id && x.name); } catch {}
-  const keepCats = () => { try { localStorage.setItem('zt-pick-cats', JSON.stringify(cats)); } catch {} };
-  const catById = (id) => (id && cats.find((c) => c.id === id)) || null;
-  const catOf = (it) => { const id = sorts.get(it.key); return id && catById(id) ? id : ''; };
-  const colorOf = (c) => CAT_COLORS[c.c % CAT_COLORS.length];
-  const svg = (d, w = 14) => {
+  const taken = (it) => (S.take === 'keep' ? flagOf(it) === 1 : flagOf(it) !== -1);
+  const takeList = () => items.filter(taken);
+  const isDir = (e) => !!e.kids;
+  const ek = (e) => (isDir(e) ? `d:${e.path}` : e.key);   // a folder's or a photo's key in the window
+  const parentOf = (p) => { const i = p.lastIndexOf('/'); return i < 0 ? '' : p.slice(0, i); };
+  const inside = (it, p) => !p || it.dir === p || it.dir.startsWith(`${p}/`);
+  const FOLDER = '<path d="M1 2.5A1.5 1.5 0 0 1 2.5 1h4.3l1.8 2h8.9A1.5 1.5 0 0 1 19 4.5v9a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 1 13.5z" fill="currentColor"/>';
+  const BIG_FOLDER = '<path class="f-back" d="M4 9a4 4 0 0 1 4-4h14.5l5 5H56a4 4 0 0 1 4 4v28a4 4 0 0 1-4 4H8a4 4 0 0 1-4-4z"/><path class="f-front" d="M4 17a4 4 0 0 1 4-4h48a4 4 0 0 1 4 4v25a4 4 0 0 1-4 4H8a4 4 0 0 1-4-4z"/>';
+  const svg = (d, box, w, h) => {
     const s = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-    for (const [k, v] of [['viewBox', '0 0 24 24'], ['width', w], ['height', w], ['aria-hidden', 'true']]) s.setAttribute(k, v);
+    for (const [k, v] of [['viewBox', box], ['width', w], ['height', h], ['aria-hidden', 'true']]) s.setAttribute(k, v);
     s.innerHTML = d;
     return s;
   };
-  const PEN = '<path d="M4.5 19.5h4l10-10-4-4-10 10z M13 7l4 4" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linejoin="round"/>';
-  const BIN = '<path d="M5 7h14M10 7V4.5h4V7M7 7l1 12.5h8L17 7" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/>';
-
-  // ---------- who took each photo ----------
-  // A team's exports carry the photographer's name ("Python-4582.jpg", "竺原-4537.jpg"); else the camera's Artist;
-  // else what the same camera's other photos say (by its serial number: Python's IMG_4678.jpg is Python's); else the
-  // folder or the ZIP it came in ("聰明/DSC_0001.JPG"); else the camera. A name can be changed, and two given the
-  // same name are one; the changes are kept in this browser, so the next event knows them.
-  const NOT_A_NAME = /^(?:img|dsc[fn]?|mvi|pxl|dji|gopr|gp|gh|sam|cimg|pict|imgp|kimg|sdc|dcim|photos?|images?|pics?|picture|screenshot|lrm|export(?:ed)?|edited|edit|final|copy|hdr|pano|burst|vid|video|mov|scan|wp|r|p|z|dc|untitled|line|wechat|whatsapp|telegram|messenger|signal|instagram|ig|fb|snapseed|vsco|lr|ps|未命名|照片|截圖|相片|影像|螢幕截圖|螢幕快照)$/i;
-  function nameIn(file) {
-    const m = /^([^\s_.\-\d][^\s_.\-]{0,23})[\s_.\-]+\S*?\d/u.exec(file.replace(/\.[^.]*$/, ''));
-    return m && !NOT_A_NAME.test(m[1]) ? m[1] : '';
+  // the top folder: the one everyone's photos are under ("工人相見歡"), else the ZIP's name
+  function topName() {
+    if (!items.length) return '照片';
+    const it = items[0], up = it.path.split('/').slice(0, -1), common = up.slice(0, up.length - (it.dir ? it.dir.split('/').length : 0));
+    if (common.length) return common[common.length - 1];
+    return sources.length === 1 && sources[0].name ? sources[0].name.replace(/\.zip$/i, '').replace(/-\d{8}T\d{6}Z-\d{3}$/, '') : '全部照片';
   }
-  // a ZIP's or a folder's name, without Google Drive's "-20261025T070707Z-001"
-  const srcName = (s) => (s.kind === 'zip' || s.kind === 'folder' ? s.name.replace(/\.zip$/i, '').replace(/-\d{8}T\d{6}Z-\d{3}$/, '').trim() : '');
-  let alias = {};   // found → given: { 'm:nikon d610': '聰明' }
-  try { const v = JSON.parse(localStorage.getItem('zt-pick-who')); if (v && typeof v === 'object') alias = v; } catch {}
-  const keepAlias = () => { try { localStorage.setItem('zt-pick-who', JSON.stringify(alias)); } catch {} };
-  let whoSeen = -1;
-  function whoAll(force) {
-    if (!force && whoSeen === itemsGen) return;
-    whoSeen = itemsGen;
-    const spell = new Map(), bodies = new Map(), dirs = new Set(), srcs = new Set();
-    const most = (m) => { let best = '', n = 0; for (const [k, c] of m) if (c > n) { best = k; n = c; } return best; };
-    const tally = (map, k, v) => { let m = map.get(k); if (!m) map.set(k, (m = new Map())); m.set(v, (m.get(v) || 0) + 1); };
+  let tree = new Map();   // folder ('' the top) → { path, name, kids: [folders], files: [photos], n: picked in it and under it, all }
+  function buildTree() {
+    tree = new Map();
+    const top = topName();
+    const node = (p) => {
+      let t = tree.get(p);
+      if (t) return t;
+      t = { path: p, name: p ? p.slice(p.lastIndexOf('/') + 1) : top, kids: [], files: [], n: 0, all: 0 };
+      tree.set(p, t);
+      if (p) node(parentOf(p)).kids.push(p);
+      return t;
+    };
+    node('');
     for (const it of items) {
-      it.whoOwn = nameIn(it.name) || it.artist;
-      const k = it.whoOwn.toLowerCase();
-      if (k) { tally(spell, k, it.whoOwn); if (it.serial) tally(bodies, `${it.cam}#${it.serial}`, k); }
-      dirs.add(it.dir.split('/')[0].toLowerCase());
-      srcs.add(srcName(it.src).toLowerCase());
+      node(it.dir).files.push(it);
+      const y = taken(it);
+      for (let p = it.dir; ; p = parentOf(p)) { const t = tree.get(p); t.all++; if (y) t.n++; if (!p) break; }
     }
-    // a camera: the one most of its named photos are by
-    const bodyWho = new Map();
-    for (const [b, m] of bodies) { const k = most(m); let all = 0; for (const c of m.values()) all += c; if (m.get(k) >= all * 0.6) bodyWho.set(b, k); }
-    // one model, several cameras nobody's named: told apart by their serial numbers
-    const serials = new Map();
-    for (const it of items) if (!it.whoOwn && it.serial && !bodyWho.has(`${it.cam}#${it.serial}`)) tally(serials, it.cam, it.serial);
-    for (const it of items) {
-      const body = `${it.cam}#${it.serial}`, top = it.dir.split('/')[0], src = srcs.size > 1 ? srcName(it.src) : '';
-      let key, auto, how;
-      if (it.whoOwn) { const k = it.whoOwn.toLowerCase(); key = `n:${k}`; auto = most(spell.get(k)); how = nameIn(it.name) ? '檔名' : '相機裡的作者'; }
-      else if (it.serial && bodyWho.has(body)) { const k = bodyWho.get(body); key = `n:${k}`; auto = most(spell.get(k)); how = '同一台相機'; }
-      else if (top && dirs.size > 1) { key = `d:${top.toLowerCase()}`; auto = top; how = '資料夾'; }
-      else if (src) { key = `s:${src.toLowerCase()}`; auto = src; how = '來源'; }
-      else if (it.cam) {
-        const many = it.serial && serials.has(it.cam) && serials.get(it.cam).size > 1;
-        key = many ? `b:${body.toLowerCase()}` : `m:${it.cam.toLowerCase()}`;
-        auto = many ? `${it.cam}（${it.serial.slice(-4)}）` : it.cam;
-        how = '相機型號';
-      } else { key = 'x:'; auto = '不知道是誰'; how = ''; }
-      it.whoKey = key; it.whoHow = how;
-      it.who = alias[key] || auto;
-    }
+    for (const t of tree.values()) t.kids.sort((a, b) => collator.compare(tree.get(a).name, tree.get(b).name));
   }
-  // a real name (to go before a file's): found in the photos, or given
-  const named = (it) => /^[nds]:/.test(it.whoKey) || !!alias[it.whoKey];
 
-  // ---------- step 3: what's shown ----------
-  let board = [];   // the photos shown, in order
-  let picks = new Set(), cursor = null, anchorS = null;   // selected; the one the keys move from; where a Shift range starts
-  const inBoard = (it) => (S.cat === 'all' || (S.cat === 'none' ? !catOf(it) : catOf(it) === S.cat)) && (!S.who || it.who.toLowerCase() === S.who);
-  const targets3 = () => board.filter((it) => picks.has(it));
-  function rebuildBoard() {
-    whoAll();
-    if (S.cat !== 'all' && S.cat !== 'none' && !catById(S.cat)) S.cat = 'all';
-    board = takeList().filter(inBoard);
-    const shown = new Set(board);
-    for (const it of picks) if (!shown.has(it)) picks.delete(it);
-    if (cursor && !shown.has(cursor)) cursor = null;
+  // ---------- step 3: what's in the open folder ----------
+  let entries = [], fsel = new Set(), fcur = null, fanchor = null;   // the folder's folders and photos; keys selected, the one the keys move from, where a Shift range starts
+  const openSet = new Set(['']);   // the folders open in the tree
+  const fhist = [], ffut = [];
+  const bySort = (a, b) => {
+    const d = S.fsort === 'time' ? (a.t ?? Infinity) - (b.t ?? Infinity) : S.fsort === 'size' ? a.size - b.size : 0;
+    return (S.fdesc ? -1 : 1) * (d || collator.compare(a.name, b.name));
+  };
+  function listFolder() {
+    if (!tree.has(S.fdir)) S.fdir = '';
+    const t = tree.get(S.fdir);
+    entries = [...t.kids.map((p) => tree.get(p)).filter((d) => d.n || S.fall), ...t.files.filter((it) => S.fall || taken(it)).sort(bySort)];
+    const keys = new Set(entries.map(ek));
+    for (const k of fsel) if (!keys.has(k)) fsel.delete(k);
+    if (fcur && !keys.has(fcur)) fcur = null;
   }
-  // After a change: the photos again. One that left the list (put in a category while 未分類 shows) hands the keys to
-  // the next one.
-  function sortChanged(after) {
-    const at = cursor;
-    rebuildBoard();
-    if (!cursor && board.length && (after || at)) { const ref = after || at; cursor = anchorS = board.find((x) => x.n > ref.n) || board[board.length - 1]; }
-    planBoard(); drawBoard(); renderBar(); renderSide(); renderFoot();
+  const byEk = (k) => entries.find((x) => ek(x) === k) || null;
+  const chosen = () => entries.filter((x) => fsel.has(ek(x)));
+  function refresh3() {
+    if (S.step !== 3 || export_.busy) return;
+    buildTree(); listFolder(); planPane(); drawPane(); renderTree(); renderBars(); renderFoot();
   }
-  const renderStep3 = () => { if (!export_.busy) sortChanged(); };
+  const renderStep3 = () => refresh3();
 
-  // ---------- step 3: the photos, as a grid in parts (only the rows on screen exist) ----------
-  const boardEl = $('#board'), boardIn = $('#boardIn');
-  const PAD = 14, GAP = 10, CAP = 26, PART = 38, BREAK = 3 * 60000;
-  let rows = [], rowOf = [], tileW = 160, boardH = 0;   // rows: { y, h, head?, a, b } (photos a to b - 1); rowOf[i]: photo i's row
-  const tiles = new Map();   // photo → its tile, while it's on screen (kept, so a thumbnail isn't decoded again)
-  const heads = new Map();   // a part's first photo → its heading, while it's on screen
-  const breaks = (a, b) => (S.sort === 'folder' ? a.dir !== b.dir : a.t != null && b.t != null && b.t - a.t >= BREAK);
-  function planBoard() {
-    const W = Math.max(120, boardEl.clientWidth - PAD * 2), cols = Math.max(1, Math.floor((W + GAP) / (S.tile + GAP)));
-    tileW = Math.floor((W - (cols - 1) * GAP) / cols);
-    rows = []; rowOf = new Array(board.length);
-    let y = 4;
-    for (let i = 0; i < board.length;) {
-      let j = i + 1;
-      while (j < board.length && !breaks(board[j - 1], board[j])) j++;
-      rows.push({ y, h: PART, head: true, a: i, b: j }); y += PART;
-      for (let k = i; k < j; k += cols) {
-        const r = { y, h: tileW + CAP, a: k, b: Math.min(j, k + cols) };
-        for (let x = r.a; x < r.b; x++) rowOf[x] = rows.length;
-        rows.push(r); y += r.h + GAP;
-      }
-      y += 6;
-      i = j;
-    }
-    boardH = y + PAD;
-    for (const n of heads.values()) n.remove();
-    heads.clear();
-    pinned = null;
+  // ---------- step 3: the window's right side: icons or a list (only what's on screen exists) ----------
+  const pane = $('#fdPane'), paneIn = $('#fdIn');
+  const ROW = 30;
+  let fcols = 1, cellW = 160, cellH = 200;
+  function planPane() {
+    const W = Math.max(100, pane.clientWidth - 24);
+    if (S.fview === 'list') { fcols = 1; cellW = pane.clientWidth; cellH = ROW; }
+    else { fcols = Math.max(1, Math.floor(W / (S.ftile + 30))); cellW = W / fcols; cellH = S.ftile + 58; }
+    paneIn.style.height = `${Math.ceil(entries.length / fcols) * cellH + 20}px`;
+    pane.style.setProperty('--t', `${S.ftile}px`);
+    $('#fdHead').hidden = S.fview !== 'list';
+    $('#fdSize').hidden = S.fview === 'list';
+    for (const b of $$('#fdHead [data-sort]')) b.className = b.dataset.sort === S.fsort ? (S.fdesc ? 'on desc' : 'on') : '';
+    for (const r of $$('input[name="fview"]')) r.checked = r.value === S.fview;
   }
-  const hm = (t) => { const d = new Date(t); return `${pad2(d.getUTCHours())}:${pad2(d.getUTCMinutes())}`; };
-  const md = (t) => { const d = new Date(t); return `${d.getUTCMonth() + 1}/${d.getUTCDate()}`; };
-  function partLabel(a, b) {
-    const x = board[a], y = board[b - 1];
-    if (S.sort === 'folder') return x.dir || '最外層';
-    if (x.t == null) return '時間不明';
-    const days = board[board.length - 1].t != null && md(board[0].t) !== md(board[board.length - 1].t);
-    return `${days ? `${md(x.t)} ` : ''}${hm(x.t)}${y.t != null && hm(y.t) !== hm(x.t) ? ` – ${hm(y.t)}` : ''}`;
+  const cells = new Map();   // key → its cell, while it's on screen (kept, so a thumbnail isn't decoded again)
+  function cellFor(e) {
+    const dir = isDir(e), k = ek(e);
+    if (S.fview === 'list') {
+      return el('div', { class: `fr${dir ? ' dir' : ''}`, role: 'option', 'data-k': k, 'data-v': 'list' },
+        el('span', { class: 'fr-name' }, el('span', { class: 'fr-ic' }, dir ? svg(FOLDER, '0 0 20 16', 17, 14) : thumbImg(e)), el('span', { class: 'fr-t', text: e.name })),
+        el('span', { class: 'fr-time', text: dir ? '--' : e.when.replace('（檔案時間）', '') }), el('span', { class: 'fr-cam', text: dir ? '--' : e.cam || '--' }),
+        el('span', { class: 'fr-size', text: dir ? '' : fmtBytes(e.size) }));
+    }
+    return el('div', { class: `fi${dir ? ' dir' : ''}`, role: 'option', 'data-k': k, 'data-v': 'icons' },
+      el('span', { class: 'fi-pic' }, dir ? svg(BIG_FOLDER, '0 0 64 50', 64, 50) : thumbImg(e)),
+      el('span', { class: 'fi-name', text: e.name }), dir ? el('span', { class: 'fi-sub' }) : null);
+  }
+  function paintCell(n, e, i) {
+    const k = ek(e), dir = isDir(e);
+    n.className = `${S.fview === 'list' ? 'fr' : 'fi'}${dir ? ' dir' : ''}${fsel.has(k) ? ' sel' : ''}${k === fcur ? ' cur' : ''}${(dir ? !e.n : !taken(e)) ? ' dim' : ''}${S.fview === 'list' && i % 2 ? ' odd' : ''}`;
+    n.setAttribute('aria-selected', String(fsel.has(k)));
+    if (dir) {
+      const t = `${num(e.n)} 張${S.fall && e.all !== e.n ? `／${num(e.all)}` : ''}`;
+      const x = n.querySelector(S.fview === 'list' ? '.fr-size' : '.fi-sub');
+      if (x.textContent !== t) x.textContent = t;
+      n.title = `${e.name}：挑到 ${num(e.n)} 張（共 ${num(e.all)} 張）・按兩下打開`;
+    } else n.title = `${e.name}${e.when ? `・${e.when}` : ''}${e.cam ? `・${e.cam}` : ''}・${fmtBytes(e.size)}${taken(e) ? '' : '・不會存'}`;
+    n._e = e;
   }
   function emptyText() {
-    if (!takeList().length) return S.take === 'keep' ? '還沒有標「留用」的照片：回去挑，或在左上選「沒排除的」' : '每一張都標了「排除」';
-    if (S.cat === 'none') return '全部分好了 ✓';
-    const c = catById(S.cat);
-    if (c) return `「${c.name}」還沒有照片：選照片，按 ${cats.indexOf(c) < 9 ? cats.indexOf(c) + 1 : '它的「放入」'}，或拖到左邊的「${c.name}」`;
-    return '沒有照片';
+    if (!takeList().length && !S.fall) return S.take === 'keep' ? '還沒有標「留用」的照片：回去挑，或在下面選「沒排除的」' : '每一張都標了「排除」';
+    return S.fall ? '這個資料夾是空的' : '這個資料夾裡沒有挑到的照片';
   }
-  function drawBoard() {
+  function drawPane() {
     if (S.step !== 3) return;
-    boardIn.style.height = `${boardH}px`;
-    if (!board.length) { tiles.clear(); heads.clear(); pin.hidden = true; boardIn.replaceChildren(el('p', { class: 'board-empty', text: emptyText() })); return; }
-    const top = boardEl.scrollTop - 400, bottom = boardEl.scrollTop + boardEl.clientHeight + 400, keep = new Set();
-    let lo = 0, hi = rows.length;
-    while (lo < hi) { const m = (lo + hi) >> 1; if (rows[m].y + rows[m].h < top) lo = m + 1; else hi = m; }
-    for (let r = lo; r < rows.length && rows[r].y < bottom; r++) {
-      const row = rows[r];
-      if (row.head) {
-        let n = heads.get(board[row.a]);
-        if (!n) {
-          n = el('div', { class: 'part', style: `top:${row.y}px;height:${PART}px` }, el('b', { text: partLabel(row.a, row.b) }), el('span', { text: `${num(row.b - row.a)} 張` }),
-            el('button', { type: 'button', class: 'link-btn', 'data-a': row.a, 'data-b': row.b, title: '選這一段的照片（按著 Shift 或 ⌘：加進已選的）', text: '選這段' }));
-          heads.set(board[row.a], n);
-        }
-        keep.add(n);
-        continue;
-      }
-      for (let i = row.a; i < row.b; i++) {
-        const it = board[i];
-        let n = tiles.get(it);
-        if (!n) { n = el('div', { class: 'tile', role: 'option', draggable: 'true', 'data-k': it.key }, el('span', { class: 't-pic' }, thumbImg(it)), el('span', { class: 't-cap' }, el('span', { class: 't-cat' }), el('span', { class: 't-who' }))); tiles.set(it, n); }
-        const st = n.style;
-        st.left = `${PAD + (i - row.a) * (tileW + GAP)}px`; st.top = `${row.y}px`; st.width = `${tileW}px`; st.height = `${row.h}px`;
-        paintTile(n, it);
-        keep.add(n);
-      }
+    if (!entries.length) { cells.clear(); paneIn.style.height = ''; paneIn.replaceChildren(el('p', { class: 'fd-empty', text: emptyText() })); return; }
+    const top = pane.scrollTop - 300, bottom = pane.scrollTop + pane.clientHeight + 300, keep = new Set();
+    const a = Math.max(0, Math.floor(top / cellH) * fcols), b = Math.min(entries.length, Math.ceil(bottom / cellH) * fcols);
+    for (let i = a; i < b; i++) {
+      const e = entries[i], k = ek(e);
+      let n = cells.get(k);
+      if (!n || n.dataset.v !== S.fview) { n = cellFor(e); cells.set(k, n); }
+      const st = n.style;
+      if (S.fview === 'list') { st.left = '6px'; st.top = `${4 + i * ROW}px`; st.width = 'calc(100% - 12px)'; st.height = `${ROW}px`; }
+      else { st.left = `${12 + (i % fcols) * cellW}px`; st.top = `${12 + Math.floor(i / fcols) * cellH}px`; st.width = `${cellW}px`; st.height = `${cellH}px`; }
+      paintCell(n, e, i);
+      keep.add(n);
     }
-    for (const n of [...boardIn.children]) if (!keep.has(n)) n.remove();
-    for (const [it, n] of tiles) if (!keep.has(n)) tiles.delete(it);
-    for (const [it, n] of heads) if (!keep.has(n)) heads.delete(it);
-    for (const n of keep) if (n.parentNode !== boardIn) boardIn.append(n);
-    pinPart();
+    for (const n of [...paneIn.children]) if (!keep.has(n)) n.remove();
+    for (const [k, n] of cells) if (!keep.has(n)) cells.delete(k);
+    for (const n of keep) if (n.parentNode !== paneIn) paneIn.append(n);
   }
-  // the part the top of the list is in, its heading scrolled away: pinned at the top
-  const pin = $('#pin');
-  let pinned = null;
-  function pinPart() {
-    const t = boardEl.scrollTop;
-    let r = 0, hi = rows.length;
-    while (r < hi) { const m = (r + hi) >> 1; if (rows[m].y + rows[m].h <= t) r = m + 1; else hi = m; }
-    while (r > 0 && rows[r] && !rows[r].head) r--;
-    const head = rows[r] && rows[r].head && rows[r].y + PART <= t + 2 ? rows[r] : null;
-    pin.hidden = !head;
-    if (!head || head === pinned) return;
-    pinned = head;
-    fill(pin, el('b', { text: partLabel(head.a, head.b) }), el('span', { text: `${num(head.b - head.a)} 張` }),
-      el('button', { type: 'button', class: 'link-btn', 'data-a': head.a, 'data-b': head.b, title: '選這一段的照片（按著 Shift 或 ⌘：加進已選的）', text: '選這段' }));
+  function paintAll() {
+    for (const n of cells.values()) if (n._e) paintCell(n, n._e, entries.indexOf(n._e));
+    renderBars();
   }
-  function paintTile(n, it) {
-    const c = catById(catOf(it)), on = picks.has(it), cls = `tile${on ? ' sel' : ''}${it === cursor ? ' cur' : ''}`;
-    if (n.className !== cls) n.className = cls;
-    n.setAttribute('aria-selected', String(on));
-    const [ct, wh] = n.lastElementChild.children, name = c ? c.name : '';
-    if (ct.textContent !== name) ct.textContent = name;
-    if (c) ct.style.setProperty('--c', colorOf(c));
-    if (wh.textContent !== it.who) wh.textContent = it.who;
-    n.title = `${it.name}・${it.who}${it.when ? `・${it.when}` : ''}`;
+  let paneRaf = 0;
+  pane.addEventListener('scroll', () => { if (!paneRaf) paneRaf = requestAnimationFrame(() => { paneRaf = 0; drawPane(); }); }, { passive: true });
+  new ResizeObserver(() => { if (S.step === 3 && pane.clientWidth) { planPane(); drawPane(); } }).observe(pane);
+  function reveal3(i) {
+    // (a list's header stays over the top of it)
+    const head = S.fview === 'list' ? $('#fdHead').offsetHeight : 0, y = (S.fview === 'list' ? 4 : 12) + Math.floor(i / fcols) * cellH, t = pane.scrollTop, H = pane.clientHeight;
+    if (y < t) pane.scrollTop = y - 4; else if (head + y + cellH > t + H) pane.scrollTop = head + y + cellH - H + 4;
+    drawPane();
   }
-  function paint3() {
-    for (const [it, n] of tiles) paintTile(n, it);
-    renderBar(); renderSide();
-  }
-  let boardRaf = 0;
-  boardEl.addEventListener('scroll', () => { if (!boardRaf) boardRaf = requestAnimationFrame(() => { boardRaf = 0; drawBoard(); }); }, { passive: true });
-  new ResizeObserver(() => {
-    if (S.step !== 3 || !boardEl.clientWidth) return;
-    const r = rows.find((x) => !x.head && x.y + x.h > boardEl.scrollTop), first = r ? board[r.a] : null;
-    planBoard();
-    if (first) { const row = rows[rowOf[board.indexOf(first)]]; if (row) boardEl.scrollTop = Math.max(0, row.y - PART); }
-    drawBoard();
-  }).observe(boardEl);
 
-  // ---------- step 3: selecting ----------
-  let ptr = 'mouse';
-  boardEl.addEventListener('pointerdown', (e) => { ptr = e.pointerType || 'mouse'; }, true);
-  boardEl.addEventListener('click', (e) => {
-    const part = e.target.closest('.part button');
-    if (part) { selectPart(+part.dataset.a, +part.dataset.b, e.shiftKey || e.metaKey || e.ctrlKey); return; }
-    const n = e.target.closest('.tile');
-    if (!n) { if (picks.size && (e.target === boardEl || e.target === boardIn)) { picks.clear(); paint3(); } return; }
-    const it = byKey.get(n.dataset.k);
-    if (!it) return;
-    const from = anchorS && board.includes(anchorS) ? anchorS : cursor;
-    if (e.shiftKey && from) {
-      const a = board.indexOf(from), b = board.indexOf(it);
-      if (!(e.metaKey || e.ctrlKey)) picks.clear();
-      for (let i = Math.min(a, b); i <= Math.max(a, b); i++) picks.add(board[i]);
-      anchorS = from;
-    } else if (e.metaKey || e.ctrlKey || ptr === 'touch' || ptr === 'pen') {
-      if (picks.has(it)) picks.delete(it); else picks.add(it);
-      anchorS = it;
-    } else { picks = new Set([it]); anchorS = it; }
-    cursor = it;
-    paint3();
+  // ---------- step 3: selecting, opening ----------
+  let fptr = 'mouse';
+  pane.addEventListener('pointerdown', (e) => { fptr = e.pointerType || 'mouse'; }, true);
+  pane.addEventListener('click', (e) => {
+    const n = e.target.closest('[data-k]');
+    if (!n) { if (fsel.size) { fsel.clear(); paintAll(); } return; }
+    const k = n.dataset.k, e2 = byEk(k), touch = fptr === 'touch' || fptr === 'pen';
+    if (!e2) return;
+    // a finger: a tap opens a folder, and adds a photo to the ones selected
+    if (touch && isDir(e2) && !fsel.size) { openDir(e2.path); return; }
+    if (e.shiftKey && fanchor && byEk(fanchor)) {
+      const a = entries.findIndex((x) => ek(x) === fanchor), b = entries.indexOf(e2);
+      if (!(e.metaKey || e.ctrlKey)) fsel.clear();
+      for (let i = Math.min(a, b); i <= Math.max(a, b); i++) fsel.add(ek(entries[i]));
+    } else if (e.metaKey || e.ctrlKey || touch) {
+      if (fsel.has(k)) fsel.delete(k); else fsel.add(k);
+      fanchor = k;
+    } else { fsel = new Set([k]); fanchor = k; }
+    fcur = k;
+    paintAll();
   });
-  boardEl.addEventListener('dblclick', (e) => { const n = e.target.closest('.tile'); if (n && ptr === 'mouse' && !e.shiftKey && !e.metaKey && !e.ctrlKey) peek(byKey.get(n.dataset.k)); });
-  function selectPart(a, b, add) {
-    if (!add) picks.clear();
-    for (let i = a; i < b && i < board.length; i++) picks.add(board[i]);
-    cursor = anchorS = board[a] || null;
-    paint3();
-  }
-  function selectAll() { picks = new Set(board); if (!cursor) cursor = anchorS = board[0] || null; paint3(); }
-  function moveTo(i, extend) {
-    if (!board.length) return;
-    i = clamp(i, 0, board.length - 1);
-    const it = board[i];
+  pane.addEventListener('dblclick', (e) => {
+    const n = e.target.closest('[data-k]'), x = n && byEk(n.dataset.k);
+    if (!x || e.shiftKey || e.metaKey || e.ctrlKey) return;
+    if (isDir(x)) openDir(x.path); else peek(x);
+  });
+  function fmove(i, extend) {
+    if (!entries.length) return;
+    i = clamp(i, 0, entries.length - 1);
+    const k = ek(entries[i]);
     if (extend) {
-      if (!anchorS || !board.includes(anchorS)) anchorS = cursor || it;
-      const a = board.indexOf(anchorS);
-      picks = new Set();
-      for (let k = Math.min(a, i); k <= Math.max(a, i); k++) picks.add(board[k]);
-    } else { picks = new Set([it]); anchorS = it; }
-    cursor = it;
-    reveal(i);
-    paint3();
+      if (!fanchor || !byEk(fanchor)) fanchor = fcur || k;
+      const a = entries.findIndex((x) => ek(x) === fanchor);
+      fsel = new Set();
+      for (let j = Math.min(a, i); j <= Math.max(a, i); j++) fsel.add(ek(entries[j]));
+    } else { fsel = new Set([k]); fanchor = k; }
+    fcur = k;
+    reveal3(i);
+    paintAll();
   }
-  // ↑ ↓: the same column a row up or down (rows of another part too)
-  function vertical(d, i = board.indexOf(cursor)) {
-    let r = rowOf[i] + d;
-    while (rows[r] && rows[r].head) r += d;
-    if (!rows[r]) return i;
-    return Math.min(rows[r].a + (i - rows[rowOf[i]].a), rows[r].b - 1);
+  // a folder opened (a double-click, the tree, the path, back / forward); going up, the one you came from is selected
+  function openDir(p, remember = true) {
+    if (!tree.has(p) || p === S.fdir) return;
+    if (remember) { fhist.push(S.fdir); if (fhist.length > 60) fhist.shift(); ffut.length = 0; }
+    const was = S.fdir;
+    S.fdir = p;
+    for (let x = p; x; x = parentOf(x)) openSet.add(parentOf(x));
+    openSet.add(p);
+    fsel.clear(); fcur = fanchor = null;
+    if (was !== p && (p === '' ? was : was.startsWith(`${p}/`))) { const k = `d:${p ? `${p}/` : ''}${(p ? was.slice(p.length + 1) : was).split('/')[0]}`; fsel.add(k); fcur = fanchor = k; }
+    pane.scrollTop = 0;
+    refresh3();
+    if (fcur) { const i = entries.findIndex((x) => ek(x) === fcur); if (i >= 0) reveal3(i); }
   }
-  function reveal(i) {
-    const row = rows[rowOf[i]];
-    if (!row) return;
-    const above = rows[rowOf[i] - 1], top = above && above.head ? above.y : row.y - PART - 4, t = boardEl.scrollTop, H = boardEl.clientHeight;   // (under the pinned heading)
-    if (top < t) boardEl.scrollTop = top; else if (row.y + row.h > t + H) boardEl.scrollTop = row.y + row.h - H + GAP;
-    drawBoard();
-  }
+  function travel3(from, to) { if (!from.length) return; to.push(S.fdir); openDir(from.pop(), false); }
+  $('#fdBack').addEventListener('click', () => travel3(fhist, ffut));
+  $('#fdFwd').addEventListener('click', () => travel3(ffut, fhist));
+  function openCur() { const x = fcur && byEk(fcur); if (!x) return; if (isDir(x)) openDir(x.path); else peek(x); }
 
-  // ---------- step 3: into a category ----------
-  const sortUndo = [];
-  function put(list, id) {
-    if (!list.length) { toast(ptr === 'mouse' ? '先選照片：點一下，按著 Shift 點可以選一段' : '先點照片選取', 2600); return false; }
-    const c = catById(id), ch = list.filter((it) => catOf(it) !== id);
-    if (ch.length) {
-      sortUndo.push(ch.map((it) => [it, catOf(it)]));
-      if (sortUndo.length > 200) sortUndo.shift();
-      for (const it of ch) if (id) sorts.set(it.key, id); else sorts.delete(it.key);
-      save(ch.map((it) => [`c|${it.key}`, id]));
-    }
-    toast(id ? `${num(list.length)} 張放進「${c.name}」` : `${num(list.length)} 張移出分類`, 1800);
-    sortChanged(list[list.length - 1]);
-    return true;
+  // ---------- step 3: the tree (left), the title, the path and the count (below) ----------
+  function renderTree() {
+    const walk = (p, depth) => {
+      const t = tree.get(p), kids = t.kids.filter((c) => S.fall || tree.get(c).n), on = openSet.has(p) && kids.length > 0;
+      return el('li', { role: 'treeitem', 'aria-expanded': kids.length ? String(on) : null, 'aria-selected': String(S.fdir === p) },
+        el('div', { class: `tn${S.fdir === p ? ' on' : ''}${t.n ? '' : ' dim'}`, style: `--d:${depth}` },
+          kids.length ? el('button', { type: 'button', class: `tn-tw${on ? ' open' : ''}`, 'data-tw': p, tabindex: '-1', 'aria-label': on ? '收起' : '展開' }) : el('span', { class: 'tn-tw' }),
+          el('button', { type: 'button', class: 'tn-main', 'data-open': p, title: `${t.name}：挑到 ${num(t.n)} 張（共 ${num(t.all)} 張）` },
+            svg(FOLDER, '0 0 20 16', 16, 13), el('span', { class: 'tn-name', text: t.name }), el('span', { class: 'tn-n', text: num(t.n) }))),
+        on ? el('ul', { role: 'group' }, ...kids.map((c) => walk(c, depth + 1))) : null);
+    };
+    fill($('#fdTree'), walk('', 0));
   }
-  function putKey(i, list) {
-    const c = cats[i];
-    if (!c) { toast(cats.length ? `只有 ${num(cats.length)} 個分類` : '先在左邊新增分類，例如「議程」', 2600); return false; }
-    return put(list, c.id);
+  $('#fdTree').addEventListener('click', (e) => {
+    const tw = e.target.closest('[data-tw]');
+    if (tw) { const p = tw.dataset.tw; if (openSet.has(p)) openSet.delete(p); else openSet.add(p); renderTree(); return; }
+    const m = e.target.closest('[data-open]');
+    if (m) openDir(m.dataset.open);
+  });
+  function renderBars() {
+    if (S.step !== 3) return;
+    const t = tree.get(S.fdir);
+    if (!t) return;
+    $('#fdTitle').textContent = t.name;
+    $('#fdBack').disabled = !fhist.length;
+    $('#fdFwd').disabled = !ffut.length;
+    const crumbs = [];
+    for (let p = S.fdir; ; p = parentOf(p)) { crumbs.unshift(p); if (!p) break; }
+    fill($('#fdCrumbs'), ...crumbs.flatMap((p, i) => [i ? el('span', { class: 'fd-sep', 'aria-hidden': 'true', text: '›' }) : null,
+      el('button', { type: 'button', class: 'fd-crumb', 'data-open': p, 'aria-current': p === S.fdir ? 'page' : null }, svg(FOLDER, '0 0 20 16', 13, 11), tree.get(p).name)]));
+    const dirs = entries.filter(isDir).length, files = entries.length - dirs, sel = chosen(), selFiles = sel.filter((x) => !isDir(x));
+    const what = [dirs ? `${num(dirs)} 個資料夾` : '', files ? `${num(files)} 張照片` : ''].filter(Boolean).join('・') || '沒有東西';
+    fill($('#fdStatus'), el('span', { text: sel.length ? `已選 ${num(sel.length)} 項，共 ${what}` : what }),
+      selFiles.length && fptr !== 'mouse' ? el('button', { type: 'button', class: 'link-btn', onclick: () => peek(selFiles[0]), text: '放大看' }) : null,
+      S.fdir && t.n ? el('button', { type: 'button', class: 'link-btn', onclick: saveHere, title: `只存「${t.name}」裡挑到的（含裡面的資料夾）`, text: `只存這個資料夾（${num(t.n)} 張）` }) : null);
   }
-  function undoSort() {
-    let u = sortUndo.pop();
-    while (u && !(u = u.filter(([it]) => byKey.get(it.key) === it)).length) u = sortUndo.pop();
-    if (!u) { toast('沒有可以復原的'); return; }
-    for (const [it, id] of u) if (id) sorts.set(it.key, id); else sorts.delete(it.key);
-    save(u.map(([it, id]) => [`c|${it.key}`, id]));
-    sortChanged();
-    // the ones put back, selected (where they show)
-    const back = u.map(([it]) => it).filter((it) => board.includes(it));
-    if (back.length) { picks = new Set(back); cursor = anchorS = back[0]; reveal(board.indexOf(back[0])); paint3(); }
-    toast(u.length > 1 ? `復原了 ${num(u.length)} 張` : '復原了');
-  }
-
-  // ---------- step 3: the categories and the photographers (left) ----------
-  let editing = '';   // whose name is being changed: 'c:' + a category's id, 'w:' + a photographer's
-  function row(o) {
-    return el('li', { class: `row${o.on ? ' on' : ''}${o.cls ? ` ${o.cls}` : ''}`, 'data-drop': o.drop ?? null, title: o.title || null },
-      el('button', { type: 'button', class: 'r-main', 'aria-pressed': String(!!o.on), onclick: o.click },
-        el('span', { class: 'r-lead' }, o.lead || null),
-        el('span', { class: 'r-name', text: o.name }), el('span', { class: 'r-n', text: num(o.n) })),
-      o.put ? el('button', { type: 'button', class: 'r-put', title: o.putTitle, onclick: () => put(targets3(), o.drop) }, o.put) : null,
-      o.edit ? el('button', { type: 'button', class: 'r-edit', title: '改名字', 'aria-label': `改「${o.name}」的名字`, onclick: o.edit }, svg(PEN)) : null);
-  }
-  function editRow(name, onSave, onDelete, hint) {
-    const input = el('input', { type: 'text', class: 'r-input', value: name, maxlength: '40', 'aria-label': '新的名字', placeholder: hint || '' });
-    let done = false;
-    const end = (ok) => { if (done) return; done = true; editing = ''; if (ok) onSave(input.value.replace(/\s+/g, ' ').trim()); else renderSide(); };
-    input.addEventListener('keydown', (e) => { e.stopPropagation(); if (e.key === 'Enter') { e.preventDefault(); end(true); } else if (e.key === 'Escape') { e.preventDefault(); end(false); } });
-    input.addEventListener('blur', () => end(true));
-    return el('li', { class: 'row editing' }, input,
-      onDelete ? el('button', { type: 'button', class: 'r-edit r-del', title: '刪除這個分類', 'aria-label': '刪除這個分類', onmousedown: (e) => e.preventDefault(), onclick: () => { done = true; editing = ''; onDelete(); } }, svg(BIN)) : null);
-  }
-  function renderSide(force) {
-    if (S.step !== 3 || export_.busy) return;
-    const take = takeList(), per = new Map(), people = new Map(), c = counts(), n = picks.size;
-    let none = 0;
-    for (const it of take) {
-      const id = catOf(it);
-      if (id) per.set(id, (per.get(id) || 0) + 1); else none++;
-      const k = it.who.toLowerCase();
-      let p = people.get(k);
-      if (!p) people.set(k, (p = { k, name: it.who, n: 0, how: new Map() }));
-      p.n++;
-      if (it.whoHow) p.how.set(it.whoHow, (p.how.get(it.whoHow) || 0) + 1);
-    }
+  $('#fdCrumbs').addEventListener('click', (e) => { const b = e.target.closest('[data-open]'); if (b) openDir(b.dataset.open); });
+  function renderFoot() {
+    const c = counts(), list = takeList(), go = $('#go');
     $('#takeKeep').textContent = `留用的 ${num(c.keep)}`;
     $('#takeNot').textContent = `沒排除的 ${num(c.keep + c.none)}`;
     const r = $(`input[name="take"][value="${S.take}"]`);
     if (r) r.checked = true;
-    const sel = n ? `選取的 ${num(n)} 張` : '';
-    if (force || !editing.startsWith('c:')) {
-      fill($('#cats'),
-        row({ on: S.cat === 'all', name: '全部', n: take.length, click: () => setCat('all'), lead: svg('<path fill="currentColor" d="M4 4h7v7H4zM13 4h7v7h-7zM4 13h7v7H4zM13 13h7v7h-7z"/>', 13) }),
-        row({ on: S.cat === 'none', name: '未分類', n: none, drop: '', cls: 'none', click: () => setCat('none'), lead: el('kbd', { text: '0' }),
-          put: n && targets3().some(catOf) ? '移出' : '', putTitle: `${sel}移出分類（0）` }),
-        ...cats.map((x, i) => (editing === `c:${x.id}` ? editRow(x.name, (v) => renameCat(x, v), () => deleteCat(x))
-          : row({ on: S.cat === x.id, name: x.name, n: per.get(x.id) || 0, drop: x.id, click: () => setCat(x.id), edit: () => edit(`c:${x.id}`),
-            lead: el('kbd', { style: `--c:${colorOf(x)}`, text: i < 9 ? String(i + 1) : '' }),
-            put: n ? '放入' : '', putTitle: `${sel}放進「${x.name}」${i < 9 ? `（${i + 1}）` : ''}` }))));
-    }
-    if (force || !editing.startsWith('w:')) {
-      fill($('#who'), ...[...people.values()].sort((a, b) => b.n - a.n || collator.compare(a.name, b.name)).map((p) => (editing === `w:${p.k}` ? editRow(p.name, (v) => renameWho(p.k, v), null, '空白：用認出來的名字')
-        : row({ on: S.who === p.k, name: p.name, n: p.n, click: () => setWho(S.who === p.k ? '' : p.k), edit: () => edit(`w:${p.k}`),
-          lead: el('span', { class: 'r-face', 'aria-hidden': 'true', text: [...p.name][0].toUpperCase() }),
-          title: `從${[...p.how].sort((a, b) => b[1] - a[1]).map(([h, k]) => `${h}認出 ${num(k)} 張`).join('、')}・點名字只看這個人的，筆可以改名（改成一樣的名字會合在一起）` }))));
-    }
-    $('.cats-sec').classList.toggle('few', cats.length < 3);
-    renderIdeas();
-  }
-  function edit(what) {
-    editing = what;
-    renderSide(true);
-    const i = $('#side .r-input');
-    if (i) { i.focus(); i.select(); }
-  }
-  function setCat(id) { S.cat = id; picks.clear(); cursor = null; boardEl.scrollTop = 0; sortChanged(); }
-  function setWho(k) { S.who = k; picks.clear(); cursor = null; boardEl.scrollTop = 0; sortChanged(); }
-  function addCat(name) {
-    name = name.replace(/\s+/g, ' ').trim().slice(0, 40);
-    if (!name) return false;
-    if (cats.some((c) => c.name.toLowerCase() === name.toLowerCase())) { toast(`已經有「${name}」了`); return false; }
-    const used = new Set(cats.map((c) => c.c % CAT_COLORS.length));
-    let c = 0;
-    while (used.has(c) && c < CAT_COLORS.length) c++;
-    cats.push({ id: `k${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`, name, c: c < CAT_COLORS.length ? c : cats.length });
-    keepCats();
-    renderSide(); renderBar(); renderFoot();
-    if (cats.length <= 9) toast(`新增了「${name}」：選照片，按 ${cats.length} 放進去`, 2600);
-    return true;
-  }
-  function renameCat(c, name) {
-    if (name && name !== c.name) {
-      if (cats.some((x) => x !== c && x.name.toLowerCase() === name.toLowerCase())) toast(`已經有「${name}」了`);
-      else { c.name = name; keepCats(); }
-    }
-    sortChanged();
-  }
-  function deleteCat(c) {
-    const inIt = items.filter((it) => sorts.get(it.key) === c.id);
-    if (inIt.length && !confirm(`「${c.name}」裡的 ${num(inIt.length)} 張會變回未分類。刪除這個分類？`)) { renderSide(); return; }
-    cats = cats.filter((x) => x !== c);
-    keepCats();
-    for (const it of inIt) sorts.delete(it.key);
-    save(inIt.map((it) => [`c|${it.key}`, '']));
-    sortUndo.length = 0;
-    sortChanged();
-  }
-  // a photographer's new name: on every photo found to be theirs; nothing, back to what was found
-  function renameWho(k, name) {
-    const keys = new Set(items.filter((it) => it.who.toLowerCase() === k).map((it) => it.whoKey));
-    for (const key of keys) { if (name) alias[key] = name; else delete alias[key]; }
-    keepAlias();
-    whoAll(true);
-    if (S.who === k) S.who = name ? name.toLowerCase() : '';
-    sortChanged();
-  }
-  function renderIdeas() {
-    const have = new Set(cats.map((c) => c.name.toLowerCase())), left = IDEAS.filter((x) => !have.has(x.toLowerCase()));
-    $('#ideas').hidden = !left.length;
-    fill($('#ideas'), ...left.map((x) => el('button', { type: 'button', class: 'idea', onmousedown: (e) => e.preventDefault(), onclick: () => addCat(x), text: `＋${x}` })));
-  }
-  $('#catAdd').addEventListener('submit', (e) => { e.preventDefault(); const i = $('#catName'); if (addCat(i.value)) i.value = ''; });
-  $('#catName').addEventListener('keydown', (e) => { if (e.key === 'Escape') { e.target.value = ''; e.target.blur(); } });
-
-  // ---------- step 3: the bar over the photos ----------
-  function renderBar() {
-    if (S.step !== 3) return;
-    const c = catById(S.cat), n = picks.size, who = S.who && board[0] ? board[0].who : S.who;
-    fill($('#bbWhat'), c ? el('i', { class: 'dot', style: `--c:${colorOf(c)}` }) : null, el('span', { text: c ? c.name : S.cat === 'none' ? '未分類' : '全部' }),
-      S.who ? el('button', { type: 'button', class: 'chip', title: '不限攝影師', onclick: () => setWho('') }, who, el('span', { 'aria-hidden': 'true', text: ' ×' })) : null,
-      el('span', { class: 'bb-n', text: `${num(board.length)} 張` }));
-    const touch = ptr !== 'mouse' || matchMedia('(pointer: coarse)').matches;
-    fill($('#bbSel'), ...(n ? [el('span', { class: 'bb-count' }, '已選 ', el('b', { text: num(n) }), ' 張'),
-      el('button', { type: 'button', class: 'link-btn', onclick: () => peek(cursor && picks.has(cursor) ? cursor : targets3()[0]), text: touch ? '放大看' : '放大看（空白鍵）' }),
-      n < board.length ? el('button', { type: 'button', class: 'link-btn', onclick: selectAll, text: '全選' }) : null,
-      el('button', { type: 'button', class: 'link-btn', onclick: () => { picks.clear(); paint3(); }, text: '取消選取' })]
-      : [el('span', { class: 'bb-hint', text: !cats.length ? '先在左邊新增分類，例如「議程」「攤位」' : touch ? '點照片選取（可以點好幾張），再按左邊分類的「放入」' : '點照片選取・Shift 選一段・按 1–9 放進分類（或拖到左邊）・空白鍵放大看' })]));
-  }
-
-  // ---------- step 3: how it's saved (bottom) ----------
-  // folders as chosen; the photos not in a category in 未分類 (none at all in one: no category folders); the same
-  // name twice in one folder gets -2
-  const SAFE = (s) => String(s).replace(/[\\/:*?"<>|\u0000-\u001f]/g, '_').replace(/^[. ]+|[. ]+$/g, '').slice(0, 80) || '_';
-  function dirFor(it, anyCat) {
-    if (S.tree === 'flat') return '';
-    if (S.tree === 'dirs') return it.dir;
-    const c = catById(catOf(it)), cat = anyCat ? SAFE(c ? c.name : '未分類') : '', who = SAFE(it.who);
-    return ({ 'cat-who': [cat, who], 'who-cat': [who, cat], cat: [cat], who: [who] }[S.tree] || []).filter(Boolean).join('/');
-  }
-  function fileFor(it) {
-    if (!S.credit || !named(it)) return it.name;
-    const w = SAFE(it.who);
-    return it.name.toLowerCase().startsWith(w.toLowerCase()) ? it.name : `${w}-${it.name}`;
-  }
-  function namesFor(list, anyCat = list.some(catOf)) {
-    whoAll();
-    const used = new Set(), out = new Map();
-    for (const it of list) {
-      const dir = dirFor(it, anyCat), file = fileFor(it);
-      const dot = file.lastIndexOf('.'), base = dot > 0 ? file.slice(0, dot) : file, ext = dot > 0 ? file.slice(dot) : '';
-      let name = file;
-      for (let n = 2; used.has(`${dir}/${name}`.toLowerCase()); n++) name = `${base}-${n}${ext}`;
-      used.add(`${dir}/${name}`.toLowerCase());
-      out.set(it, { dir, name });
-    }
-    return out;
-  }
-  function renderFoot() {
-    if (S.step !== 3 || export_.busy) return;
-    const list = takeList(), anyCat = list.some(catOf), go = $('#go');
-    $('#treeSel').value = S.tree;
-    $('#credit').checked = S.credit;
-    // an example: the one selected, else a photo in a category (and one whose name gets the photographer's, if that's on)
-    const ex = (cursor && list.includes(cursor) && cursor) || list.find((it) => catOf(it) && (!S.credit || fileFor(it) !== it.name)) || list.find(catOf) || list[0];
-    const none = anyCat && /cat/.test(S.tree) ? list.filter((it) => !catOf(it)).length : 0;
-    if (ex) {
-      const { dir, name } = namesFor([ex], anyCat).get(ex);
-      fill($('#treeEg'), '例：', el('b', { text: [...dir.split('/').filter(Boolean), name].join(' / ') }), none ? `・沒分類的 ${num(none)} 張放「未分類」` : '');
-    } else $('#treeEg').textContent = '';
     go.disabled = !list.length;
     go.textContent = !list.length ? '存下來 →' : list.length === 1 ? '下載這張 →' : CAN_DIR ? `存進資料夾（${num(list.length)} 張）→` : `下載 ZIP（${num(list.length)} 張）→`;
     $('#goZip').hidden = go.hidden || !(CAN_DIR && list.length > 1);
+    $('#note3').textContent = !list.length ? (S.take === 'keep' ? '還沒有標「留用」的照片' : '每一張都標了「排除」')
+      : list.length === 1 ? '' : CAN_DIR ? '照原本的資料夾存進你選的資料夾；已經在裡面的同一張會跳過' : '照原本的資料夾打包；用電腦版 Chrome、Edge 可以直接存進資料夾';
   }
-  $('#treeSel').addEventListener('change', (e) => { S.tree = e.target.value; remember(); renderFoot(); });
-  $('#credit').addEventListener('change', (e) => { S.credit = e.target.checked; remember(); renderFoot(); });
-  const sizeIn = $('#tileSize');
-  sizeIn.value = S.tile;
-  let tileTimer = 0;
-  function setTile(v) {
-    S.tile = clamp(Math.round(v), +sizeIn.min, +sizeIn.max);
-    sizeIn.value = S.tile;
-    // the photo at the top stays at the top
-    const r = rows.find((x) => !x.head && x.y + x.h > boardEl.scrollTop), first = r ? board[r.a] : null;
-    planBoard();
-    if (first) { const row = rows[rowOf[board.indexOf(first)]]; if (row) boardEl.scrollTop = Math.max(0, row.y - PART); }
-    drawBoard();
-    clearTimeout(tileTimer); tileTimer = setTimeout(remember, 400);
+  // the view, the order, the size, the ones not picked
+  for (const r of $$('input[name="fview"]')) r.addEventListener('change', () => { S.fview = r.value; remember(); cells.clear(); paneIn.replaceChildren(); refresh3(); pane.focus({ preventScroll: true }); });
+  $('#fdHead').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-sort]');
+    if (!b) return;
+    if (S.fsort === b.dataset.sort) S.fdesc = !S.fdesc; else { S.fsort = b.dataset.sort; S.fdesc = false; }
+    remember(); refresh3();
+  });
+  $('#fdAll').addEventListener('change', (e) => { S.fall = e.target.checked; refresh3(); });
+  const fdSize = $('#fdSize');
+  fdSize.value = S.ftile;
+  let ftileTimer = 0;
+  function setFtile(v) {
+    S.ftile = clamp(Math.round(v), +fdSize.min, +fdSize.max);
+    fdSize.value = S.ftile;
+    const first = Math.floor(pane.scrollTop / cellH) * fcols;
+    planPane();
+    pane.scrollTop = Math.floor(first / fcols) * cellH;
+    drawPane();
+    clearTimeout(ftileTimer); ftileTimer = setTimeout(remember, 400);
   }
-  sizeIn.addEventListener('input', () => setTile(+sizeIn.value));
-  // a control changed with the mouse (the size, a menu, a switch) gives the keys back to the photos
+  fdSize.addEventListener('input', () => setFtile(+fdSize.value));
+  // a control changed with the mouse (the size, the view, a switch) gives the keys back to the photos
   let ptrAt = 0;
   addEventListener('pointerdown', () => { ptrAt = Date.now(); }, true);
-  $('#step3').addEventListener('change', (e) => { if (Date.now() - ptrAt < 4000 && e.target.matches('input[type="radio"], input[type="checkbox"], input[type="range"], select')) e.target.blur(); });
+  $('#step3').addEventListener('change', (e) => { if (Date.now() - ptrAt < 4000 && e.target.matches('input[type="radio"], input[type="checkbox"], input[type="range"]')) e.target.blur(); });
 
-  // ---------- step 3: dragging photos onto a category ----------
-  let dragging = null;
-  const ghost = el('div', { class: 'drag-ghost', 'aria-hidden': 'true' });
-  document.body.append(ghost);
-  boardIn.addEventListener('dragstart', (e) => {
-    const n = e.target.closest && e.target.closest('.tile'), it = n && byKey.get(n.dataset.k);
-    if (!it) return;
-    if (!picks.has(it)) { picks = new Set([it]); anchorS = it; }
-    cursor = it;
-    dragging = targets3();
-    paint3();
-    document.body.classList.add('dragging');
-    e.dataTransfer.effectAllowed = 'move';
-    try { e.dataTransfer.setData('text/plain', dragging.map((x) => x.name).join('\n')); } catch {}
-    ghost.textContent = `${num(dragging.length)} 張`;
-    try { e.dataTransfer.setDragImage(ghost, 16, 16); } catch {}
-  });
-  const dragDone = () => { dragging = null; document.body.classList.remove('dragging'); for (const r of $$('.row.over')) r.classList.remove('over'); };
-  boardIn.addEventListener('dragend', dragDone);
-  const side = $('#side');
-  side.addEventListener('dragover', (e) => {
-    if (!dragging) return;
-    const r = e.target.closest('[data-drop]');
-    for (const x of $$('.row.over')) if (x !== r) x.classList.remove('over');
-    if (!r) return;
-    e.preventDefault();
-    e.dataTransfer.dropEffect = 'move';
-    r.classList.add('over');
-  });
-  side.addEventListener('dragleave', (e) => { const r = e.target.closest('[data-drop]'); if (r && !r.contains(e.relatedTarget)) r.classList.remove('over'); });
-  side.addEventListener('drop', (e) => {
-    const r = e.target.closest('[data-drop]'), list = dragging;
-    if (!list || !r) return;
-    e.preventDefault(); e.stopPropagation();
-    dragDone();
-    put(list, r.dataset.drop);
-  });
+  // ---------- step 3: flags (P, X, U), as in step 2, on the photos selected; ⌘Z takes them back ----------
+  function flag3(list, f) {
+    list = list.filter((x) => x && !isDir(x));
+    if (!list.length) { toast('先選照片'); return false; }
+    const ch = list.map((it) => ({ it, from: flagOf(it), to: f })).filter((c) => c.from !== c.to);
+    if (ch.length) {
+      undo.push({ ch, at: null });
+      if (undo.length > 300) undo.shift();
+      for (const c of ch) if (c.to) marks.set(c.it.key, c.to); else marks.delete(c.it.key);
+      save(ch.map((c) => [c.it.key, c.to]));
+    }
+    toast(`${list.length > 1 ? `${num(list.length)} 張` : ''}${SAID[f]}${ch.some((c) => !taken(c.it)) && !S.fall ? '・不會存' : ''}`, 1600);
+    refresh3();
+    return true;
+  }
+  function undo3() {
+    let u = undo.pop();
+    while (u && !(u.ch = u.ch.filter((c) => byKey.get(c.it.key) === c.it)).length) u = undo.pop();
+    if (!u) { toast('沒有可以復原的'); return; }
+    for (const c of u.ch) if (c.from) marks.set(c.it.key, c.from); else marks.delete(c.it.key);
+    save(u.ch.map((c) => [c.it.key, c.from]));
+    refresh3();
+    const back = u.ch.map((c) => c.it.key).filter((k) => byEk(k));
+    if (back.length) { fsel = new Set(back); fcur = fanchor = back[0]; reveal3(entries.findIndex((x) => ek(x) === back[0])); paintAll(); }
+    toast(u.ch.length > 1 ? `復原了 ${num(u.ch.length)} 張` : '復原了');
+  }
 
-  // ---------- step 3: one photo, big (space bar, a double-click) ----------
+  // ---------- step 3: Quick Look ----------
   // The thumbnail at once, then a preview the size of the window (made in step 2's workers), else the photo itself.
-  // ← → move on; a number key puts it in that category and (自動前進, as in step 2) goes on to the next.
+  // ← → the next photo in the folder; P / X / U flag it and (自動前進, as in step 2) go on.
   const peekEl = $('#peek'), pkFrame = $('#pkFrame'), pkStage = $('#pkStage');
   let pkAt = null, pkGen = 0, pkUrl = '';
+  const pkFiles = () => entries.filter((x) => !isDir(x));
   function peek(it) {
-    if (!it || export_.busy) return;
+    if (!it || isDir(it) || export_.busy) return;
     pkAt = it;
     peekEl.hidden = false;
     peekEl.focus({ preventScroll: true });
@@ -2317,11 +2077,11 @@
     pkGen++;
     pkFrame.replaceChildren();
     if (pkUrl) { URL.revokeObjectURL(pkUrl); pkUrl = ''; }
-    const i = board.indexOf(pkAt);
+    const i = entries.indexOf(pkAt);
     pkAt = null;
-    if (i >= 0) reveal(i);
-    paint3();
-    boardEl.focus({ preventScroll: true });
+    if (i >= 0) reveal3(i);
+    paintAll();
+    pane.focus({ preventScroll: true });
   }
   async function bigUrl(it) {
     const v = await pvAsk(it, true);
@@ -2330,12 +2090,15 @@
     if (pkUrl) URL.revokeObjectURL(pkUrl);
     return (pkUrl = URL.createObjectURL(b));
   }
-  function drawPeek() {
-    const it = pkAt, gen = ++pkGen, i = board.indexOf(it);
-    if (!it || i < 0) { closePeek(); return; }
-    cursor = anchorS = it; picks = new Set([it]);
+  function fitPeek(it) {
     const [w, h] = dims(it), W = Math.max(100, pkStage.clientWidth - 112), H = Math.max(100, pkStage.clientHeight - 8), s = Math.min(W / w, H / h);
-    const fw = Math.round(w * s), fh = Math.round(h * s);
+    return [Math.round(w * s), Math.round(h * s)];
+  }
+  function drawPeek() {
+    const it = pkAt, gen = ++pkGen, files = pkFiles(), i = files.indexOf(it);
+    if (!it || i < 0) { closePeek(); return; }
+    fsel = new Set([it.key]); fcur = fanchor = it.key;
+    const [fw, fh] = fitPeek(it);
     Object.assign(pkFrame.style, { width: `${fw}px`, height: `${fh}px` });
     const tu = thumbUrl(it), kids = [];
     if (tu) {
@@ -2346,45 +2109,45 @@
     } else wantThumb(it);
     pkFrame.replaceChildren(...kids);
     pkFrame.classList.add('loading');
-    const c = catById(catOf(it));
-    fill($('#pkWhat'), el('b', { text: it.name }), el('span', { text: `${it.who}${it.when ? `・${it.when}` : ''}` }),
-      c ? el('span', { class: 'pk-cat', style: `--c:${colorOf(c)}`, text: c.name }) : el('span', { class: 'pk-cat none', text: '未分類' }),
-      el('span', { class: 'pk-pos', text: `${num(i + 1)}／${num(board.length)}` }));
+    const f = flagOf(it);
+    fill($('#pkWhat'), el('b', { text: it.name }), el('span', { text: [it.dir ? `${tree.get('').name}／${it.dir}` : tree.get('').name, it.when, it.cam].filter(Boolean).join('・') }),
+      el('span', { class: `pk-flag${f === 1 ? ' keep' : f === -1 ? ' drop' : ''}`, text: f === 1 ? '留用' : f === -1 ? '排除' : '未標旗標' }),
+      taken(it) ? null : el('span', { class: 'pk-not', text: '不會存' }),
+      el('span', { class: 'pk-pos', text: `${num(i + 1)}／${num(files.length)}` }));
+    for (const b of $$('#pkFlags button')) { const on = f !== 0 && +b.dataset.f === f; b.classList.toggle('on', on); b.setAttribute('aria-pressed', String(on)); }
     $('#pkPrev').disabled = i <= 0;
-    $('#pkNext').disabled = i >= board.length - 1;
-    fill($('#pkCats'), ...cats.map((x, k) => el('button', { type: 'button', class: catOf(it) === x.id ? 'on' : '', 'aria-pressed': String(catOf(it) === x.id), onclick: () => peekPut(x.id) },
-      el('kbd', { style: `--c:${colorOf(x)}`, text: k < 9 ? String(k + 1) : '' }), x.name)),
-    cats.length ? el('button', { type: 'button', class: `out${catOf(it) ? '' : ' on'}`, onclick: () => peekPut('') }, el('kbd', { text: '0' }), '未分類') : el('span', { class: 'pk-none', text: '先在左邊新增分類，就能在這裡按數字鍵分類' }));
+    $('#pkNext').disabled = i >= files.length - 1;
     bigUrl(it).then((url) => {
       if (gen !== pkGen || !url) return null;
       const img = el('img', { class: 'pk-img', src: url, alt: '' });
       return img.decode().catch(() => {}).then(() => { if (gen === pkGen) { pkFrame.append(img); pkFrame.classList.remove('loading'); } });
     }).catch(() => { if (gen === pkGen) pkFrame.classList.remove('loading'); });
     // the next ones, ready
-    pvPlanned = [board[i + 1], board[i - 1], board[i + 2]].filter((x) => x && !x.url);
+    pvPlanned = [files[i + 1], files[i - 1], files[i + 2]].filter((x) => x && !x.url);
     pvPump();
-    drawBoard();
+    drawPane();
   }
-  function peekGo(d) { const i = board.indexOf(pkAt); if (board[i + d]) { pkAt = board[i + d]; drawPeek(); } }
-  function peekPut(id) {
-    const it = pkAt, i = board.indexOf(it);
-    if (!put([it], id)) return;
-    const j = board.indexOf(it);
-    if (j < 0) pkAt = board[Math.min(i, board.length - 1)] || null;
-    else if (S.auto && board[j + 1]) pkAt = board[j + 1];
+  function peekGo(d) { const files = pkFiles(), i = files.indexOf(pkAt); if (files[i + d]) { pkAt = files[i + d]; drawPeek(); } }
+  function peekFlag(f) {
+    const it = pkAt, i = pkFiles().indexOf(it);
+    if (!flag3([it], f)) return;
+    const files = pkFiles(), j = files.indexOf(it);
+    if (j < 0) pkAt = files[Math.min(i, files.length - 1)] || null;   // not shown any more (not picked): the next one is in its place
+    else if (S.auto && files[j + 1]) pkAt = files[j + 1];
     if (!pkAt) { closePeek(); return; }
     drawPeek();
   }
   function peekKey(e) {
     const k = e.key, mod = e.metaKey || e.ctrlKey;
-    if (mod && !e.altKey && !e.shiftKey && (k === 'z' || k === 'Z')) { e.preventDefault(); const at = pkAt; undoSort(); pkAt = board.includes(at) ? at : null; if (pkAt) drawPeek(); else closePeek(); return; }
+    if (mod && !e.altKey && !e.shiftKey && (k === 'z' || k === 'Z')) { e.preventDefault(); const at = pkAt; undo3(); pkAt = pkFiles().includes(at) ? at : null; if (pkAt) drawPeek(); else closePeek(); return; }
     if (mod || e.altKey) return;
     let done = true;
-    if (/^[1-9]$/.test(k)) { const c = cats[+k - 1]; if (c) peekPut(c.id); else putKey(+k - 1, []); }
-    else switch (k) {
-      case '0': case '`': peekPut(''); break;
+    switch (k) {
       case 'ArrowRight': case 'ArrowDown': peekGo(1); break;
       case 'ArrowLeft': case 'ArrowUp': peekGo(-1); break;
+      case 'p': case 'P': peekFlag(1); break;
+      case 'x': case 'X': case 'Delete': case 'Backspace': peekFlag(-1); break;
+      case 'u': case 'U': case '0': peekFlag(0); break;
       case 'Escape': case ' ': case 'Enter': closePeek(); break;
       default: done = false;
     }
@@ -2393,61 +2156,93 @@
   $('#pkX').addEventListener('click', closePeek);
   $('#pkPrev').addEventListener('click', () => peekGo(-1));
   $('#pkNext').addEventListener('click', () => peekGo(1));
-  new ResizeObserver(() => { if (pkAt && !peekEl.hidden) { const [w, h] = dims(pkAt), W = Math.max(100, pkStage.clientWidth - 112), H = Math.max(100, pkStage.clientHeight - 8), s = Math.min(W / w, H / h); Object.assign(pkFrame.style, { width: `${Math.round(w * s)}px`, height: `${Math.round(h * s)}px` }); } }).observe(pkStage);
+  $('#pkFlags').addEventListener('click', (e) => { const b = e.target.closest('button'); if (b) peekFlag(+b.dataset.f); });
+  new ResizeObserver(() => { if (pkAt && !peekEl.hidden) { const [w, h] = fitPeek(pkAt); Object.assign(pkFrame.style, { width: `${w}px`, height: `${h}px` }); } }).observe(pkStage);
 
-  // ---------- step 3: keys ----------
+  // ---------- step 3: keys, as Finder's (and step 2's flags) ----------
   function onKey3(e) {
     if (S.step !== 3 || export_.busy) return;
     if (!peekEl.hidden) { peekKey(e); return; }
-    const t = e.target;
-    if (t.closest && t.closest('input, select, textarea')) return;
-    const k = e.key, mod = e.metaKey || e.ctrlKey;
-    if (mod && !e.altKey && !e.shiftKey && (k === 'z' || k === 'Z')) { e.preventDefault(); undoSort(); return; }
-    if (mod && !e.altKey && (k === 'a' || k === 'A')) { e.preventDefault(); selectAll(); return; }
-    if (mod || e.altKey) return;
+    const t = e.target, k = e.key, mod = e.metaKey || e.ctrlKey;
+    if (t.closest && t.closest('input, select, textarea') && (!t.matches('input[type="checkbox"], input[type="radio"], input[type="range"]') || /^Arrow|^Home$|^End$|^Page/.test(k))) return;
+    if (mod && !e.altKey) {
+      let done = true;
+      if ((k === 'z' || k === 'Z') && !e.shiftKey) undo3();
+      else if (k === 'a' || k === 'A') { fsel = new Set(entries.map(ek)); if (!fcur && entries[0]) fcur = ek(entries[0]); paintAll(); }
+      else if (k === '[') travel3(fhist, ffut);
+      else if (k === ']') travel3(ffut, fhist);
+      else if (k === 'ArrowUp') { if (S.fdir) openDir(parentOf(S.fdir)); }
+      else if (k === 'ArrowDown') openCur();
+      else done = false;
+      if (done) e.preventDefault();
+      return;
+    }
+    if (e.altKey) return;
     // a button with the focus takes its own Space and Enter
     if ((k === ' ' || k === 'Enter') && t.closest && t.closest('button, a, label')) return;
-    const i = cursor ? board.indexOf(cursor) : -1;
+    const i = fcur ? entries.findIndex((x) => ek(x) === fcur) : -1, files = chosen().filter((x) => !isDir(x));
+    // one photo flagged: on to the next (自動前進, as in step 2)
+    const flagKey = (f) => {
+      const one = files.length === 1 ? files[0] : null, at = one ? entries.indexOf(one) : -1;
+      if (!flag3(files, f) || !one || !S.auto) return;
+      const j = entries.indexOf(one), to = j >= 0 ? entries[j + 1] : entries[at];
+      if (to) fmove(entries.indexOf(to));
+    };
     let done = true;
-    // one photo sorted with a key: on to the next (自動前進, as in step 2)
-    const one = targets3().length === 1 && S.auto ? targets3()[0] : null;
-    const next = (ok) => { if (!ok || !one) return; const j = board.indexOf(one), to = j >= 0 ? board[j + 1] : cursor; if (to) moveTo(board.indexOf(to)); };
-    if (/^[1-9]$/.test(k)) next(putKey(+k - 1, targets3()));
-    else switch (k) {
-      case '0': case '`': next(put(targets3(), '')); break;
-      case 'ArrowRight': moveTo(i + 1, e.shiftKey); break;
-      case 'ArrowLeft': moveTo(i < 0 ? 0 : i - 1, e.shiftKey); break;
-      case 'ArrowDown': moveTo(i < 0 ? 0 : vertical(1), e.shiftKey); break;
-      case 'ArrowUp': moveTo(i < 0 ? 0 : vertical(-1), e.shiftKey); break;
-      case 'Home': moveTo(0, e.shiftKey); break;
-      case 'End': moveTo(board.length - 1, e.shiftKey); break;
-      case 'PageDown': case 'PageUp': { let j = Math.max(0, i); for (let s = 0; s < 3; s++) j = vertical(k === 'PageDown' ? 1 : -1, j); moveTo(j, e.shiftKey); break; }
-      case ' ': case 'Enter': peek(cursor && picks.has(cursor) ? cursor : targets3()[0] || cursor || board[0]); break;
-      case 'Escape': if (picks.size) { picks.clear(); paint3(); } else done = false; break;
-      case '-': case '_': setTile(S.tile - 30); break;
-      case '=': case '+': setTile(S.tile + 30); break;
+    switch (k) {
+      case 'ArrowRight': if (S.fview === 'icons') fmove(i + 1, e.shiftKey); break;
+      case 'ArrowLeft': if (S.fview === 'icons') fmove(i < 0 ? 0 : i - 1, e.shiftKey); break;
+      case 'ArrowDown': fmove(i < 0 ? 0 : i + fcols, e.shiftKey); break;
+      case 'ArrowUp': fmove(i < 0 ? 0 : i - fcols, e.shiftKey); break;
+      case 'Home': fmove(0, e.shiftKey); break;
+      case 'End': fmove(entries.length - 1, e.shiftKey); break;
+      case 'PageDown': fmove(Math.max(0, i) + fcols * Math.max(1, Math.floor(pane.clientHeight / cellH) - 1), e.shiftKey); break;
+      case 'PageUp': fmove(Math.max(0, i) - fcols * Math.max(1, Math.floor(pane.clientHeight / cellH) - 1), e.shiftKey); break;
+      case 'Enter': openCur(); break;
+      case ' ': { const x = fcur && byEk(fcur); if (x && !isDir(x)) peek(x); else if (files[0]) peek(files[0]); else if (x) openDir(x.path); break; }
+      case 'p': case 'P': flagKey(1); break;
+      case 'x': case 'X': case 'Delete': case 'Backspace': flagKey(-1); break;
+      case 'u': case 'U': case '0': flagKey(0); break;
+      case 'Escape': if (fsel.size) { fsel.clear(); paintAll(); } else done = false; break;
+      case '-': case '_': if (S.fview === 'icons') setFtile(S.ftile - 30); break;
+      case '=': case '+': if (S.fview === 'icons') setFtile(S.ftile + 30); break;
       default: done = false;
     }
     if (done) e.preventDefault();
   }
   document.addEventListener('keydown', onKey3);
 
-  // ---------- step 3: saving ----------
-  $('#go').addEventListener('click', () => { const list = takeList(); if (!list.length) return; if (list.length === 1) saveOne(list[0]); else if (CAN_DIR) saveDir(list); else saveZip(list); });
-  $('#goZip').addEventListener('click', () => saveZip(takeList()));
-  // in again: the categories and photos (a save over: ready to sort and save again)
+  // ---------- step 3: saving, the folders kept ----------
+  function save3(list, base, label) { if (!list.length) return; if (list.length === 1) saveOne(list[0]); else if (CAN_DIR) saveDir(list, base); else saveZip(list, base, label); }
+  function saveHere() { const t = tree.get(S.fdir); save3(takeList().filter((it) => inside(it, S.fdir)), S.fdir, t ? t.name : topName()); }
+  $('#go').addEventListener('click', () => save3(takeList(), '', topName()));
+  $('#goZip').addEventListener('click', () => saveZip(takeList(), '', topName()));
+  // the folders, from the one saved down (the top: all of them); the same name twice in one folder gets -2
+  function namesFor(list, base = '') {
+    const used = new Set(), out = new Map();
+    for (const it of list) {
+      const dir = !base ? it.dir : it.dir === base ? '' : it.dir.slice(base.length + 1);
+      const dot = it.name.lastIndexOf('.'), stem = dot > 0 ? it.name.slice(0, dot) : it.name, ext = dot > 0 ? it.name.slice(dot) : '';
+      let name = it.name;
+      for (let n = 2; used.has(`${dir}/${name}`.toLowerCase()); n++) name = `${stem}-${n}${ext}`;
+      used.add(`${dir}/${name}`.toLowerCase());
+      out.set(it, { dir, name });
+    }
+    return out;
+  }
+  // in again: the folders (a save over: ready to look and save again)
   function fresh3() {
     $('#saving').hidden = true; $('#after').hidden = true; $('#fails').hidden = true;
     if (S.take === 'keep' && !counts().keep) S.take = 'notdrop';
-    picks.clear(); cursor = anchorS = null;
+    $('#fdAll').checked = S.fall;
+    fsel.clear(); fcur = fanchor = null;
     renderFoot3(true);
-    boardEl.scrollTop = 0;
-    sortChanged();
-    boardEl.focus({ preventScroll: true });
+    refresh3();
+    pane.focus({ preventScroll: true });
   }
   $('#again').addEventListener('click', fresh3);
   function renderFoot3(on) {
-    $('#go').hidden = !on; $('#back3').disabled = !on; $('#treeSel').disabled = !on; $('#credit').disabled = !on;
+    $('#go').hidden = !on; $('#back3').disabled = !on;
     $('#goZip').hidden = !on || !(CAN_DIR && takeList().length > 1);
   }
   function progress() {
@@ -2482,16 +2277,15 @@
     setTimeout(() => URL.revokeObjectURL(a.href), 120000);
   }
   async function saveOne(it) {
-    const { name } = namesFor([it]).get(it);
     begin(1, '準備檔案…');
-    try { download(await blobOf(it), name); export_.done = 1; finish(['開始下載了：', el('b', { text: name })]); }
+    try { download(await blobOf(it), it.name); export_.done = 1; finish(['開始下載了：', el('b', { text: it.name })]); }
     catch { export_.fails.push({ name: it.name, why: '讀不到' }); finish(['沒有存成功']); }
   }
-  async function saveDir(list) {
+  async function saveDir(list, base) {
     let root;
     try { root = await window.showDirectoryPicker({ id: 'zt-pick', mode: 'readwrite', startIn: 'pictures' }); }
     catch (e) { if (e.name !== 'AbortError') toast('沒辦法打開這個資料夾'); return; }
-    const names = namesFor(list);
+    const names = namesFor(list, base);
     begin(list.length, el('span', {}, '存進「', el('b', { text: root.name }), '」…'));
     window.addEventListener('beforeunload', hold);
     const dirs = new Map([['', root]]);
@@ -2534,8 +2328,8 @@
     finish(!ok && export_.skipped ? [`這 ${num(export_.skipped)} 張本來就都在`, ...where, '裡了']
       : ['存好 ', el('b', { text: `${num(ok)} 張` }), ' 到', ...where, export_.skipped ? `・${num(export_.skipped)} 張本來就在裡面` : '']);
   }
-  async function saveZip(list) {
-    const names = namesFor(list);
+  async function saveZip(list, base, label) {
+    const names = namesFor(list, base);
     begin(list.length, '打包中…');
     window.addEventListener('beforeunload', hold);
     try {
@@ -2556,7 +2350,7 @@
       const all = entries.reduce((a, x) => a + (x.raw ? x.raw.data.size : x.file.size), 0), n = entries.length;
       const blob = await ManyZip.files(entries, (d) => { export_.done = Math.min(n, Math.round((d / all) * n)); progress(); });
       export_.done = list.length;
-      download(blob, `挑好的照片-${n}張.zip`);
+      download(blob, `${String(label || '挑好的照片').replace(/[\\/:*?"<>|]/g, '_')}-${n}張.zip`);
       finish(['開始下載了：', el('b', { text: `${num(n)} 張` }), `，${fmtBytes(blob.size)}`]);
     } catch (e) {
       console.error(e);

@@ -5,12 +5,12 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#ffffff">
 <title>ZhuyuanLovePick・照片挑選</title>
-<meta name="description" content="幾千張照片也能快速挑：Google Drive 下載的 ZIP 直接放進來，用鍵盤一張一張看，跟 Lightroom 一樣 P 留用、X 排除、U 取消，挑好的再按分類、攝影師分好，存成資料夾或 ZIP。旗標會自動記住，下次接著挑。照片只在你的電腦裡處理，不會上傳。">
+<meta name="description" content="幾千張照片也能快速挑：Google Drive 下載的 ZIP 直接放進來，用鍵盤一張一張看，跟 Lightroom 一樣 P 留用、X 排除、U 取消，挑好的照原本的資料夾存成資料夾或 ZIP。旗標會自動記住，下次接著挑。照片只在你的電腦裡處理，不會上傳。">
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="ZhuyuanTools">
 <meta property="og:locale" content="zh_TW">
 <meta property="og:title" content="ZhuyuanLovePick・照片挑選">
-<meta property="og:description" content="幾千張照片也能快速挑：Google Drive 下載的 ZIP 直接放進來，用鍵盤一張一張看，跟 Lightroom 一樣 P 留用、X 排除、U 取消，挑好的再按分類、攝影師分好，存成資料夾或 ZIP。旗標會自動記住，下次接著挑。照片只在你的電腦裡處理，不會上傳。">
+<meta property="og:description" content="幾千張照片也能快速挑：Google Drive 下載的 ZIP 直接放進來，用鍵盤一張一張看，跟 Lightroom 一樣 P 留用、X 排除、U 取消，挑好的照原本的資料夾存成資料夾或 ZIP。旗標會自動記住，下次接著挑。照片只在你的電腦裡處理，不會上傳。">
 <meta property="og:url" content="https://tools.zhuyuan.tw/pick">
 <meta property="og:image" content="https://tools.zhuyuan.tw/pick/assets/og.png">
 <meta property="og:image:width" content="1200">
@@ -43,7 +43,7 @@
     <ol>
       <li><button type="button" data-goto="1"><span class="dot">1</span><span class="lbl">放入照片</span></button></li>
       <li><button type="button" data-goto="2"><span class="dot">2</span><span class="lbl">挑照片</span></button></li>
-      <li><button type="button" data-goto="3"><span class="dot">3</span><span class="lbl">分類存檔</span></button></li>
+      <li><button type="button" data-goto="3"><span class="dot">3</span><span class="lbl">檢視下載</span></button></li>
     </ol>
   </nav>
   <!-- the culling screen, as Lightroom's: ▲ hides the bar above (F5) -->
@@ -104,7 +104,7 @@
         <ol class="how" id="how" aria-label="怎麼用">
           <li><span class="how-no">1</span><b>放入照片</b><span>幾千張、好幾個 ZIP 都行</span></li>
           <li><span class="how-no">2</span><b><span class="h-key">用鍵盤挑</span><span class="h-touch">用手指挑</span></b><span><span class="h-key">← → 換張・P 留用・X 排除・U 取消</span><span class="h-touch">左右滑換張・點「留用」或「排除」</span></span></li>
-          <li><span class="how-no">3</span><b>分類存檔</b><span>按分類、攝影師分好資料夾</span></li>
+          <li><span class="how-no">3</span><b>檢視下載</b><span>照原本的資料夾存下來</span></li>
         </ol>
         <p class="reading" id="reading" hidden><span class="spinner"></span> <span id="readingText">正在打開…</span></p>
       </div>
@@ -194,43 +194,37 @@
     </section>
 
     <!-- ============ STEP 3 ============ -->
-    <!-- Sorting, then saving. On the left what's fixed: which photos, the categories (yours, kept for next time) and the
-         photographers (found in the photos); on the right the photos, the only thing that scrolls; at the bottom how
-         the folders go and the save button. Photos are selected like files (Shift, ⌘), put into a category with its
-         number key, by dragging them onto it or with its 放入 button. -->
-    <section class="panel fill sorter" id="step3" aria-labelledby="h3t" hidden>
-      <div class="sort" id="sort">
-        <aside class="side" id="side">
-          <div class="side-top">
-            <h2 id="h3t">分類存檔</h2>
-            <div class="seg take" role="radiogroup" aria-label="哪些照片">
-              <label><input type="radio" name="take" value="keep" checked><span id="takeKeep">留用的</span></label>
-              <label><input type="radio" name="take" value="notdrop"><span id="takeNot">沒排除的</span></label>
-            </div>
-          </div>
-          <section class="side-sec cats-sec" aria-labelledby="catsT">
-            <h3 class="side-h" id="catsT">分類</h3>
-            <ul class="rows cats" id="cats"></ul>
-            <form class="cat-add" id="catAdd" autocomplete="off">
-              <input type="text" id="catName" maxlength="40" placeholder="新增分類，例如：議程" aria-label="新增分類的名字" enterkeyhint="done">
-              <button type="submit" class="icon-btn" id="catAddGo" title="新增分類" aria-label="新增分類"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></button>
-            </form>
-            <p class="ideas" id="ideas"></p>
-          </section>
-          <section class="side-sec who-sec" aria-labelledby="whoT">
-            <h3 class="side-h" id="whoT">攝影師 <span class="side-sub">從檔名、相機看出來的</span></h3>
-            <ul class="rows who" id="who"></ul>
-          </section>
+    <!-- The picked photos where they were, as a Finder window: the folders on the left, the open folder's photos (icons
+         or a list) on the right, back / forward and the folder's name above, the path below. Space looks at one big.
+         Saved the way they are, folders kept. -->
+    <section class="panel fill finder" id="step3" aria-labelledby="h3t" hidden>
+      <h2 class="sr" id="h3t">檢視下載</h2>
+      <div class="fd" id="fd">
+        <aside class="fd-side" aria-label="資料夾">
+          <p class="fd-side-h">資料夾</p>
+          <ul class="fd-tree" id="fdTree" role="tree" aria-label="資料夾"></ul>
         </aside>
-        <div class="board-wrap">
-          <div class="board-bar" id="boardBar">
-            <p class="bb-what" id="bbWhat"></p>
-            <p class="bb-sel" id="bbSel"></p>
-            <label class="bb-size" title="縮圖大小"><svg viewBox="0 0 24 24" width="15" height="15" fill="currentColor" aria-hidden="true"><rect x="3" y="3" width="8" height="8" rx="1.5"/><rect x="13" y="3" width="8" height="8" rx="1.5"/><rect x="3" y="13" width="8" height="8" rx="1.5"/><rect x="13" y="13" width="8" height="8" rx="1.5"/></svg><input type="range" id="tileSize" min="110" max="320" step="1" aria-label="縮圖大小"></label>
+        <div class="fd-main">
+          <div class="fd-bar">
+            <span class="fd-nav">
+              <button type="button" class="fd-btn" id="fdBack" title="上一個（⌘[）" aria-label="上一個" disabled><svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="M10 3 5 8l5 5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+              <button type="button" class="fd-btn" id="fdFwd" title="下一個（⌘]）" aria-label="下一個" disabled><svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="m6 3 5 5-5 5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+            </span>
+            <h3 class="fd-title" id="fdTitle"></h3>
+            <label class="tog fd-all" title="沒挑到的也列出來（淡淡的，不會存）"><input type="checkbox" id="fdAll"><span class="tog-ui" aria-hidden="true"></span><span>顯示沒挑的</span></label>
+            <span class="fd-views" role="radiogroup" aria-label="顯示方式">
+              <label title="圖示"><input type="radio" name="fview" value="icons"><span><svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true"><path fill="currentColor" d="M1.5 1.5h5v5h-5zM9.5 1.5h5v5h-5zM1.5 9.5h5v5h-5zM9.5 9.5h5v5h-5z"/></svg></span></label>
+              <label title="列表"><input type="radio" name="fview" value="list"><span><svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true"><path fill="currentColor" d="M1.5 2.5h13v2h-13zM1.5 7h13v2h-13zM1.5 11.5h13v2h-13z"/></svg></span></label>
+            </span>
+            <input type="range" class="fd-size" id="fdSize" min="90" max="260" step="1" aria-label="縮圖大小" title="縮圖大小">
           </div>
-          <div class="board" id="board" tabindex="0" role="listbox" aria-multiselectable="true" aria-label="照片"><div class="part pin" id="pin" hidden></div><div class="board-in" id="boardIn"></div></div>
+          <div class="fd-pane" id="fdPane" tabindex="0" role="listbox" aria-multiselectable="true" aria-labelledby="fdTitle"><div class="fd-head" id="fdHead" hidden><button type="button" data-sort="name">名稱</button><button type="button" data-sort="time">拍攝時間</button><span>相機</span><button type="button" data-sort="size">大小</button></div><div class="fd-in" id="fdIn"></div></div>
+          <div class="fd-foot">
+            <p class="fd-crumbs" id="fdCrumbs"></p>
+            <p class="fd-status" id="fdStatus"></p>
+          </div>
         </div>
-        <!-- while saving, and after: over the two -->
+        <!-- while saving, and after: over the window -->
         <div class="saving" id="saving" hidden>
           <div class="big" id="big">
             <p class="big-num"><b id="bigNum">0</b><span id="bigOf"></span></p>
@@ -239,33 +233,32 @@
           </div>
           <ol class="fails" id="fails" hidden></ol>
           <div class="after" id="after" hidden>
-            <button type="button" class="btn" id="again">回去分類</button>
+            <button type="button" class="btn" id="again">回去看資料夾</button>
             <button type="button" class="btn ghost" data-goto="2"><span aria-hidden="true">←</span> 回去繼續挑</button>
           </div>
         </div>
       </div>
-      <div class="panel-foot sort-foot">
+      <div class="panel-foot fd-save">
         <button type="button" class="btn back" data-goto="2" id="back3" aria-label="回去挑"><span aria-hidden="true">←</span><span class="lbl">回去挑</span></button>
-        <label class="tree"><span class="tree-l">資料夾</span><select id="treeSel" aria-label="資料夾怎麼分">
-          <option value="cat-who">分類 ▸ 攝影師</option>
-          <option value="who-cat">攝影師 ▸ 分類</option>
-          <option value="cat">只分分類</option>
-          <option value="who">只分攝影師</option>
-          <option value="dirs">照原本的資料夾</option>
-          <option value="flat">全部放一起</option>
-        </select></label>
-        <span class="foot-note tree-eg" id="treeEg"></span>
-        <label class="tog credit" title="Flickr、相簿會用檔名當標題，名字在上面就知道是誰拍的"><input type="checkbox" id="credit"><span class="tog-ui" aria-hidden="true"></span><span>檔名加攝影師</span></label>
+        <div class="seg take" role="radiogroup" aria-label="存哪些">
+          <label><input type="radio" name="take" value="keep" checked><span id="takeKeep">留用的</span></label>
+          <label><input type="radio" name="take" value="notdrop"><span id="takeNot">沒排除的</span></label>
+        </div>
+        <span class="foot-note" id="note3"></span>
         <button type="button" class="btn ghost" id="goZip" hidden>改成下載 ZIP</button>
         <button type="button" class="btn primary" id="go" disabled>存下來 →</button>
       </div>
     </section>
 
-    <!-- step 3's big look at one photo (space bar, a double-click): ← → move on, the number keys sort it -->
+    <!-- step 3's Quick Look (space bar, a double-click): ← → the next photo in the folder, P / X / U flag it -->
     <div class="peek" id="peek" hidden tabindex="-1" role="dialog" aria-modal="true" aria-label="放大看">
-      <div class="pk-top"><p class="pk-what" id="pkWhat"></p><button type="button" class="pk-x" id="pkX" title="關閉（Esc、空白鍵）" aria-label="關閉">×</button></div>
+      <div class="pk-top"><p class="pk-what" id="pkWhat"></p><button type="button" class="pk-x" id="pkX" title="關閉（空白鍵、Esc）" aria-label="關閉">×</button></div>
       <div class="pk-stage" id="pkStage"><button type="button" class="pk-nav prev" id="pkPrev" aria-label="上一張"></button><div class="pk-frame" id="pkFrame"></div><button type="button" class="pk-nav next" id="pkNext" aria-label="下一張"></button></div>
-      <div class="pk-cats" id="pkCats"></div>
+      <div class="pk-flags" id="pkFlags">
+        <button type="button" id="pkKeep" data-f="1"><kbd>P</kbd>留用</button>
+        <button type="button" id="pkDrop" data-f="-1"><kbd>X</kbd>排除</button>
+        <button type="button" id="pkNone" data-f="0"><kbd>U</kbd>取消旗標</button>
+      </div>
     </div>
   </main>
 </div>
