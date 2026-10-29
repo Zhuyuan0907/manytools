@@ -388,31 +388,48 @@ kbd { display: inline-block; min-width: 1.6em; padding: 0 5px; border-radius: 5p
   /* Lightroom's panels are set in Myriad: that if it's on the computer, else Adobe's open Source Sans 3 (/fonts) */
   --lr-font: "Myriad Pro", "Myriad Web Pro", "Source Sans 3 Web", -apple-system, BlinkMacSystemFont, "PingFang TC", "Noto Sans TC Web", "Noto Sans TC", "Microsoft JhengHei", "Heiti TC", sans-serif;
   --i-flag: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M3.2 15V1.4h1.3v.8h8.8l-2.1 3.4 2.1 3.4H4.5V15z'/%3E%3C/svg%3E");
+  --i-flag-o: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M3.85 15V2.05h8.3l-1.75 2.9 1.75 2.9h-8.3' fill='none' stroke='%23000' stroke-width='1.3'/%3E%3C/svg%3E");
   --i-rej: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cmask id='m'%3E%3Crect width='16' height='16' fill='%23fff'/%3E%3Cpath d='M6.6 3.6l3.6 3.6M10.2 3.6L6.6 7.2' stroke='%23000' stroke-width='1.6' stroke-linecap='round'/%3E%3C/mask%3E%3Cpath mask='url(%23m)' d='M3.2 15V1.4h1.3v.8h8.8l-2.1 3.4 2.1 3.4H4.5V15z'/%3E%3C/svg%3E");
 }
-body.culling { background: var(--lr-top); color-scheme: dark; }
+body.culling { background: #000; color-scheme: dark; }
 .lr, .keys, body.culling .top, body.culling .stepper { font-family: var(--lr-font); }
 @media (min-width: 641px) {
-  body.culling .app { max-width: none; padding: 0; gap: 0; grid-template-columns: minmax(0, 1fr) auto; grid-template-rows: auto minmax(0, 1fr); }
-  body.culling .top { grid-column: 1; grid-row: 1; height: 46px; padding: 0 18px; }
-  body.culling .logo { width: 26px; height: 26px; border-radius: 7px; box-shadow: none; }
-  body.culling .brand { gap: 10px; }
-  body.culling .wordmark { font-size: 1.05rem; color: #e6e6e8; }
-  body.culling .wordmark .w-tool { color: #c995e3; }
-  body.culling .tagline, body.culling .privacy { display: none; }
-  /* the steps, like the module picker: names, the current one bright */
-  body.culling .stepper { grid-column: 2; grid-row: 1; align-self: center; padding: 0 8px 0 0; background: none; border: 0; border-radius: 0; box-shadow: none; }
-  body.culling .stepper ol { display: flex; gap: 0; }
-  body.culling .stepper li + li { border-left: 1px solid #48484b; }
-  body.culling .stepper button, body.culling .stepper button.current { padding: 1px 16px; gap: 0; border-radius: 0; background: none; color: #8a8a8f; }
+  body.culling .app { position: relative; max-width: none; padding: 0; gap: 0; grid-template-columns: minmax(0, 1fr) auto; grid-template-rows: auto minmax(0, 1fr); }
+  /* the top bar, as Lightroom's: black, 57 px; the identity plate on the left (a grey tile, two grey lines), the steps
+     on the right as its module picker */
+  body.culling .top { grid-column: 1; grid-row: 1; height: 57px; align-items: flex-start; justify-content: flex-start; gap: 0; padding: 19.5px 0 0 20px; background: #000; }
+  body.culling .brand { align-items: flex-start; gap: 14.5px; }
+  body.culling .logo { width: 27.5px; height: 26px; border-radius: 4.5px; box-shadow: none; filter: grayscale(1) brightness(1.04); }
+  body.culling .brand-text { gap: 0; margin-top: -1.5px; }
+  body.culling .wordmark { font-size: 11px; line-height: 11px; font-weight: 400; letter-spacing: 0; color: #929292; }
+  body.culling .wordmark .w-love, body.culling .wordmark .w-tool { color: inherit; }
+  body.culling .tagline { display: block; margin-top: 3.5px; font-size: 17px; line-height: 17px; font-weight: 400; letter-spacing: 0; color: #929292; }
+  body.culling .privacy { display: none; }
+  body.culling .demo-tag { align-self: flex-start; margin: 1px 0 0 16px; padding: 0 6px; border: 1px solid #424242; border-radius: 3px; background: none; color: #929292; font-size: 11px; font-weight: 400; line-height: 15px; }
+  body.culling .stepper { grid-column: 2; grid-row: 1; align-self: start; height: 57px; padding: 27.5px 9.5px 0 0; background: #000; border: 0; border-radius: 0; box-shadow: none; }
+  body.culling .stepper ol { display: flex; align-items: center; gap: 0; }
+  body.culling .stepper li { display: flex; align-items: center; }
+  body.culling .stepper li + li::before { content: ""; width: 1px; height: 19px; margin-top: -.5px; background: #929292; }
+  body.culling .stepper button, body.culling .stepper button.current { height: 22px; padding: 0 10.5px; gap: 0; border-radius: 0; background: none; color: #a9a9a9; }
   body.culling .stepper .dot { display: none; }
-  body.culling .stepper .lbl { font-size: 1rem; font-weight: 500; }
-  body.culling .stepper button.current { color: var(--lr-hi); }
-  body.culling .stepper button:not(:disabled):not(.current):hover { background: none; color: #e6e6e8; }
+  body.culling .stepper .lbl { font-size: 22px; line-height: 22px; font-weight: 400; letter-spacing: 0; }
+  body.culling .stepper button.current { color: #fff; }
+  body.culling .stepper button.current .lbl { font-weight: 400; }
+  body.culling .stepper button:disabled { color: #5c5c5c; opacity: 1; }
+  body.culling .stepper button:not(:disabled):not(.current):hover { background: none; color: #d6d6d6; }
   body.culling main { grid-column: 1 / -1; grid-row: 2; }
-  body.culling .lr { border: 0; border-radius: 0; box-shadow: none; }
+  /* the step fills the rest: 15 px black margins beside it, a #424242 line under the top bar and above the filmstrip */
+  body.culling .lr { position: relative; padding: 3px 15px 0; border: 0; border-radius: 0; box-shadow: none; background: #000; }
+  body.culling .lr::before { content: ""; position: absolute; left: 15px; right: 15px; top: 0; height: 1px; background: #424242; }
+  body.culling .panel-tog { display: block; }
+  body.culling #togTop { position: absolute; left: calc(50% - 6px); top: 4.5px; z-index: 2; width: 12px; height: 7px; }
+  body.culling #togTop::before { border-top-width: 0; border-bottom: 6.5px solid #5f5f5f; }
+  /* the top bar away (▲, F5): a thin black bar with ▼ */
+  body.culling.no-top .top, body.culling.no-top .stepper { display: none; }
+  body.culling.no-top .app { grid-template-rows: 14px minmax(0, 1fr); }
+  body.culling.no-top #togTop::before { border-bottom-width: 0; border-top: 6.5px solid #5f5f5f; border-bottom-color: transparent; }
 }
-.lr { display: grid; grid-template-rows: minmax(0, 1fr) auto auto auto; grid-template-columns: minmax(0, 1fr); background: var(--lr-panel); color: var(--lr-text); }
+.lr { display: grid; grid-template-rows: minmax(0, 1fr) auto auto auto auto; grid-template-columns: minmax(0, 1fr); background: #000; color: var(--lr-text); }
 .lr kbd { background: #1e1e1f; border-color: #4a4a4e; color: #a9a9ae; }
 
 /* the photo */
@@ -422,7 +439,8 @@ body.culling { background: var(--lr-top); color-scheme: dark; }
 .stage.grabbing { cursor: grabbing; }
 .frame { position: absolute; transform-origin: 0 0; }
 .frame.glide { transition: transform .3s cubic-bezier(.2, .8, .2, 1); }
-.frame .photo { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; transition: opacity .12s; }
+/* swapped in at once, as Lightroom does (fading a 24 MP photo in cost frames) */
+.frame .photo { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; }
 .frame .photo.in { opacity: 1; }
 .frame .ph { position: absolute; left: 50%; top: 50%; display: block; }
 /* its details: Lightroom's info overlay */
@@ -504,44 +522,108 @@ body.culling { background: var(--lr-top); color-scheme: dark; }
 .lr .btn.go2 { height: 32px; margin-left: 8px; padding: 0 14px; border-radius: 6px; font-size: .9rem; box-shadow: none; }
 .lr .btn.go2:disabled { opacity: .35; }
 
-/* the filmstrip's header: folder, order, where you are, the filter (also the counts), the second screen, the keys, on */
-.fhead { position: relative; display: flex; align-items: center; gap: 16px; min-height: 32px; padding: 3px 12px; background: var(--lr-panel-2); border-top: 1px solid #19191a; color: var(--lr-dim); font-size: .82rem; }
-.fh-sel { display: inline-flex; align-items: center; gap: 7px; flex: none; white-space: nowrap; }
-.fh-sel select { min-height: 24px; max-width: 230px; padding: 0 6px; border-radius: 4px; border: 1px solid #444447; background: #2c2c2e; color: var(--lr-text); font-size: .82rem; }
-.fh-pos { flex: 1 1 auto; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.fh-pos b { color: var(--lr-text); font-weight: 600; }
-.tally { display: flex; align-items: center; gap: 2px; flex: none; }
-.fh-lbl { margin-right: 6px; }
-.tl { height: 24px; display: inline-flex; align-items: center; gap: 5px; padding: 0 9px; border: 0; border-radius: 4px; background: none; color: var(--lr-dim); font-size: .82rem; white-space: nowrap; cursor: pointer; }
-.tl b { color: var(--lr-text); font-weight: 600; }
-.tl i { width: 12px; height: 12px; flex: none; background: currentColor; -webkit-mask: var(--i-flag) center / contain no-repeat; mask: var(--i-flag) center / contain no-repeat; }
-.tl.is-drop i { -webkit-mask-image: var(--i-rej); mask-image: var(--i-rej); }
-@media (hover: hover) { .tl:hover { background: #2e2e30; color: var(--lr-text); } }
-.tl.on { background: #404043; color: var(--lr-hi); }
-.tl.on b { color: var(--lr-hi); }
-/* how much is decided: a thin line along the top */
-.fh-act { display: flex; align-items: center; gap: 2px; flex: none; margin-left: 4px; padding-left: 10px; border-left: 1px solid var(--lr-line); }
-.fh-act .tb-ic { width: 32px; height: 26px; }
-.lr .fh-act .btn.go2 { height: 26px; margin-left: 8px; padding: 0 12px; font-size: .84rem; border-radius: 5px; }
-.done-bar { position: absolute; left: 0; right: 0; top: -1px; height: 2px; pointer-events: none; }
-.done-bar i { display: block; height: 100%; width: 0; background: #b07ccc; transition: width .2s; }
+/* the filmstrip's header, as Lightroom's (measured from its screen at 2x): black, between two #424242 lines.
+   "1" and "2" (the main and the second window) as little windows, dotted rules, the grid and ←/→ in #4d4d4d, the
+   source and what's in it in 13 px #929292 with the photo's name white, then "過濾器:", its menu and its switch. */
+.fhead { display: flex; align-items: center; height: 32px; border-top: 1px solid #424242; background: #000; color: #929292; font-size: 13px; line-height: 16px; white-space: nowrap; }
+.fhead button { font: inherit; padding: 0; cursor: pointer; }
+.fh-ic, .fh-lbl, .fh-flag { border: 0; background: none; color: inherit; }
+.fh-win { display: flex; gap: 10px; flex: none; }
+.fh-menu { position: relative; display: inline-flex; align-items: center; }
+.fh-menu select { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; font-size: 13px; -webkit-appearance: none; appearance: none; }
+/* a little window: a frame with a title strip (three dots) and its number */
+.win { position: relative; display: grid; place-items: center; box-sizing: border-box; width: 27px; height: 17px; border: 1px solid #4d4d4d; border-top-width: 3px; background: #000; color: #666; font-weight: 700; font-size: 13px; line-height: 13px; }
+.win::before { content: ""; position: absolute; left: 0; top: -2px; width: 5px; height: 1px; background: repeating-linear-gradient(90deg, #2b2b2b 0 1px, transparent 1px 2px); }
+.win.on { border-color: #b2b2b2; color: #b2b2b2; }
+.win.on::before { background: repeating-linear-gradient(90deg, #646464 0 1px, transparent 1px 2px); }
+.fhead .win { padding-top: 0; }
+.fh-dots { flex: none; width: 1px; height: 17px; margin: 0 10px; background: repeating-linear-gradient(#515151 0 1px, transparent 1px 4px); }
+.fh-dots + .fh-ic { margin-left: 0; }
+.fh-ic { flex: none; display: grid; place-items: center; height: 17px; color: #4d4d4d; }
+.fh-ic + .fh-ic { margin-left: 11.5px; }
+.fh-ic + .fh-dots { margin-left: 11.5px; }
+.fhead button.fh-ic:disabled { cursor: default; }
+@media (hover: hover) { .fhead button.fh-ic:not(:disabled):hover, .win:hover, .fh-menu:hover .win { color: #8a8a8a; } }
+.fh-src { flex: 1 1 auto; min-width: 0; }
+.fh-src-text { display: flex; align-items: baseline; min-width: 0; overflow: hidden; }
+#srcName { flex: none; margin-right: 21.5px; }
+.fh-pos { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.fh-pos b { color: #fff; font-weight: 400; margin-left: 1.5px; }
+.caret { flex: none; width: 0; height: 0; margin: 0 0 1px 6.5px; border: 3px solid transparent; border-bottom: 0; border-top-color: #929292; }
+.fh-filter { flex: none; display: flex; align-items: center; margin-left: 16px; }
+.fh-lbl { order: 0; }
+.fh-flags { order: 1; display: flex; gap: 7px; margin-left: 10px; }
+.fh-flags[hidden] { display: none; }
+.popup { order: 2; display: block; width: 146px; height: 16px; margin-left: 10.5px; }
+.fh-switch { order: 3; }
+@media (hover: hover) { .fh-lbl:hover { color: #c4c4c4; } }
+/* the filter's flags: 留用, 未標註旗標, 排除 */
+.fh-flag { width: 13px; height: 13px; background: currentColor; color: #5c5c5c; -webkit-mask: var(--i-flag) center / contain no-repeat; mask: var(--i-flag) center / contain no-repeat; }
+.fh-flag.is-none { -webkit-mask-image: var(--i-flag-o); mask-image: var(--i-flag-o); }
+.fh-flag.is-drop { -webkit-mask-image: var(--i-rej); mask-image: var(--i-rej); }
+.fh-flag.on { color: #e6e6e6; }
+@media (hover: hover) { .fh-flag:not(.on):hover { color: #8a8a8a; } }
+/* its menu, a sunken field with Lightroom's up/down stepper */
+.popup select {
+  display: block; width: 100%; height: 16px; margin: 0; padding: 0 16px 0 11px; border: 1px solid #404040; border-radius: 0;
+  -webkit-appearance: none; appearance: none; background: #333 url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='14'%3E%3ClinearGradient id='g' x1='0' y1='0' x2='0' y2='1'%3E%3Cstop offset='0' stop-color='%23424242'/%3E%3Cstop offset='.08' stop-color='%233a3a3a'/%3E%3Cstop offset='1' stop-color='%23272727'/%3E%3C/linearGradient%3E%3Crect width='1' height='14' fill='%23404040'/%3E%3Crect x='1' width='10' height='14' fill='url(%23g)'/%3E%3Crect x='11' width='1' height='14' fill='%23000'/%3E%3Cpath d='M3.25 6 6 2.5 8.75 6z M3.25 8 6 11.5 8.75 8z' fill='%23757575' stroke='%23262626' stroke-width='.5'/%3E%3C/svg%3E") right top / 12px 14px no-repeat;
+  box-shadow: inset 0 0 0 1px #000, inset 1px 1px 0 1px #2e2e2e; color: #929292; font: 13px/14px var(--lr-font); text-shadow: 0 .5px 0 #202020; cursor: pointer;
+}
+.popup select option { background: #2b2b2b; color: #e6e6e6; text-shadow: none; }
+/* the switch: the knob down with the filter off, up with it on */
+.fh-switch { position: relative; flex: none; width: 11px; height: 16px; margin-left: 9px; box-sizing: border-box; border: 1px solid #515151; background: #262626; box-shadow: inset 0 0 0 1px #1a1a1a; }
+.fh-switch i { position: absolute; left: 1px; right: 1px; bottom: 1px; height: 5.5px; background: linear-gradient(#a2a2a2, #575757); box-shadow: inset 1px 0 0 rgba(255, 255, 255, .22), 0 1px 0 #595959; }
+.fh-switch.on i { top: 1px; bottom: auto; }
 
-/* the filmstrip: the camera's thumbnails turned the photo's way, in grey cells */
-.strip { --cell: 78px; height: 86px; overflow-x: auto; overflow-y: hidden; position: relative; background: var(--lr-film); scrollbar-width: thin; scrollbar-color: #48484c transparent; }
-.strip-in { position: relative; height: 100%; }
-.cell, .gcell { border: 0; cursor: pointer; overflow: hidden; }
-.cell { position: absolute; top: 6px; width: calc(var(--cell) - 6px); height: calc(var(--cell) - 6px); margin-left: 3px; padding: 4px; border-radius: 4px; background: #2c2c2e; }
-@media (hover: hover) { .cell:hover { background: #38383b; } }
-.cell img, .g-pic img { display: block; object-fit: contain; }
-.cell img { width: 100%; height: 100%; }
-.cell.cur { background: #77777c; }
-.cell.is-drop img, .gcell.is-drop img { opacity: .3; }
-/* the flags on the cells: Lightroom's little flag, on a dark chip */
-.cell.is-keep::before, .cell.is-drop::before, .gcell.is-keep::before, .gcell.is-drop::before { content: ""; position: absolute; width: 20px; height: 20px; border-radius: 5px; background: rgba(18, 18, 19, .72); }
-.cell.is-keep::after, .cell.is-drop::after, .gcell.is-keep::after, .gcell.is-drop::after { content: ""; position: absolute; width: 12px; height: 12px; background: #fff; -webkit-mask: var(--i-flag) center / contain no-repeat; mask: var(--i-flag) center / contain no-repeat; }
-.cell.is-drop::after, .gcell.is-drop::after { background: var(--lr-rej); -webkit-mask-image: var(--i-rej); mask-image: var(--i-rej); }
-.cell::before { left: 5px; bottom: 5px; }
-.cell::after { left: 9px; bottom: 9px; }
+/* the filmstrip, as Lightroom's: in a #424242 frame, square grey cells edge to edge (a light line, the body, a dark
+   line), the number and the flag at the top, the photo in a thin black frame; the one you're on light grey, its photo
+   matted in white; then its scrollbar, the arrows at its ends and ▼ under it */
+.film { position: relative; box-sizing: border-box; padding: 2px 2px 0; border: 1px solid #424242; background: #000; }
+.strip { position: relative; height: 77px; overflow: hidden; contain: strict; }
+.strip-in { position: absolute; left: 0; top: 0; height: 77px; will-change: transform; }
+.cell { position: absolute; top: 0; width: 77px; height: 77px; box-sizing: border-box; border-left: 1px solid #a2a2a2; border-right: 1px solid #666; background: #929292; cursor: pointer; contain: strict; }
+.c-no { position: absolute; left: 6.5px; top: 1px; font-weight: 700; font-size: 10px; line-height: 10px; color: #585858; pointer-events: none; }
+.c-pic { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); overflow: hidden; background: #6f6f6f; box-shadow: 0 0 0 1px #000; pointer-events: none; }
+.c-pic img { position: absolute; left: 0; top: 0; display: block; width: 100%; height: 100%; object-fit: cover; }
+.cell.cur { background: #cbcbcb; border-right-color: #8e8e8e; box-shadow: inset 0 0 0 1px #e0e0e0; }
+.cell.cur .c-no { color: #979797; }
+.cell.cur .c-pic { box-shadow: 0 0 0 1px #000, 0 0 0 3px #eaeaea; }
+.cell.picked:not(.cur) { background: #acacac; box-shadow: inset 0 0 0 1px #bdbdbd; }
+.cell.picked:not(.cur) .c-no { color: #6c6c6c; }
+.cell.picked:not(.cur) .c-pic { box-shadow: 0 0 0 1px #000, 0 0 0 2px #d2d2d2; }
+/* the flags: a little white one (留用), a black one (排除: the photo faded) by the number */
+.cell.is-keep::before, .cell.is-drop::before { content: ""; position: absolute; left: 0; top: 2px; width: 5px; height: 6px; pointer-events: none;
+  background: linear-gradient(#fff, #fff) 1px 1px / 4px 3px no-repeat, linear-gradient(#d9d9d9, #d9d9d9) 0 0 / 1px 6px no-repeat; }
+.cell.is-drop::before { background: linear-gradient(#111, #111) 1px 1px / 4px 3px no-repeat, linear-gradient(#2b2b2b, #2b2b2b) 0 0 / 1px 6px no-repeat; }
+.cell.is-drop .c-pic img { opacity: .3; }
+.film-bar { position: relative; height: 13px; }
+.film-bar i { position: absolute; left: 0; top: 1px; height: 10px; border-radius: 1px; cursor: default;
+  background: linear-gradient(#828282, #8c8c8c 18%, #959595 32%, #a1a1a1 45%, #a0a0a0 58%, #9b9b9b 68%, #8d8d8d 78%, #787878 90%, #737373);
+  box-shadow: inset 1.5px 0 0 rgba(0, 0, 0, .14), inset -1.5px 0 0 rgba(0, 0, 0, .14); }
+.film-bar i[hidden] { display: none; }
+/* the ends' ◀ ▶ (a screen back or on), in the black beside the frame */
+.film-end { position: absolute; top: 0; bottom: 0; width: 15px; padding: 0; border: 0; background: none; cursor: pointer; }
+.film-end.prev { left: -16px; }
+.film-end.next { right: -16px; }
+.film-end::before { content: ""; position: absolute; top: calc(50% - 5px); left: 5px; border: 5px solid transparent; }
+.film-end.prev::before { left: 0; border-left-width: 0; border-right-color: #929292; }
+.film-end.next::before { left: 5px; border-right-width: 0; border-left-color: #929292; }
+/* the panels' triangles, Lightroom's: ▲ above (the top bar), ▼ under the filmstrip */
+.panel-tog { display: none; padding: 0; border: 0; background: none; cursor: pointer; }
+.panel-tog::before { content: ""; display: block; width: 0; height: 0; margin: 0 auto; border: 6px solid transparent; }
+#togFilm { height: 14.5px; }
+#togFilm::before { margin-top: 4.5px; border-bottom-width: 0; border-top-color: #5f5f5f; }
+.lr.no-film #togFilm::before { border-top-width: 0; border-bottom: 6px solid #5f5f5f; border-top-color: transparent; }
+.lr.no-film .fhead, .lr.no-film .film { display: none; }
+@media (hover: hover) { .panel-tog:hover::before { filter: brightness(1.6); } }
+
+.gcell { border: 0; cursor: pointer; overflow: hidden; }
+.g-pic img { display: block; object-fit: contain; }
+.gcell.is-drop img { opacity: .3; }
+/* the flags on the grid's cells: Lightroom's little flag, on a dark chip */
+.gcell.is-keep::before, .gcell.is-drop::before { content: ""; position: absolute; width: 20px; height: 20px; border-radius: 5px; background: rgba(18, 18, 19, .72); }
+.gcell.is-keep::after, .gcell.is-drop::after { content: ""; position: absolute; width: 12px; height: 12px; background: #fff; -webkit-mask: var(--i-flag) center / contain no-repeat; mask: var(--i-flag) center / contain no-repeat; }
+.gcell.is-drop::after { background: var(--lr-rej); -webkit-mask-image: var(--i-rej); mask-image: var(--i-rej); }
 
 /* the grid: only the rows on screen exist */
 .grid { flex: 1 1 auto; min-height: 0; overflow-y: auto; scrollbar-gutter: stable; position: relative; outline: none; scrollbar-color: #48484c transparent; }
@@ -560,7 +642,7 @@ body.culling { background: var(--lr-top); color-scheme: dark; }
 /* A computer with a mouse: the keyboard picks (Lightroom's way), so the buttons for it go and the photo gets the room.
    Fingers (phones, tablets) keep them, and the filmstrip's header drops what's for a keyboard and a second screen. */
 @media (min-width: 641px) and (hover: hover) and (pointer: fine) { .tools { display: none; } }
-@media (max-width: 640px), (hover: none), (pointer: coarse), (pointer: none) { .fh-act, .st-tip, .fl kbd { display: none !important; } }
+@media (max-width: 640px), (hover: none), (pointer: coarse), (pointer: none) { .fh-win, .fh-win + .fh-dots, .st-tip, .fl kbd { display: none !important; } }
 
 /* full screen: the whole step */
 #step2:fullscreen { max-height: none; width: 100vw; height: 100vh; border: 0; border-radius: 0; }
@@ -613,35 +695,32 @@ body.culling { background: var(--lr-top); color-scheme: dark; }
 .head-text p b { color: var(--accent-strong); }
 
 /* narrower and shorter: the words go before the photo gets smaller */
-@media (max-width: 1100px) and (min-width: 641px) {
-  .fh-lbl, .fh-sel > span, .tl.is-keep span, .tl.is-drop span { display: none; }
-  .fh-sel select { max-width: 160px; }
-}
 @media (max-width: 900px) and (min-width: 641px) {
   .fl kbd { display: none; }
   .tools { gap: 8px; }
-  .fhead { gap: 10px; }
+  .popup { width: 118px; }
 }
 @media (max-width: 760px) and (min-width: 641px) {
-  .fh-sel:not(#folderWrap), #bSecond { display: none; }
-  .fh-sel select { max-width: 130px; }
-  .tally { margin-left: auto; }
-  body.culling .stepper button, body.culling .stepper button.current { padding: 1px 10px; }
-  body.culling .wordmark { font-size: .95rem; }
+  .fh-lbl, .fh-flags { display: none !important; }
+  .popup { margin-left: 0; }
+  body.culling .stepper button, body.culling .stepper button.current { padding: 0 8px; }
+  body.culling .stepper .lbl { font-size: 19px; }
 }
 @media (max-height: 640px) and (min-width: 641px) {
-  body.culling .top { height: 40px; }
-  .strip { --cell: 66px; height: 72px; }
+  body.culling .top, body.culling .stepper { height: 46px; }
+  body.culling .top { padding-top: 10px; }
+  body.culling .stepper { padding-top: 15px; }
   .tools { min-height: 40px; padding-top: 4px; padding-bottom: 4px; }
 }
 /* a phone on its side: the photo first; the filmstrip goes (← → and swipes still move on) */
 @media (max-height: 460px) and (min-width: 641px) {
-  body.culling .top { height: 34px; }
-  body.culling .logo { width: 22px; height: 22px; }
-  .strip { display: none; }
+  body.culling .top, body.culling .stepper { height: 36px; }
+  body.culling .top { padding-top: 5px; }
+  body.culling .stepper { padding-top: 7px; }
+  body.culling .tagline { display: none; }
+  .film, #togFilm { display: none !important; }
   .tools { min-height: 36px; padding-top: 2px; padding-bottom: 2px; }
   .fl, .lr .btn.go2 { height: 28px; }
-  .fhead { min-height: 28px; padding-top: 1px; padding-bottom: 1px; }
   .ov { font-size: 12px; }
 }
 
@@ -657,14 +736,13 @@ body.culling { background: var(--lr-top); color-scheme: dark; }
   body.culling .stepper button.current::before { background: #c995e3; }
   body.culling .stepper .m-back { color: #d6a9ee; }
   body.culling .m-back:not([hidden]) + .m-step { border-left-color: #3a3a3d; }
-  .lr { grid-template-rows: minmax(0, 1fr) auto auto auto; grid-template-areas: "viewer" "strip" "fhead" "tools"; }
+  .lr { grid-template-rows: minmax(0, 1fr) auto auto auto; grid-template-areas: "viewer" "film" "fhead" "tools"; }
   .viewer { grid-area: viewer; }
-  .strip { grid-area: strip; --cell: 60px; height: 66px; }
-  .fhead { grid-area: fhead; padding: 4px max(10px, env(safe-area-inset-right)) 2px max(10px, env(safe-area-inset-left)); border-top: 0; }
-  .fh-sel, .fh-pos, .fh-lbl, .tl.is-keep span, .tl.is-drop span { display: none; }
-  .tally { flex: 1 1 auto; display: grid; grid-template-columns: repeat(4, auto); justify-content: space-between; }
-  .tl { height: 30px; padding: 0 10px; font-size: .86rem; }
-  .done-bar { top: 0; }
+  .film { grid-area: film; border-width: 1px 0 0; }
+  .film-end, .panel-tog { display: none !important; }
+  .fhead { grid-area: fhead; height: auto; padding: 5px max(10px, env(safe-area-inset-right)) 3px max(10px, env(safe-area-inset-left)); border-top: 0; }
+  .fh-win, .fh-dots, .fh-ic, .fh-lbl, .fh-flags, .fh-switch { display: none !important; }
+  .popup { margin-left: 8px; width: 132px; }
   .tools { grid-area: tools; display: flex; flex-wrap: wrap; gap: 8px; padding: 6px max(12px, env(safe-area-inset-right)) calc(10px + env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left)); border-top: 0; }
   .tb-c { order: -1; flex: 1 1 100%; display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
   .fl { height: 50px; justify-content: center; font-size: 1.05rem; border-radius: 12px; }

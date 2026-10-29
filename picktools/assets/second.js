@@ -15,7 +15,7 @@
   };
   const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
   const ORIENT = { 2: 'scaleX(-1)', 3: 'rotate(180deg)', 4: 'scaleY(-1)', 5: 'scaleX(-1) rotate(90deg)', 6: 'rotate(90deg)', 7: 'rotate(90deg) scaleX(-1)', 8: 'rotate(-90deg)' };
-  const FILTER_NAME = { keep: '留用', none: '未標記', drop: '排除' };
+  const FILTER_NAME = { keep: '留用', none: '未標註旗標', drop: '排除' };
   if (!('BroadcastChannel' in window)) { $('sEmpty').textContent = '這個瀏覽器不能用副螢幕'; return; }
   const bc = new BroadcastChannel('zt-pick');
 
@@ -62,7 +62,7 @@
     $('sPos').replaceChildren(...(it ? [el('b', { text: `第 ${num(pos + 1)}／${num(list.length)} 張` }), `・${it[1]}`] : [list.length ? `${num(list.length)} 張` : '副螢幕']),
       filter !== 'all' ? `（只看${FILTER_NAME[filter]}）` : '', sel.size > 1 ? `・選了 ${num(sel.size)} 張` : '');
     $('sCounts').replaceChildren(...(counts ? [el('span', { class: 'n-keep' }, el('i'), '留用 ', el('b', { text: num(counts.keep) })),
-      el('span', {}, '未標記 ', el('b', { text: num(counts.none) })), el('span', { class: 'n-drop' }, el('i'), '排除 ', el('b', { text: num(counts.drop) }))] : []));
+      el('span', {}, '未標註旗標 ', el('b', { text: num(counts.none) })), el('span', { class: 'n-drop' }, el('i'), '排除 ', el('b', { text: num(counts.drop) }))] : []));
     // nothing to show: no photos yet, or none in the filter chosen there
     const e = $('sEmpty');
     e.hidden = list.length > 0;

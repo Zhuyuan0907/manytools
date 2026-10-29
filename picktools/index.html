@@ -46,6 +46,8 @@
       <li><button type="button" data-goto="3"><span class="dot">3</span><span class="lbl">存下來</span></button></li>
     </ol>
   </nav>
+  <!-- the culling screen, as Lightroom's: ▲ hides the bar above (F5) -->
+  <button type="button" class="panel-tog up" id="togTop" tabindex="-1" title="隱藏或顯示上方面板（F5）" aria-label="隱藏或顯示上方面板"></button>
 
   <main>
     <!-- a phone: this tool is for a computer (or a tablet), so it says so instead -->
@@ -134,7 +136,7 @@
       <div class="tools" id="tools">
         <div class="tb tb-l">
           <button type="button" class="tb-ic on" id="bLoupe" title="單張（E）" aria-label="單張"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.9"><rect x="3.5" y="5" width="17" height="14" rx="1.5"/></svg></button>
-          <button type="button" class="tb-ic" id="bGrid" title="格狀（G）" aria-label="格狀"><svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><rect x="3" y="4" width="5" height="4.5" rx=".8"/><rect x="9.5" y="4" width="5" height="4.5" rx=".8"/><rect x="16" y="4" width="5" height="4.5" rx=".8"/><rect x="3" y="10" width="5" height="4.5" rx=".8"/><rect x="9.5" y="10" width="5" height="4.5" rx=".8"/><rect x="16" y="10" width="5" height="4.5" rx=".8"/><rect x="3" y="16" width="5" height="4.5" rx=".8"/><rect x="9.5" y="16" width="5" height="4.5" rx=".8"/><rect x="16" y="16" width="5" height="4.5" rx=".8"/></svg></button>
+          <button type="button" class="tb-ic" id="bGrid" title="格點（G）" aria-label="格點"><svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><rect x="3" y="4" width="5" height="4.5" rx=".8"/><rect x="9.5" y="4" width="5" height="4.5" rx=".8"/><rect x="16" y="4" width="5" height="4.5" rx=".8"/><rect x="3" y="10" width="5" height="4.5" rx=".8"/><rect x="9.5" y="10" width="5" height="4.5" rx=".8"/><rect x="16" y="10" width="5" height="4.5" rx=".8"/><rect x="3" y="16" width="5" height="4.5" rx=".8"/><rect x="9.5" y="16" width="5" height="4.5" rx=".8"/><rect x="16" y="16" width="5" height="4.5" rx=".8"/></svg></button>
           <span class="tb-sep" aria-hidden="true"></span>
           <button type="button" class="tb-txt" id="bZoom" title="放大到 100%（Z 或空白鍵）">100%</button>
         </div>
@@ -149,25 +151,45 @@
         </div>
       </div>
 
+      <!-- the filmstrip's header, as Lightroom's: the main and second window, grid, back / forward, the source (where
+           the photos come from, how many, which one), and the filter -->
       <div class="fhead" id="fhead">
-        <label class="fh-sel" id="folderWrap"><span>資料夾</span><select id="folder"></select></label>
-        <label class="fh-sel"><span>排序</span><select id="sort"><option value="time">拍攝時間</option><option value="folder">資料夾</option></select></label>
-        <p class="fh-pos" id="stPos"></p>
-        <div class="tally" id="tally" role="radiogroup" aria-label="篩選">
-          <span class="fh-lbl" aria-hidden="true">篩選</span>
-          <button type="button" class="tl" data-f="all" role="radio" title="全部"><span>全部</span><b id="nAll">0</b></button>
-          <button type="button" class="tl is-keep" data-f="keep" role="radio" title="留用"><i aria-hidden="true"></i><span>留用</span><b id="nKeep">0</b></button>
-          <button type="button" class="tl" data-f="none" role="radio" title="未標記"><span>未標記</span><b id="nNone">0</b></button>
-          <button type="button" class="tl is-drop" data-f="drop" role="radio" title="排除"><i aria-hidden="true"></i><span>排除</span><b id="nDrop">0</b></button>
-        </div>
-        <div class="fh-act">
-          <button type="button" class="tb-ic" id="bSecond" title="副螢幕（Shift＋G）：另開一個視窗放所有照片的格狀，拖到另一個螢幕，會跟著你挑到哪" aria-label="副螢幕" aria-pressed="false"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="3.5" width="19" height="13.5" rx="1.6"/><path d="M9 21h6M12 17v4"/><path d="M6.5 7.5h2.5M10.8 7.5h2.5M15 7.5h2.5M6.5 11.5h2.5M10.8 11.5h2.5M15 11.5h2.5" stroke-width="2.2"/></svg></button>
-          <button type="button" class="tb-ic" id="bKeys" title="快捷鍵（?）" aria-label="快捷鍵"><svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="6" width="19" height="12" rx="2"/><path d="M6 9.5h.01M9.3 9.5h.01M12.6 9.5h.01M15.9 9.5h.01M18 9.5h.01M7.5 14.5h9"/></svg></button>
-          <button type="button" class="btn primary go2" id="next2d" disabled>存下來 →</button>
-        </div>
-        <div class="done-bar" id="doneBar"><i id="doneFill"></i></div>
+        <span class="fh-win">
+          <span class="fh-menu" title="主視窗：格點、放大、全螢幕…">
+            <span class="win on" aria-hidden="true">1</span>
+            <select id="winMenu" aria-label="主視窗"></select>
+          </span>
+          <button type="button" class="win" id="bSecond" title="輔助視窗（副螢幕，Shift＋G）：另開一個視窗放所有照片的格點，拖到另一個螢幕，會跟著你挑到哪" aria-label="輔助視窗（副螢幕）" aria-pressed="false">2</button>
+        </span>
+        <i class="fh-dots" aria-hidden="true"></i>
+        <button type="button" class="fh-ic" id="bGridH" title="格點檢視（G）" aria-label="格點檢視"><svg viewBox="0 0 15 15" width="15" height="15" aria-hidden="true"><path fill="currentColor" d="M0 0h6v6H0zM9 0h6v6H9zM0 9h6v6H0zM9 9h6v6H9z"/></svg></button>
+        <button type="button" class="fh-ic" id="bBack" title="上一個檢視" aria-label="上一個檢視" disabled><svg viewBox="0 0 13 15" width="13" height="15" aria-hidden="true"><path fill="currentColor" d="M0 7.5 5.5 0v5h7v5h-7v5z"/></svg></button>
+        <button type="button" class="fh-ic" id="bFwd" title="下一個檢視" aria-label="下一個檢視" disabled><svg viewBox="0 0 13 15" width="13" height="15" aria-hidden="true"><path fill="currentColor" d="M13 7.5 7.5 0v5h-7v5h7v5z"/></svg></button>
+        <i class="fh-dots" aria-hidden="true"></i>
+        <span class="fh-menu fh-src" title="來源：資料夾、排序">
+          <span class="fh-src-text"><span id="srcName">上次讀入</span><span class="fh-pos" id="stPos"></span><i class="caret" aria-hidden="true"></i></span>
+          <select id="srcMenu" aria-label="來源"></select>
+        </span>
+        <span class="fh-filter">
+          <span class="fh-flags" id="fhFlags" hidden>
+            <button type="button" class="fh-flag is-keep" data-f="keep" title="留用" aria-label="只看留用" aria-pressed="false"></button>
+            <button type="button" class="fh-flag is-none" data-f="none" title="未標註旗標" aria-label="只看未標註旗標" aria-pressed="false"></button>
+            <button type="button" class="fh-flag is-drop" data-f="drop" title="排除" aria-label="只看排除" aria-pressed="false"></button>
+          </span>
+          <button type="button" class="fh-lbl" id="bFilterLbl" title="顯示或隱藏旗標過濾器" aria-expanded="false">過濾器:</button>
+          <span class="popup"><select id="filterSel" aria-label="過濾器"></select></span>
+          <button type="button" class="fh-switch" id="bFilterOn" role="switch" aria-checked="false" title="開啟/關閉過濾器（⌘L）" aria-label="開啟/關閉過濾器"><i></i></button>
+        </span>
       </div>
-      <div class="strip" id="strip" aria-label="底片窗格"><div class="strip-in" id="stripIn"></div></div>
+      <!-- the filmstrip: square cells kept in the middle as you go (only those on screen exist), its own scrollbar,
+           the arrows at its ends -->
+      <div class="film" id="film">
+        <button type="button" class="film-end prev" id="filmPrev" tabindex="-1" aria-label="往前捲"></button>
+        <div class="strip" id="strip" aria-label="底片顯示窗格"><div class="strip-in" id="stripIn"></div></div>
+        <div class="film-bar" id="filmBar" aria-hidden="true"><i id="filmThumb"></i></div>
+        <button type="button" class="film-end next" id="filmNext" tabindex="-1" aria-label="往後捲"></button>
+      </div>
+      <button type="button" class="panel-tog" id="togFilm" tabindex="-1" title="隱藏或顯示底片顯示窗格（F6）" aria-label="隱藏或顯示底片顯示窗格"></button>
       <div class="panel-foot lr-foot"><button type="button" class="btn back" data-goto="1" tabindex="-1"><span class="lbl">加照片</span></button></div>
     </section>
 
@@ -231,10 +253,12 @@
     <dt><kbd>Caps Lock</kbd> 或加按 <kbd>Shift</kbd></dt><dd>標完跳下一張（上面的「自動前進」打開時，標完都會跳）</dd>
     <dt><kbd>I</kbd></dt><dd>顯示或隱藏左上角的照片資訊</dd>
     <dt><kbd>Z</kbd> 或空白鍵</dt><dd>放大到 100%，換張也維持放大；再按一次回全圖</dd>
-    <dt><kbd>G</kbd>・<kbd>E</kbd></dt><dd>格狀・單張</dd>
-    <dt><kbd>Shift</kbd> 點選</dt><dd>格狀裡選一段，一起標</dd>
+    <dt><kbd>G</kbd>・<kbd>E</kbd></dt><dd>格點・放大（單張）</dd>
+    <dt><kbd>Shift</kbd> 點選</dt><dd>格點裡選一段，一起標</dd>
+    <dt><kbd>⌘</kbd> <kbd>L</kbd></dt><dd>開啟/關閉過濾器（Windows：<kbd>Ctrl</kbd> <kbd>L</kbd>）</dd>
     <dt><kbd>F</kbd></dt><dd>全螢幕</dd>
-    <dt><kbd>Shift</kbd> <kbd>G</kbd></dt><dd>副螢幕：另開視窗放所有照片的格狀，拖到另一個螢幕</dd>
+    <dt><kbd>F5</kbd>・<kbd>F6</kbd></dt><dd>隱藏或顯示上方面板・底片顯示窗格</dd>
+    <dt><kbd>Shift</kbd> <kbd>G</kbd></dt><dd>副螢幕（輔助視窗）：另開視窗放所有照片的格點，拖到另一個螢幕</dd>
     <dt><kbd>⌘</kbd> <kbd>Z</kbd></dt><dd>復原（Windows：<kbd>Ctrl</kbd> <kbd>Z</kbd>）</dd>
   </dl>
   <p class="help">旗標會記在這個瀏覽器裡，下次放入同一批照片會接著挑。</p>

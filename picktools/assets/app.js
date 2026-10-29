@@ -25,7 +25,8 @@
   };
   const onServer = /^https?:$/.test(location.protocol);
   if (onServer) $('#brand').href = '/photo';   // the home page's 拍攝 side
-  const num = (n) => n.toLocaleString('zh-TW');
+  const NUM = new Intl.NumberFormat('zh-TW');
+  const num = (n) => NUM.format(n);
   const fmtBytes = (b) => (b >= 1e9 ? `${(b / 1e9).toFixed(1)} GB` : b >= 1e6 ? `${(b / 1e6).toFixed(1)} MB` : `${Math.max(1, Math.round(b / 1e3))} KB`);
   const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
   const PHONE = matchMedia('(max-width: 640px), (pointer: coarse) and (max-width: 900px)').matches;
@@ -455,8 +456,8 @@
 
   // ---------- what's shown: the filter, the folder, the order ----------
   const SAVED = 'zt-pick';
-  const S = { step: 1, filter: 'all', folder: '', sort: 'time', auto: true, info: true, tip: true, grid: false, take: 'keep', lay: 'flat' };
-  const KEPT = ['sort', 'auto', 'info', 'tip', 'lay'];
+  const S = { step: 1, filter: 'all', folder: '', sort: 'time', auto: true, info: true, tip: true, grid: false, take: 'keep', lay: 'flat', flags: false, film: true };
+  const KEPT = ['sort', 'auto', 'info', 'tip', 'lay', 'flags', 'film'];
   try { const o = JSON.parse(localStorage.getItem(SAVED)) || {}; for (const k of KEPT) if (k in o) S[k] = o[k]; } catch {}
   const remember = () => { try { localStorage.setItem(SAVED, JSON.stringify(Object.fromEntries(KEPT.map((k) => [k, S[k]])))); } catch {} };
   let view = [];   // the photos shown, in order
@@ -479,6 +480,7 @@
   // you move off them.
   function go(d) {
     if (!view.length) return;
+    if (d) pvDir = d > 0 ? 1 : -1;
     let next = pos + d;
     if (view.some((it) => !matches(it))) {
       const from = view[pos], before = view.slice(0, pos).filter(matches).length;
@@ -562,7 +564,6 @@
     $('#next1').disabled = !allowed(2);
     $('#next1').textContent = done ? '接著挑 →' : '開始挑 →';
     renderFolders();
-    $('#sort').value = S.sort;
   }
   function removeSource(s) {
     if (loading) return;
@@ -676,8 +677,10 @@
     full(current());
   }
 
-  // pictures: an <img> for each photo near the current one, decoded ahead; the thumbnail stands in meanwhile
-  const KEEP = PHONE ? 3 : WEBKIT ? 4 : 6;
+  // pictures: an <img> for each photo near the current one, decoded ahead; the thumbnail stands in meanwhile. With
+  // previews (below) the whole photo is only for zooming in, so only a few are kept.
+  const PV = !PHONE && typeof OffscreenCanvas === 'function' && typeof Worker === 'function' && typeof createImageBitmap === 'function';
+  const KEEP = PV ? 3 : PHONE ? 3 : WEBKIT ? 4 : 6;
   const pics = new Map();   // it → { img, url, ready, ok }
   let heicWorker = null, heicSeq = 0, heicIdle = 0;
   const heicJobs = new Map();
@@ -745,14 +748,134 @@
     if (p) { pics.delete(it); p.img.removeAttribute('src'); if (p.url) URL.revokeObjectURL(p.url); }
     if (it.thumbUrl) { URL.revokeObjectURL(it.thumbUrl); it.thumbUrl = null; }
     unpacked.delete(it);
+    pvDrop(it); pvBad.delete(it);
   }
-  function full(it) { if (it) pic(it); }
+  // the whole photo, to zoom in: over the preview, there as soon as it's decoded
+  function full(it) {
+    if (!it) return;
+    const p = pic(it);
+    if (it !== current() || S.grid) return;
+    if (!frame.contains(p.img)) { p.img.classList.toggle('in', p.ok); frame.append(p.img); }
+    if (!p.ok) p.ready.then((ok) => { if (ok && current() === it && frame.contains(p.img)) { p.img.classList.add('in'); stage.classList.remove('loading'); } });
+  }
 
-  let showGen = 0, preTimer = 0;
+  // ---------- previews, as Lightroom's standard previews ----------
+  // A 24 MP photo on screen means decoding 96 MB (about half a second) and moving it to the screen, which is what made
+  // holding → stutter. A preview the size it's shown at (assets/preview.js, in workers, off the page's thread) decodes
+  // in a tenth of that. They're made ahead, the way you're going, a few at a time, the thumbnail from the same decode.
+  const PV_WORKERS = WEBKIT ? 2 : clamp((navigator.hardwareConcurrency || 4) - 2, 1, 4);
+  const previews = new Map();   // it → { url, long }
+  const pvBad = new Set(), pvBusy = new Set(), pvWait = new Map(), pvWorkers = [];
+  let pvUrgent = [], pvPlanned = [], pvThumbs = [], pvDir = 1, pvOn = PV;
+  const pvNo = (it) => !pvOn || pvBad.has(it) || (it.heic && !WEBKIT);
+  // its long side in screen pixels, fitted to the photo's place
+  function pvLong(it) {
+    const W = stage.clientWidth || innerWidth, H = stage.clientHeight || innerHeight, [w, h] = dims(it);
+    return Math.min(3600, Math.ceil(Math.max(w, h) * Math.min(W / w, H / h) * dpr()));
+  }
+  // asked for by what's waiting for it (the photo on screen): first in line
+  function pvAsk(it, urgent) {
+    if (pvNo(it)) return Promise.resolve(null);
+    const v = previews.get(it);
+    if (v) return Promise.resolve(v);
+    let w = pvWait.get(it);
+    if (!w) { let res; w = { p: new Promise((r) => { res = r; }) }; w.res = res; pvWait.set(it, w); }
+    if (urgent && !pvBusy.has(it)) pvUrgent = [it, ...pvUrgent.filter((x) => x !== it)].slice(0, 6);
+    pvPump();
+    return w.p;
+  }
+  // the next ones the way you're going (a few behind too); a demo photo is a download, so only the next one
+  function pvPlan() {
+    if (!pvOn || S.step !== 2) return;
+    const out = [], cur = current(), ahead = cur && cur.url ? 1 : 30;
+    for (let d = 1; d <= ahead; d++) for (const k of d <= 2 && !(cur && cur.url) ? [pvDir * d, -pvDir * d] : [pvDir * d]) {
+      const x = view[pos + k];
+      if (x && !previews.has(x) && !pvBusy.has(x) && !pvNo(x)) out.push(x);
+    }
+    pvPlanned = out;
+    pvPump();
+  }
+  function pvPump() {
+    for (;;) {
+      const ok = (x) => x && !previews.has(x) && !pvBusy.has(x) && !pvNo(x) && byKey.has(x.key);
+      let it = null;
+      while (!it && pvUrgent.length) { const x = pvUrgent.shift(); if (ok(x)) it = x; }
+      while (!it && pvThumbs.length) { const x = pvThumbs.pop(); if (ok(x) && !x.thumb) it = x; }
+      while (!it && pvPlanned.length) { const x = pvPlanned.shift(); if (ok(x)) it = x; }
+      if (!it) return;
+      const wk = pvFree();
+      if (!wk) { pvUrgent.unshift(it); return; }
+      pvRun(wk, it);
+    }
+  }
+  function pvFree() {
+    const x = pvWorkers.find((v) => !v.busy);
+    if (x || pvWorkers.length >= PV_WORKERS) return x || null;
+    try { const v = { w: new Worker('assets/preview.js'), busy: false, done: 0 }; pvWorkers.push(v); return v; } catch { pvOn = false; return null; }
+  }
+  async function pvRun(wk, it) {
+    wk.busy = true; pvBusy.add(it);
+    let r;
+    try {
+      const blob = await blobOf(it), long = pvLong(it);
+      const ext = (/\.([^.]+)$/.exec(it.name) || [])[1] || '', type = { png: 'image/png', webp: 'image/webp', heic: 'image/heic', heif: 'image/heif' }[ext.toLowerCase()] || 'image/jpeg';
+      r = await new Promise((res) => { wk.w.onmessage = ({ data }) => res(data); wk.w.onerror = () => res({ error: 'worker' }); wk.w.postMessage({ blob, type, long }); });
+      r.long = long;
+    } catch (e) { r = { error: String(e) }; }
+    pvBusy.delete(it); wk.busy = false;
+    // WebKit keeps a decoded photo's memory until its worker goes: a fresh one every other photo
+    if (WEBKIT && ++wk.done >= 2) { wk.w.terminate(); pvWorkers.splice(pvWorkers.indexOf(wk), 1); }
+    const w = pvWait.get(it);
+    pvWait.delete(it);
+    if (!byKey.has(it.key)) { if (w) w.res(null); pvPump(); return; }
+    if (r.error) { pvBad.add(it); if (!it.thumb) wantThumbHere(it); if (w) w.res(null); }
+    else {
+      const v = { url: URL.createObjectURL(r.blob), long: r.long };
+      previews.set(it, v);
+      if (!it.w) { it.w = r.fw; it.h = r.fh; }
+      if (!it.thumb && r.thumb) { it.thumb = r.thumb; it.turn = 1; thumbArrived(it); }
+      pvTrim();
+      if (w) w.res(v);
+    }
+    pvPump();
+  }
+  // kept: the ones nearest the photo you're on (each a few hundred KB)
+  function pvTrim() {
+    if (previews.size <= 240) return;
+    const c = current(), far = [...previews.keys()].sort((a, b) => Math.abs(b.n - (c ? c.n : 0)) - Math.abs(a.n - (c ? c.n : 0)));
+    for (const x of far.slice(0, 40)) pvDrop(x);
+  }
+  function pvDrop(it) {
+    const v = previews.get(it);
+    if (v) { previews.delete(it); URL.revokeObjectURL(v.url); }
+    const d = pvImgs.get(it);
+    if (d) { pvImgs.delete(it); d.img.removeAttribute('src'); }
+  }
+  // decoded previews, ready to show: the photo on screen and the next few
+  const pvImgs = new Map();   // it → { img, url, ok, ready }
+  function pvImg(it) {
+    const v = previews.get(it);
+    if (!v) return null;
+    let d = pvImgs.get(it);
+    if (d && d.url === v.url) { pvImgs.delete(it); pvImgs.set(it, d); return d; }
+    const img = new Image();
+    img.className = 'photo pv'; img.alt = ''; img.draggable = false; img.decoding = 'async'; img.src = v.url;
+    d = { img, url: v.url, ok: false };
+    d.ready = img.decode().then(() => { d.ok = true; return true; }, () => false);
+    pvImgs.set(it, d);
+    for (const [k, o] of pvImgs) { if (pvImgs.size <= 8) break; if (k === current()) continue; pvImgs.delete(k); o.img.removeAttribute('src'); }
+    return d;
+  }
+
+  // What's on screen: the best there is right away (the whole photo if it's decoded, else its preview, else the
+  // thumbnail), the better one swapped in when it's ready. Moves faster than anyone looks (a held arrow) decode nothing
+  // big for the photos passed over; the next previews are decoded ahead, so those show sharp at once.
+  let showGen = 0, preTimer = 0, settleTimer = 0, lastShow = 0, lastIt = null, scrub = false;
   function show() {
     const it = current();
     const gen = ++showGen;
     $('#stEmpty').hidden = !!it;
+    clearTimeout(settleTimer); clearTimeout(preTimer);
     if (!it) {
       frame.replaceChildren();
       $('#stEmpty').textContent = !items.length ? '還沒有照片' : S.filter === 'none' ? '這裡的照片都標好了' : '這裡沒有照片';
@@ -760,41 +883,65 @@
       drawStrip(); drawGrid(); queueSecond();
       return;
     }
-    const p = pic(it);
-    const kids = [];
-    if (!p.ok) {
+    const now = performance.now();
+    if (it !== lastIt) { scrub = now - lastShow < 170; lastShow = now; lastIt = it; }
+    const p = pics.get(it), useFull = Z.on || pvNo(it);
+    let v = previews.get(it);
+    if (v && v.long < pvLong(it) * 0.85) { pvDrop(it); v = null; }   // made for a smaller window
+    let best = p && p.ok ? p.img : null;
+    if (!best && v && !useFull) { const d = pvImg(it); if (d.ok) best = d.img; }
+    if (best) { best.classList.add('in'); frame.replaceChildren(best); }
+    else {
       const t = thumbUrl(it);
-      if (t) kids.push(el('img', { class: 'ph', src: t, alt: '' }));
-      else wantThumb(it);
+      frame.replaceChildren(...(t ? [el('img', { class: 'ph', src: t, alt: '' })] : []));
+      if (!t) wantThumb(it);
     }
-    kids.push(p.img);
-    p.img.classList.toggle('in', p.ok);
-    frame.replaceChildren(...kids);
     layout();
-    if (!p.ok) {
-      stage.classList.add('loading');
-      p.ready.then((ok) => {
+    stage.classList.toggle('loading', !best);
+    const swap = (img) => {
+      if (gen !== showGen) return;
+      img.classList.add('in');
+      frame.replaceChildren(img);
+      layout();
+      stage.classList.remove('loading');
+    };
+    const fail = () => { if (gen === showGen) { stage.classList.remove('loading'); $('#stEmpty').hidden = false; $('#stEmpty').textContent = '這張打不開'; } };
+    const later = (fn) => { settleTimer = setTimeout(() => { if (gen === showGen) fn(); }, 170); };
+    if (useFull) {
+      if (!(p && p.ok)) {
+        const go = () => { const q = pic(it); q.ready.then((ok) => (ok ? swap(q.img) : fail())); };
+        if (scrub && !Z.on) later(go); else go();
+      }
+    } else if (!best) {
+      const go = () => pvAsk(it, true).then((x) => {
         if (gen !== showGen) return;
-        stage.classList.remove('loading');
-        if (!ok) { $('#stEmpty').hidden = false; $('#stEmpty').textContent = '這張打不開'; return; }
-        layout();
-        p.img.classList.add('in');
-        const ph = frame.querySelector('.ph');
-        if (ph) setTimeout(() => { if (gen === showGen) ph.remove(); }, 200);
+        if (!x) { show(); return; }   // no preview for this one: the whole photo, then
+        const d = pvImg(it);
+        if (d) d.ready.then((ok) => (ok ? swap(d.img) : fail()));
       });
-    } else stage.classList.remove('loading');
+      // a preview already made decodes quickly (not in WebKit while moving, where decoding holds the page)
+      if (v && !(scrub && WEBKIT)) { const d = pvImg(it); d.ready.then((ok) => { if (ok) swap(d.img); }); }
+      else if (scrub) later(go); else go();
+    }
     info(it);
     drawStrip(); drawGrid(); queueSecond();
-    // the next ones (and the one before), once you stop for a moment: as many as the pictures kept, so none of them
-    // pushes out the next; a demo photo is a download, so only the next one
-    clearTimeout(preTimer);
-    preTimer = setTimeout(async () => {
-      for (const d of it.url ? [1] : [1, 2, -1, 3].slice(0, KEEP - 1)) {
-        if (gen !== showGen) return;
-        const n = view[pos + d];
-        if (n) await pic(n).ready;
-      }
-    }, p.ok ? 60 : 160);
+    if (pvOn) {
+      // previews: the next ones made, and the next two decoded, ready to show; after a moment on this one, the whole
+      // photo too, so zooming in is instant
+      pvPlan();
+      if (!(scrub && WEBKIT)) for (const d of [1, 2]) { const n = view[pos + d * pvDir]; if (n && previews.has(n) && !pvNo(n)) pvImg(n); }
+      preTimer = setTimeout(() => { if (gen === showGen && !Z.on && !S.grid) pic(it); }, 900);
+    } else {
+      // the next ones (and the one before), once you stop for a moment: as many as the pictures kept, so none of them
+      // pushes out the next; a demo photo is a download, so only the next one
+      preTimer = setTimeout(async () => {
+        for (const d of it.url ? [1] : [1, 2, -1, 3].slice(0, KEEP - 1)) {
+          if (gen !== showGen) return;
+          const n = view[pos + d];
+          if (n) await pic(n).ready;
+        }
+      }, p && p.ok ? 60 : 160);
+    }
   }
   // the photo's details in the top-left corner, as Lightroom's info overlay: name, exposure, lens, then when and whose
   function details(it) {
@@ -811,7 +958,7 @@
     $('#ovFlag').className = `ov-flag${f === 1 ? ' is-keep' : f === -1 ? ' is-drop' : ''}`;
     for (const [b, on] of [[$('#bKeep'), f === 1], [$('#bDrop'), f === -1]]) { b.classList.toggle('on', on); b.setAttribute('aria-pressed', String(on)); b.disabled = !it; }
     if (it) fill($('#ov'), ...details(it)); else fill($('#ov'));
-    fill($('#stPos'), ...(it ? [el('b', { text: `第 ${num(pos + 1)}／${num(view.length)} 張` }), `・${it.name}`] : []));
+    renderSrc();
   }
   // "標示為留用", Lightroom's word for it, in the middle for a moment
   const SAID = { 1: '標示為留用', '-1': '設為排除', 0: '取消旗標' };
@@ -839,6 +986,12 @@
   const thumbQ = [];
   let thumbBusy = false;
   function wantThumb(it) {
+    if (it.thumb || it.thumbTried) return;
+    if (!pvNo(it)) { if (!previews.has(it)) { pvThumbs = [...pvThumbs.filter((x) => x !== it), it].slice(-200); pvPump(); } return; }
+    wantThumbHere(it);
+  }
+  // made here instead (no previews, or this one can't have one)
+  function wantThumbHere(it) {
     if (it.thumb || it.thumbTried) return;
     const i = thumbQ.indexOf(it);
     if (i >= 0) thumbQ.splice(i, 1);
@@ -870,12 +1023,19 @@
         URL.revokeObjectURL(url);
         it.thumb = await new Promise((r) => c.toBlob(r, 'image/jpeg', 0.8));
         it.turn = 1;
-        for (const n of $$(`[data-k="${CSS.escape(it.key)}"] img`)) { n.src = thumbUrl(it); n.style.transform = ''; }
-        // the second window gets it too (asked for or not), so it has it after this page closes
-        if (swWant.delete(it.key) || swOpen()) sendThumbs([it]);
+        thumbArrived(it);
       } catch { /* stays blank */ }
     }
     thumbBusy = false;
+  }
+  // a thumbnail made: into the filmstrip's and the grid's cells, and to the second window
+  function thumbArrived(it) {
+    for (const n of $$(`#gridIn [data-k="${CSS.escape(it.key)}"] img`)) { n.src = thumbUrl(it); n.style.transform = ''; }
+    const sc = stripCells.get(it);
+    if (sc) fitThumb(sc, it);
+    if (current() === it) { const ph = frame.querySelector('.ph'); if (ph) { ph.src = thumbUrl(it); layout(); } }
+    // the second window gets it too (asked for or not), so it has it after this page closes
+    if (swWant.delete(it.key) || swOpen()) sendThumbs([it]);
   }
   function thumbImg(it) {
     const u = thumbUrl(it);
@@ -888,32 +1048,118 @@
     return `${base}${f === 1 ? ' is-keep' : f === -1 ? ' is-drop' : ''}${it === current() ? ' cur' : ''}${sel.has(it) ? ' picked' : ''}`;
   };
 
-  // ---------- the strip under the photo (only what's on screen is made: thousands of photos) ----------
-  const strip = $('#strip'), stripIn = $('#stripIn');
-  const cellW = () => parseFloat(getComputedStyle(strip).getPropertyValue('--cell')) || 76;
-  let stripPos = -1;
+  // ---------- the filmstrip, as Lightroom's ----------
+  // Square grey cells edge to edge, the number and the flag at the top, the photo in a thin frame; the one you're on
+  // lighter, its photo matted. Moving with the keys keeps it in the middle and the strip glides under it (Lightroom
+  // centres it too), so holding → runs smoothly instead of jumping a screen at a time; a click in the strip leaves it
+  // where it is, unless the cell clicked is at an end. Only the cells on screen exist, each made once and kept while
+  // it's in sight: a move changes classes, not cells, so no thumbnail is made or decoded again.
+  const film = $('#film'), strip = $('#strip'), stripIn = $('#stripIn'), filmBar = $('#filmBar'), filmThumb = $('#filmThumb');
+  const CELL = 77;
+  const stripCells = new Map();   // item → its cell
+  let stripX = 0, stripTo = 0, stripRaf = 0, stripT = 0, stripPos = -1, stripClick = false;
+  const stripMax = () => Math.max(0, view.length * CELL - strip.clientWidth);
+  const stripCentre = (i) => clamp(i * CELL + CELL / 2 - strip.clientWidth / 2, 0, stripMax());
+  const filmOn = () => S.step === 2 && !film.hidden && !$('#step2').classList.contains('no-film');
   function drawStrip(follow = true) {
-    if (S.step !== 2 || S.grid) return;
-    const cw = cellW(), W = strip.clientWidth;
-    stripIn.style.width = `${view.length * cw}px`;
+    if (!filmOn()) return;
     if (follow && stripPos !== pos) {
-      // keep the current one in view, a few cells from the edge
-      const x = pos * cw, l = strip.scrollLeft;
-      if (x < l + cw * 2 || x > l + W - cw * 3) strip.scrollLeft = x - W / 2 + cw / 2;
+      const W = strip.clientWidth, x = pos * CELL - stripX, to = stripCentre(pos);
+      if (stripPos < 0 || Math.abs(to - stripX) > W * 1.5) { stripX = stripTo = to; cancelAnimationFrame(stripRaf); stripRaf = 0; }   // a new list, or far: there at once
+      else if (!(stripClick && x >= CELL && x <= W - CELL * 2)) glideStrip(to);
       stripPos = pos;
     }
-    const l = strip.scrollLeft, a = Math.max(0, Math.floor(l / cw) - 4), b = Math.min(view.length, Math.ceil((l + W) / cw) + 4);
-    const kids = [];
+    stripClick = false;
+    placeStrip();
+  }
+  // towards `to`, a little each frame (an eased follow: a new move while it glides just moves the goal)
+  function glideStrip(to) {
+    stripTo = clamp(to, 0, stripMax());
+    if (stripRaf) return;
+    stripT = 0;
+    const step = (t) => {
+      const dt = stripT ? Math.min(50, t - stripT) : 16;
+      stripT = t;
+      const d = stripTo - stripX;
+      if (Math.abs(d) < 0.4) { stripX = stripTo; stripRaf = 0; placeStrip(); return; }
+      stripX += d * (1 - Math.exp(-dt / 55));
+      placeStrip();
+      stripRaf = requestAnimationFrame(step);
+    };
+    stripRaf = requestAnimationFrame(step);
+  }
+  function placeStrip() {
+    const dpr = devicePixelRatio || 1, x = Math.round(stripX * dpr) / dpr;
+    stripIn.style.transform = `translate3d(${-x}px, 0, 0)`;
+    fillStrip();
+    // the scrollbar: its thumb as long as the share of the strip on screen
+    const W = strip.clientWidth, total = view.length * CELL, T = filmBar.clientWidth;
+    filmThumb.hidden = total <= W;
+    if (total > W) {
+      const tw = Math.max(24, Math.round((T * W) / total));
+      filmThumb.style.width = `${tw}px`;
+      filmThumb.style.transform = `translateX(${Math.round(((T - tw) * stripX) / Math.max(1, total - W))}px)`;
+    }
+  }
+  function fillStrip() {
+    const W = strip.clientWidth, a = Math.max(0, Math.floor(stripX / CELL) - 3), b = Math.min(view.length, Math.ceil((stripX + W) / CELL) + 3);
+    const shown = new Set();
     for (let i = a; i < b; i++) {
       const it = view[i];
-      kids.push(el('button', { type: 'button', class: cellClass(it, 'cell'), style: `left:${i * cw}px`, 'data-i': i, 'data-k': it.key, tabindex: '-1', title: it.name }, thumbImg(it)));
+      shown.add(it);
+      let c = stripCells.get(it);
+      if (!c) { c = stripCell(it); stripCells.set(it, c); stripIn.append(c); }
+      if (c.$i !== i) { c.$i = i; c.style.left = `${i * CELL}px`; c.dataset.i = i; c.firstChild.textContent = i + 1; }
+      const k = cellClass(it, 'cell');
+      if (c.className !== k) c.className = k;
     }
-    stripIn.replaceChildren(...kids);
+    for (const [it, c] of stripCells) if (!shown.has(it)) { c.remove(); stripCells.delete(it); }
   }
-  strip.addEventListener('scroll', () => drawStrip(false), { passive: true });
-  strip.addEventListener('click', (e) => { const c = e.target.closest('.cell'); if (c) goTo(+c.dataset.i); });
-  // a mouse wheel scrolls the strip sideways
-  strip.addEventListener('wheel', (e) => { if (Math.abs(e.deltaY) > Math.abs(e.deltaX)) { strip.scrollLeft += e.deltaY; e.preventDefault(); } }, { passive: false });
+  function stripCell(it) {
+    const c = el('div', { class: 'cell', 'data-k': it.key, title: it.name }, el('span', { class: 'c-no' }), el('span', { class: 'c-pic' }));
+    fitThumb(c, it);
+    return c;
+  }
+  // the photo in its frame: as big as fits a 60 px square, its own shape (a camera's 4:3 thumbnail of a 3:2 photo is
+  // cropped to 3:2), turned the photo's way
+  function fitThumb(c, it) {
+    const box = c.lastChild, [w, h] = dims(it), k = 60 / Math.max(w, h), fw = Math.round(w * k), fh = Math.round(h * k);
+    box.style.width = `${fw}px`; box.style.height = `${fh}px`;
+    const u = thumbUrl(it);
+    if (!u) { wantThumb(it); box.replaceChildren(); return; }
+    const img = el('img', { src: u, alt: '', draggable: 'false' });
+    if (it.turn > 1) img.style.cssText = it.turn >= 5 ? `width:${fh}px;height:${fw}px;left:${(fw - fh) / 2}px;top:${(fh - fw) / 2}px;transform:${ORIENT[it.turn]}` : `transform:${ORIENT[it.turn]}`;
+    box.replaceChildren(img);
+  }
+  // a click: that photo, the strip staying put (re-centred only for a cell at an end)
+  strip.addEventListener('click', (e) => { const c = e.target.closest('.cell'); if (c) { stripClick = true; goTo(+c.dataset.i); } });
+  // the wheel, a trackpad's swipe, the scrollbar and the end arrows scroll it freely (until the next move)
+  function scrollStrip(x, smooth) { if (smooth) glideStrip(x); else { cancelAnimationFrame(stripRaf); stripRaf = 0; stripX = stripTo = clamp(x, 0, stripMax()); placeStrip(); } }
+  strip.addEventListener('wheel', (e) => { e.preventDefault(); scrollStrip(stripX + (Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY) * (e.deltaMode === 1 ? 30 : 1)); }, { passive: false });
+  $('#filmPrev').addEventListener('click', () => scrollStrip(stripX - strip.clientWidth + CELL, true));
+  $('#filmNext').addEventListener('click', () => scrollStrip(stripX + strip.clientWidth - CELL, true));
+  filmBar.addEventListener('pointerdown', (e) => {
+    const T = filmBar.clientWidth, tw = filmThumb.offsetWidth, total = view.length * CELL, W = strip.clientWidth;
+    const per = Math.max(1, total - W) / Math.max(1, T - tw), r = filmBar.getBoundingClientRect(), tx = filmThumb.getBoundingClientRect().left - r.left;
+    if (e.target !== filmThumb) { scrollStrip(stripX + (e.clientX - r.left < tx ? -W : W), true); return; }
+    const x0 = e.clientX, s0 = stripX;
+    filmBar.setPointerCapture(e.pointerId);
+    const move = (ev) => scrollStrip(s0 + (ev.clientX - x0) * per);
+    const up = () => { filmBar.removeEventListener('pointermove', move); filmBar.removeEventListener('pointerup', up); filmBar.removeEventListener('pointercancel', up); };
+    filmBar.addEventListener('pointermove', move); filmBar.addEventListener('pointerup', up); filmBar.addEventListener('pointercancel', up);
+  });
+  // ▼ under it (F6): the filmstrip away and back, as Lightroom's
+  function toggleFilm() {
+    const off = $('#step2').classList.toggle('no-film');
+    S.film = !off; remember();
+    stripPos = -1;
+    requestAnimationFrame(() => { layout(); drawStrip(); });
+  }
+  $('#togFilm').addEventListener('click', toggleFilm);
+  $('#step2').classList.toggle('no-film', !S.film);
+  // ▲ at the top (F5): the bar with the name and the steps away and back
+  function toggleTop() { document.body.classList.toggle('no-top'); requestAnimationFrame(() => { layout(); stripPos = -1; drawStrip(); drawGrid(); }); }
+  $('#togTop').addEventListener('click', toggleTop);
 
   // ---------- the grid ----------
   const grid = $('#grid'), gridIn = $('#gridIn');
@@ -968,13 +1214,13 @@
   });
   // where a Shift range starts: the photo it started from while that selection lasts, else the one you're on
   const rangeFrom = () => (sel.size > 1 && view.includes(anchor) ? anchor : (anchor = current()));
-  function setGrid(on) {
+  function setGrid(on, quiet) {
     if (S.grid === on || !items.length) return;
+    if (!quiet) record();
     S.grid = on;
     if (!on) sel.clear();
     $('#grid').hidden = !on;
     stage.hidden = on;
-    strip.hidden = on;
     $('#bGrid').classList.toggle('on', on);
     $('#bLoupe').classList.toggle('on', !on);
     $('#bZoom').hidden = on;
@@ -982,6 +1228,7 @@
     requestAnimationFrame(() => { if (on) { drawGrid(); grid.focus({ preventScroll: true }); } else { layout(); show(); } refresh(); });
   }
   $('#bGrid').addEventListener('click', () => setGrid(true));
+  $('#bGridH').addEventListener('click', () => setGrid(true));
   $('#bLoupe').addEventListener('click', () => setGrid(false));
   const targets = () => (sel.size > 1 ? view.filter((it) => sel.has(it)) : current() ? [current()] : []);
 
@@ -1091,57 +1338,144 @@
     $('#stTip').classList.add('out');
   }
 
-  // ---------- the filmstrip's header: counts, filter, folder, order ----------
+  // ---------- the filmstrip's header, as Lightroom's ----------
   function refresh() {
     if (S.step !== 2) return;
-    const c = counts(), f = shownCounts();
-    $('#nAll').textContent = num(f.all); $('#nNone').textContent = num(f.none); $('#nKeep').textContent = num(f.keep); $('#nDrop').textContent = num(f.drop);
-    for (const b of $$('.tl')) { const on = b.dataset.f === S.filter; b.classList.toggle('on', on); b.setAttribute('aria-checked', String(on)); }
-    $('#doneFill').style.width = `${c.all ? ((c.keep + c.drop) / c.all) * 100 : 0}%`;
-    $('#doneBar').title = `決定了 ${num(c.keep + c.drop)}／${num(c.all)} 張`;
-    const n = c.keep;
-    for (const b of $$('.go2')) { b.disabled = !allowed(3); b.textContent = n ? `存下 ${num(n)} 張 →` : '存下來 →'; }
-    if (S.grid) drawGrid(); else drawStrip();
+    const c = counts();
+    for (const b of $$('.go2')) { b.disabled = !allowed(3); b.textContent = c.keep ? `存下 ${num(c.keep)} 張 →` : '存下來 →'; }
+    drawStrip();
+    if (S.grid) drawGrid();
     queueSecond();
     info(current());
-    if (S.grid && sel.size > 1) { fill($('#stPos'), el('b', { text: `選了 ${num(sel.size)} 張` }), '・P、X、U 一起標'); $('#bKeep').disabled = $('#bDrop').disabled = false; }
+    renderFilter();
+    if (S.grid && sel.size > 1) $('#bKeep').disabled = $('#bDrop').disabled = false;
   }
-  $('#tally').addEventListener('click', (e) => {
-    const b = e.target.closest('.tl');
-    if (!b || b.dataset.f === S.filter) return;
-    S.filter = b.dataset.f;
+  // the source and what's in it: "上次讀入  79 張相片 /選取了 1 張相片 /export-1.jpg ▾" (a folder chosen: its name;
+  // a filter on: "N 張相片中的 n 張")
+  function renderSrc() {
+    const it = current(), all = S.folder ? items.filter(inFolder).length : items.length, n = S.grid && sel.size > 1 ? sel.size : it ? 1 : 0;
+    $('#srcName').textContent = S.folder ? S.folder : '上次讀入';
+    fill($('#stPos'), `${S.filter === 'all' ? `${num(all)} 張相片` : `${num(all)} 張相片中的 ${num(view.length)} 張`} /選取了 ${num(n)} 張相片 /`, it ? el('b', { text: it.name }) : null);
+  }
+  // the filter: its menu (Lightroom's presets, our four, with how many each), the switch beside it (on and off,
+  // ⌘L), and the flags that show when "過濾器:" is clicked
+  const FILTERS = [['all', '關閉過濾器'], ['keep', '已標註旗標'], ['none', '未標註旗標'], ['drop', '排除']];
+  let lastFilter = 'keep', filterSig = '';
+  function renderFilter() {
+    const f = shownCounts(), n = { all: 0, keep: f.keep, none: f.none, drop: f.drop };
+    const sig = `${S.filter}|${n.keep}|${n.none}|${n.drop}`;
+    if (sig !== filterSig) {
+      filterSig = sig;
+      fill($('#filterSel'), ...FILTERS.map(([v, t]) => el('option', { value: v, text: v === 'all' ? t : `${t}（${num(n[v])}）`, selected: v === S.filter ? '' : null })));
+      $('#filterSel').value = S.filter;
+    }
+    const on = S.filter !== 'all';
+    $('#bFilterOn').classList.toggle('on', on);
+    $('#bFilterOn').setAttribute('aria-checked', String(on));
+    for (const b of $$('.fh-flag')) { const x = b.dataset.f === S.filter; b.classList.toggle('on', x); b.setAttribute('aria-pressed', String(x)); }
+  }
+  function setFilter(f) {
+    if (f === S.filter) return;
+    record();
+    if (f !== 'all') lastFilter = f;
+    S.filter = f;
     const at = current();
     rebuildView(at && matches(at) ? at : null);
     stripPos = gridPos = -1;
     show(); refresh();
+  }
+  $('#filterSel').addEventListener('change', (e) => { setFilter(e.target.value); e.target.blur(); });
+  $('#bFilterOn').addEventListener('click', () => setFilter(S.filter === 'all' ? lastFilter : 'all'));
+  $('#fhFlags').addEventListener('click', (e) => { const b = e.target.closest('.fh-flag'); if (b) setFilter(S.filter === b.dataset.f ? 'all' : b.dataset.f); });
+  $('#bFilterLbl').addEventListener('click', () => {
+    S.flags = $('#fhFlags').hidden; remember();
+    $('#fhFlags').hidden = !S.flags;
+    $('#bFilterLbl').setAttribute('aria-expanded', String(S.flags));
   });
+  $('#fhFlags').hidden = !S.flags;
+  $('#bFilterLbl').setAttribute('aria-expanded', String(!!S.flags));
+  // the source menu (click the source or the ▾): all the photos put in, or one folder; and the order
   function renderFolders() {
     const by = new Map();
     for (const it of items) by.set(it.dir, (by.get(it.dir) || 0) + 1);
-    const dirs = [...by.keys()].sort(collator.compare);
-    $('#folderWrap').hidden = dirs.length < 2;
-    fill($('#folder'), el('option', { value: '', text: `全部資料夾（${num(items.length)}）` }),
-      ...dirs.map((d) => el('option', { value: d, text: `${d || '（最上層）'}（${num(by.get(d))}）`, selected: d === S.folder ? '' : null })));
+    const dirs = [...by.keys()].sort(collator.compare), mark = (on) => (on ? '✓ ' : '\u3000 ');
+    fill($('#srcMenu'), el('option', { value: 'f:', text: `${mark(!S.folder)}上次讀入（${num(items.length)}）` }),
+      ...(dirs.length > 1 ? dirs.map((d) => el('option', { value: `f:${d}`, text: `${mark(S.folder === d && d)}${d || '（最上層）'}（${num(by.get(d))}）`, disabled: d ? null : '' })) : []),
+      el('hr'),
+      el('option', { value: 's:time', text: `${mark(S.sort === 'time')}依拍攝時間排序` }),
+      el('option', { value: 's:folder', text: `${mark(S.sort === 'folder')}依資料夾排序` }));
+    $('#srcMenu').value = `f:${S.folder}`;
   }
-  $('#folder').addEventListener('change', (e) => {
-    S.folder = e.target.value;
+  function setFolder(d) {
+    if (d === S.folder) return;
+    record();
+    S.folder = d;
     rebuildView(current() && matches(current()) ? current() : null);
     stripPos = gridPos = -1;
     show(); refresh();
+  }
+  function setSort(v) {
+    if (v === S.sort) return;
+    S.sort = v; remember();
+    const at = current(); sortItems(); rebuildView(at); stripPos = gridPos = -1; show(); refresh();
+  }
+  $('#srcMenu').addEventListener('change', (e) => {
+    const v = e.target.value;
+    if (v.startsWith('f:')) setFolder(v.slice(2)); else if (v.startsWith('s:')) setSort(v.slice(2));
+    renderFolders();
     e.target.blur();
   });
+  // "1", the main window: its views (Lightroom's menu), and what's ours (the details, auto-advance, the keys)
+  function renderWinMenu() {
+    const mark = (on) => (on ? '✓ ' : '\u3000 ');
+    fill($('#winMenu'), el('option', { value: '', text: '主視窗', disabled: '', selected: '' }),
+      el('option', { value: 'grid', text: `${mark(S.grid)}格點　G` }), el('option', { value: 'loupe', text: `${mark(!S.grid)}放大　E` }),
+      el('hr'), el('option', { value: 'full', text: `${mark(!!document.fullscreenElement)}全螢幕　F` }),
+      el('option', { value: 'film', text: `${mark(!$('#step2').classList.contains('no-film'))}底片顯示窗格　F6` }),
+      el('hr'), el('option', { value: 'info', text: `${mark(S.info)}照片資訊　I` }), el('option', { value: 'auto', text: `${mark(S.auto)}自動前進` }),
+      el('hr'), el('option', { value: 'keys', text: '\u3000 快捷鍵…　?' }));
+  }
+  for (const t of ['pointerdown', 'focus', 'keydown']) $('#winMenu').addEventListener(t, renderWinMenu);
+  $('#winMenu').addEventListener('change', (e) => {
+    const v = e.target.value;
+    e.target.blur();
+    if (v === 'grid') setGrid(true); else if (v === 'loupe') setGrid(false); else if (v === 'full') fullScreen(); else if (v === 'film') toggleFilm();
+    else if (v === 'info') setInfo(!S.info); else if (v === 'auto') { S.auto = !S.auto; remember(); $('#auto').checked = S.auto; } else if (v === 'keys') $('#keys').showModal();
+    renderWinMenu();
+  });
+  renderWinMenu();
+  // ← → in the header, as Lightroom's: back and forward through where you've been (the filter, the folder, grid or
+  // one photo), like a browser's
+  const hist = [], fut = [];
+  const here = () => ({ filter: S.filter, folder: S.folder, grid: S.grid });
+  function record() { hist.push(here()); if (hist.length > 60) hist.shift(); fut.length = 0; histButtons(); }
+  function histButtons() { $('#bBack').disabled = !hist.length; $('#bFwd').disabled = !fut.length; }
+  function travel(from, to) {
+    if (!from.length) return;
+    to.push(here());
+    const v = from.pop();
+    if (v.filter !== S.filter || v.folder !== S.folder) {
+      if (v.filter !== 'all') lastFilter = v.filter;
+      S.filter = v.filter; S.folder = v.folder;
+      const at = current();
+      rebuildView(at && matches(at) ? at : null);
+      stripPos = gridPos = -1;
+    }
+    if (v.grid !== S.grid) setGrid(v.grid, true); else { show(); refresh(); }
+    renderFolders(); histButtons();
+  }
+  $('#bBack').addEventListener('click', () => travel(hist, fut));
+  $('#bFwd').addEventListener('click', () => travel(fut, hist));
   document.addEventListener('change', (e) => {
     const r = e.target;
     if (r.type !== 'radio') return;
     if (r.name === 'take' || r.name === 'lay') { S[r.name] = r.value; if (r.name === 'lay') remember(); renderStep3(); }
   });
-  $('#sort').addEventListener('change', (e) => { S.sort = e.target.value; remember(); const at = current(); sortItems(); rebuildView(at); stripPos = gridPos = -1; show(); refresh(); e.target.blur(); });
   $('#auto').checked = S.auto;
   $('#auto').addEventListener('change', (e) => { S.auto = e.target.checked; remember(); e.target.blur(); });
   $('#bKeep').addEventListener('click', () => mark(targets(), flagOf(current()) === 1 && sel.size <= 1 ? 0 : 1, S.auto));
   $('#bDrop').addEventListener('click', () => mark(targets(), flagOf(current()) === -1 && sel.size <= 1 ? 0 : -1, S.auto));
   $('#bZoom').addEventListener('click', () => toggleZoom());
-  $('#bKeys').addEventListener('click', () => $('#keys').showModal());
   $('#bInfo').addEventListener('click', () => setInfo(!S.info));
   // a mouse click leaves focus on a button, and the next Space or arrow would go to it
   $('#step2').addEventListener('click', (e) => { const b = e.target.closest('button'); if (b && e.detail > 0) b.blur(); });
@@ -1200,7 +1534,7 @@
     }
   }, { passive: false });
   let resizeTimer = 0;
-  new ResizeObserver(() => { cancelAnimationFrame(resizeTimer); resizeTimer = requestAnimationFrame(() => { if (S.step === 2) { layout(); drawStrip(); drawGrid(); } }); }).observe($('#viewer'));
+  new ResizeObserver(() => { cancelAnimationFrame(resizeTimer); resizeTimer = requestAnimationFrame(() => { if (S.step === 2) { layout(); stripPos = -1; drawStrip(); drawGrid(); } }); }).observe($('#viewer'));
 
   // ---------- keys ----------
   function onKey(e) {
@@ -1211,8 +1545,10 @@
     else if (e.target.closest && e.target.closest('input[type="text"], select, textarea')) return;
     const k = e.key, mod = e.metaKey || e.ctrlKey;
     if (mod && !e.altKey && (k === 'z' || k === 'Z') && !e.shiftKey) { e.preventDefault(); doUndo(); return; }
+    // ⌘L: the filter off and back on (Lightroom's 開啟/關閉過濾器)
+    if (mod && !e.altKey && (k === 'l' || k === 'L')) { e.preventDefault(); setFilter(S.filter === 'all' ? lastFilter : 'all'); return; }
     if (mod || e.altKey) return;
-    if (!view.length && !/^([gGiIeE?]|Enter|Escape)$/.test(k)) return;
+    if (!view.length && !/^([gGiIeE?]|Enter|Escape|F5|F6)$/.test(k)) return;
     const advance = S.auto || e.shiftKey || (e.getModifierState && e.getModifierState('CapsLock'));
     const one = () => (sel.size > 1 && S.grid ? targets() : [current()]);
     let done = true;
@@ -1231,6 +1567,8 @@
       case 'e': case 'E': case 'Enter': if (S.grid) setGrid(false); else done = false; break;
       case 'Escape': if (S.grid && sel.size > 1) { sel.clear(); refresh(); } else if (Z.on) toggleZoom(); else if (S.grid) setGrid(false); else done = false; break;
       case 'f': case 'F': fullScreen(); break;
+      case 'F5': toggleTop(); break;
+      case 'F6': toggleFilm(); break;
       case 'Home': goTo(0); break;
       case 'End': goTo(view.length - 1); break;
       case 'PageDown': go(S.grid ? cols * 4 : 10); break;
