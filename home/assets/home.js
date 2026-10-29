@@ -292,7 +292,7 @@
   const dlg = $('#ask');
   let asking = null;
   // 照片挑選 is for a computer: a phone isn't offered it (the CSS hides it the same way)
-  const PHONE = matchMedia('(pointer: coarse) and (max-width: 640px), (pointer: coarse) and (orientation: landscape) and (max-height: 500px)');
+  const PHONE = matchMedia('(pointer: coarse) and (max-width: 600px), (pointer: coarse) and (orientation: landscape) and (max-height: 500px)');
   function ask(set) {
     const n = set.count(['image', 'raw']), zips = set.count(['zip']), raw = set.count(['raw']), phone = PHONE.matches;
     // a ZIP (a Drive download): only 照片挑選 reads it as it is

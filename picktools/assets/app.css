@@ -399,17 +399,19 @@ body.culling { background: #000; color-scheme: dark; }
      on the right as its module picker */
   body.culling .top { grid-column: 1; grid-row: 1; height: 57px; align-items: flex-start; justify-content: flex-start; gap: 0; padding: 19.5px 0 0 20px; background: #000; }
   body.culling .brand { align-items: flex-start; gap: 14.5px; }
-  body.culling .logo { width: 27.5px; height: 26px; border-radius: 4.5px; box-shadow: none; filter: grayscale(1) brightness(1.04); }
-  body.culling .brand-text { gap: 0; margin-top: -1.5px; }
+  body.culling .logo { display: none; }
+  /* the tile: flat grey with the mark cut in dark, as Lightroom's "LrC" */
+  body.culling .brand::before { content: ""; flex: none; width: 27.5px; height: 26px; border-radius: 4.5px; background: #787878 url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='6 10 52 44'%3E%3Crect x='9' y='15' width='30' height='24' rx='4' fill='%23343434' transform='rotate(-10 24 27)'/%3E%3Crect x='19' y='21' width='36' height='28' rx='4.5' fill='%23000'/%3E%3Cpath transform='translate(42.2 40.6) scale(.5)' d='M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z' fill='%23787878' stroke='%23000' stroke-width='2.4'/%3E%3C/svg%3E") 52% 55% / 19px auto no-repeat; }
+  body.culling .brand-text { gap: 0; margin-top: -2.5px; }
   body.culling .wordmark { font-size: 11px; line-height: 11px; font-weight: 400; letter-spacing: 0; color: #929292; }
   body.culling .wordmark .w-love, body.culling .wordmark .w-tool { color: inherit; }
-  body.culling .tagline { display: block; margin-top: 3.5px; font-size: 17px; line-height: 17px; font-weight: 400; letter-spacing: 0; color: #929292; }
+  body.culling .tagline { display: block; margin-top: 1px; font-size: 17px; line-height: 17px; font-weight: 400; letter-spacing: 0; color: #929292; }
   body.culling .privacy { display: none; }
   body.culling .demo-tag { align-self: flex-start; margin: 1px 0 0 16px; padding: 0 6px; border: 1px solid #424242; border-radius: 3px; background: none; color: #929292; font-size: 11px; font-weight: 400; line-height: 15px; }
   body.culling .stepper { grid-column: 2; grid-row: 1; align-self: start; height: 57px; padding: 27.5px 9.5px 0 0; background: #000; border: 0; border-radius: 0; box-shadow: none; }
   body.culling .stepper ol { display: flex; align-items: center; gap: 0; }
   body.culling .stepper li { display: flex; align-items: center; }
-  body.culling .stepper li + li::before { content: ""; width: 1px; height: 19px; margin-top: -.5px; background: #929292; }
+  body.culling .stepper li + li::before { content: ""; width: 1px; height: 19px; margin-top: -2px; background: #929292; }
   body.culling .stepper button, body.culling .stepper button.current { height: 22px; padding: 0 10.5px; gap: 0; border-radius: 0; background: none; color: #a9a9a9; }
   body.culling .stepper .dot { display: none; }
   body.culling .stepper .lbl { font-size: 22px; line-height: 22px; font-weight: 400; letter-spacing: 0; }
@@ -525,12 +527,14 @@ body.culling { background: #000; color-scheme: dark; }
 /* the filmstrip's header, as Lightroom's (measured from its screen at 2x): black, between two #424242 lines.
    "1" and "2" (the main and the second window) as little windows, dotted rules, the grid and ←/→ in #4d4d4d, the
    source and what's in it in 13 px #929292 with the photo's name white, then "過濾器:", its menu and its switch. */
-.fhead { display: flex; align-items: center; height: 32px; border-top: 1px solid #424242; background: #000; color: #929292; font-size: 13px; line-height: 16px; white-space: nowrap; }
-.fhead button { font: inherit; padding: 0; cursor: pointer; }
+.fhead { display: flex; align-items: center; height: 33px; margin-top: 2px; border-top: 1px solid #424242; background: #000; color: #929292; font-size: 13px; line-height: 16px; white-space: nowrap; }
+.fhead button { padding: 0; cursor: pointer; }
+.fhead button:not(.win) { font: inherit; }
 .fh-ic, .fh-lbl, .fh-flag { border: 0; background: none; color: inherit; }
 .fh-win { display: flex; gap: 10px; flex: none; }
 .fh-menu { position: relative; display: inline-flex; align-items: center; }
-.fh-menu select { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; font-size: 13px; -webkit-appearance: none; appearance: none; }
+.fh-menu select { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; font-size: 13px; -webkit-appearance: none; appearance: none; color: #e6e6e6; background: #2b2b2b; }
+.fh-menu select option, .fh-menu select hr { color: #e6e6e6; background: #2b2b2b; }
 /* a little window: a frame with a title strip (three dots) and its number */
 .win { position: relative; display: grid; place-items: center; box-sizing: border-box; width: 27px; height: 17px; border: 1px solid #4d4d4d; border-top-width: 3px; background: #000; color: #666; font-weight: 700; font-size: 13px; line-height: 13px; }
 .win::before { content: ""; position: absolute; left: 0; top: -2px; width: 5px; height: 1px; background: repeating-linear-gradient(90deg, #2b2b2b 0 1px, transparent 1px 2px); }
@@ -543,18 +547,18 @@ body.culling { background: #000; color-scheme: dark; }
 .fh-ic + .fh-ic { margin-left: 11.5px; }
 .fh-ic + .fh-dots { margin-left: 11.5px; }
 .fhead button.fh-ic:disabled { cursor: default; }
-@media (hover: hover) { .fhead button.fh-ic:not(:disabled):hover, .win:hover, .fh-menu:hover .win { color: #8a8a8a; } }
-.fh-src { flex: 1 1 auto; min-width: 0; }
-.fh-src-text { display: flex; align-items: baseline; min-width: 0; overflow: hidden; }
-#srcName { flex: none; margin-right: 21.5px; }
-.fh-pos { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+@media (hover: hover) { .fhead button.fh-ic:not(:disabled):hover, .win:not(.on):hover { color: #8a8a8a; } .fh-menu:hover .win.on { color: #d4d4d4; } }
+.fh-src { flex: 0 1 auto; min-width: 0; }
+.fh-src-text { position: relative; top: 2px; display: flex; align-items: baseline; min-width: 0; overflow: hidden; }
+#srcName { flex: 0 1000 auto; min-width: 3em; margin-right: 21.5px; overflow: hidden; text-overflow: ellipsis; }
+.fh-pos { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .fh-pos b { color: #fff; font-weight: 400; margin-left: 1.5px; }
 .caret { flex: none; width: 0; height: 0; margin: 0 0 1px 6.5px; border: 3px solid transparent; border-bottom: 0; border-top-color: #929292; }
-.fh-filter { flex: none; display: flex; align-items: center; margin-left: 16px; }
-.fh-lbl { order: 0; }
+.fh-filter { flex: none; display: flex; align-items: center; margin-left: auto; padding-left: 16px; }
+.fh-lbl { order: 0; position: relative; top: 1px; }
 .fh-flags { order: 1; display: flex; gap: 7px; margin-left: 10px; }
 .fh-flags[hidden] { display: none; }
-.popup { order: 2; display: block; width: 146px; height: 16px; margin-left: 10.5px; }
+.popup { order: 2; display: block; min-width: 146px; height: 16px; margin-left: 10.5px; }
 .fh-switch { order: 3; }
 @media (hover: hover) { .fh-lbl:hover { color: #c4c4c4; } }
 /* the filter's flags: 留用, 未標註旗標, 排除 */
@@ -565,53 +569,56 @@ body.culling { background: #000; color-scheme: dark; }
 @media (hover: hover) { .fh-flag:not(.on):hover { color: #8a8a8a; } }
 /* its menu, a sunken field with Lightroom's up/down stepper */
 .popup select {
-  display: block; width: 100%; height: 16px; margin: 0; padding: 0 16px 0 11px; border: 1px solid #404040; border-radius: 0;
-  -webkit-appearance: none; appearance: none; background: #333 url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='14'%3E%3ClinearGradient id='g' x1='0' y1='0' x2='0' y2='1'%3E%3Cstop offset='0' stop-color='%23424242'/%3E%3Cstop offset='.08' stop-color='%233a3a3a'/%3E%3Cstop offset='1' stop-color='%23272727'/%3E%3C/linearGradient%3E%3Crect width='1' height='14' fill='%23404040'/%3E%3Crect x='1' width='10' height='14' fill='url(%23g)'/%3E%3Crect x='11' width='1' height='14' fill='%23000'/%3E%3Cpath d='M3.25 6 6 2.5 8.75 6z M3.25 8 6 11.5 8.75 8z' fill='%23757575' stroke='%23262626' stroke-width='.5'/%3E%3C/svg%3E") right top / 12px 14px no-repeat;
+  display: block; width: 100%; height: 16px; margin: 0; padding: 0 18px 0 11px; border: 1px solid #404040; border-radius: 0;
+  -webkit-appearance: none; appearance: none; background: #333 url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14'%3E%3ClinearGradient id='g' x1='0' y1='0' x2='0' y2='1'%3E%3Cstop offset='0' stop-color='%23424242'/%3E%3Cstop offset='.08' stop-color='%233a3a3a'/%3E%3Cstop offset='1' stop-color='%23272727'/%3E%3C/linearGradient%3E%3Crect width='1' height='14' fill='%232f2e2e'/%3E%3Crect x='1' width='1' height='14' fill='%23000'/%3E%3Crect x='2' width='1' height='14' fill='%23404040'/%3E%3Crect x='3' width='10' height='14' fill='url(%23g)'/%3E%3Crect x='13' width='1' height='14' fill='%23000'/%3E%3Cpath d='M5.5 6.3 8 3.6 10.5 6.3z M5.5 7.9 8 10.6 10.5 7.9z' fill='%23757575' stroke='%23262626' stroke-width='.5'/%3E%3C/svg%3E") right top / 14px 14px no-repeat;
   box-shadow: inset 0 0 0 1px #000, inset 1px 1px 0 1px #2e2e2e; color: #929292; font: 13px/14px var(--lr-font); text-shadow: 0 .5px 0 #202020; cursor: pointer;
 }
 .popup select option { background: #2b2b2b; color: #e6e6e6; text-shadow: none; }
 /* the switch: the knob down with the filter off, up with it on */
-.fh-switch { position: relative; flex: none; width: 11px; height: 16px; margin-left: 9px; box-sizing: border-box; border: 1px solid #515151; background: #262626; box-shadow: inset 0 0 0 1px #1a1a1a; }
-.fh-switch i { position: absolute; left: 1px; right: 1px; bottom: 1px; height: 5.5px; background: linear-gradient(#a2a2a2, #575757); box-shadow: inset 1px 0 0 rgba(255, 255, 255, .22), 0 1px 0 #595959; }
-.fh-switch.on i { top: 1px; bottom: auto; }
+.fh-switch { position: relative; flex: none; width: 11px; height: 16px; margin-left: 9px; box-sizing: border-box; border: 1px solid #515151; background: #232323; box-shadow: inset 0 0 0 1px #1a1a1a; }
+.fh-switch i { position: absolute; left: 1px; right: 1px; bottom: 2px; height: 5.5px; background: linear-gradient(#a2a2a2, #575757); box-shadow: inset 1px 0 0 rgba(255, 255, 255, .22), 0 1px 0 #1c1c1c; }
+.fh-switch.on i { top: 2px; bottom: auto; }
 
 /* the filmstrip, as Lightroom's: in a #424242 frame, square grey cells edge to edge (a light line, the body, a dark
    line), the number and the flag at the top, the photo in a thin black frame; the one you're on light grey, its photo
    matted in white; then its scrollbar, the arrows at its ends and ▼ under it */
 .film { position: relative; box-sizing: border-box; padding: 2px 2px 0; border: 1px solid #424242; background: #000; }
-.strip { position: relative; height: 77px; overflow: hidden; contain: strict; }
+.strip { position: relative; height: 77px; overflow: hidden; contain: strict; touch-action: none; }
 .strip-in { position: absolute; left: 0; top: 0; height: 77px; will-change: transform; }
 .cell { position: absolute; top: 0; width: 77px; height: 77px; box-sizing: border-box; border-left: 1px solid #a2a2a2; border-right: 1px solid #666; background: #929292; cursor: pointer; contain: strict; }
 .c-no { position: absolute; left: 6.5px; top: 1px; font-weight: 700; font-size: 10px; line-height: 10px; color: #585858; pointer-events: none; }
-.c-pic { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); overflow: hidden; background: #6f6f6f; box-shadow: 0 0 0 1px #000; pointer-events: none; }
+.c-pic { position: absolute; left: 50%; top: 50%; margin: -1px 0 0 -1px; transform: translate(-50%, -50%); overflow: hidden; background: #6f6f6f; box-shadow: 0 0 0 1px #000; pointer-events: none; }
 .c-pic img { position: absolute; left: 0; top: 0; display: block; width: 100%; height: 100%; object-fit: cover; }
-.cell.cur { background: #cbcbcb; border-right-color: #8e8e8e; box-shadow: inset 0 0 0 1px #e0e0e0; }
+.cell.cur { background: #cbcbcb; border-left-color: #cbcbcb; border-right-color: #8e8e8e; outline: 1px solid #e0e0e0; outline-offset: -1.5px; }
 .cell.cur .c-no { color: #979797; }
 .cell.cur .c-pic { box-shadow: 0 0 0 1px #000, 0 0 0 3px #eaeaea; }
+.cell.is-keep .c-pic { box-shadow: 0 0 0 1px #fff; }
+.cell.cur.is-keep .c-pic { box-shadow: 0 0 0 1px #fff, 0 0 0 3px #eaeaea; }
 .cell.picked:not(.cur) { background: #acacac; box-shadow: inset 0 0 0 1px #bdbdbd; }
 .cell.picked:not(.cur) .c-no { color: #6c6c6c; }
 .cell.picked:not(.cur) .c-pic { box-shadow: 0 0 0 1px #000, 0 0 0 2px #d2d2d2; }
+.cell.picked.is-keep:not(.cur) .c-pic { box-shadow: 0 0 0 1px #fff, 0 0 0 2px #d2d2d2; }
 /* the flags: a little white one (留用), a black one (排除: the photo faded) by the number */
 .cell.is-keep::before, .cell.is-drop::before { content: ""; position: absolute; left: 0; top: 2px; width: 5px; height: 6px; pointer-events: none;
   background: linear-gradient(#fff, #fff) 1px 1px / 4px 3px no-repeat, linear-gradient(#d9d9d9, #d9d9d9) 0 0 / 1px 6px no-repeat; }
 .cell.is-drop::before { background: linear-gradient(#111, #111) 1px 1px / 4px 3px no-repeat, linear-gradient(#2b2b2b, #2b2b2b) 0 0 / 1px 6px no-repeat; }
 .cell.is-drop .c-pic img { opacity: .3; }
-.film-bar { position: relative; height: 13px; }
+.film-bar { position: relative; height: 13px; touch-action: none; }
 .film-bar i { position: absolute; left: 0; top: 1px; height: 10px; border-radius: 1px; cursor: default;
-  background: linear-gradient(#828282, #8c8c8c 18%, #959595 32%, #a1a1a1 45%, #a0a0a0 58%, #9b9b9b 68%, #8d8d8d 78%, #787878 90%, #737373);
-  box-shadow: inset 1.5px 0 0 rgba(0, 0, 0, .14), inset -1.5px 0 0 rgba(0, 0, 0, .14); }
+  background: linear-gradient(#828282, #959595 15%, #a0a0a0 30%, #a1a1a1 50%, #9b9b9b 65%, #8d8d8d 78%, #787878 90%, #737373);
+  box-shadow: inset 2px 0 1.5px -1px rgba(0, 0, 0, .3), inset -2px 0 1.5px -1px rgba(0, 0, 0, .3); }
 .film-bar i[hidden] { display: none; }
 /* the ends' ◀ ▶ (a screen back or on), in the black beside the frame */
 .film-end { position: absolute; top: 0; bottom: 0; width: 15px; padding: 0; border: 0; background: none; cursor: pointer; }
 .film-end.prev { left: -16px; }
 .film-end.next { right: -16px; }
 .film-end::before { content: ""; position: absolute; top: calc(50% - 5px); left: 5px; border: 5px solid transparent; }
-.film-end.prev::before { left: 0; border-left-width: 0; border-right-color: #929292; }
-.film-end.next::before { left: 5px; border-right-width: 0; border-left-color: #929292; }
+.film-end.prev::before { left: 6.5px; border-left-width: 0; border-right-color: #929292; }
+.film-end.next::before { left: 3.5px; border-right-width: 0; border-left-color: #929292; }
 /* the panels' triangles, Lightroom's: ▲ above (the top bar), ▼ under the filmstrip */
 .panel-tog { display: none; padding: 0; border: 0; background: none; cursor: pointer; }
 .panel-tog::before { content: ""; display: block; width: 0; height: 0; margin: 0 auto; border: 6px solid transparent; }
-#togFilm { height: 14.5px; }
+#togFilm { display: flex; align-items: flex-start; justify-content: center; height: 14.5px; }
 #togFilm::before { margin-top: 4.5px; border-bottom-width: 0; border-top-color: #5f5f5f; }
 .lr.no-film #togFilm::before { border-top-width: 0; border-bottom: 6px solid #5f5f5f; border-top-color: transparent; }
 .lr.no-film .fhead, .lr.no-film .film { display: none; }
@@ -643,6 +650,19 @@ body.culling { background: #000; color-scheme: dark; }
    Fingers (phones, tablets) keep them, and the filmstrip's header drops what's for a keyboard and a second screen. */
 @media (min-width: 641px) and (hover: hover) and (pointer: fine) { .tools { display: none; } }
 @media (max-width: 640px), (hover: none), (pointer: coarse), (pointer: none) { .fh-win, .fh-win + .fh-dots, .st-tip, .fl kbd { display: none !important; } }
+
+/* a finger: the header's and panels' little controls keep their look but get finger-sized hit areas */
+@media (pointer: coarse) {
+  .fh-ic, .fh-lbl, .fh-switch, .fh-flag { position: relative; }
+  .fh-ic::after, .fh-lbl::after, .fh-switch::after, .fh-flag::after { content: ""; position: absolute; inset: -12px -6px; }
+  .fh-ic + .fh-ic { margin-left: 20px; }
+  .fh-ic + .fh-dots, .fh-dots + .fh-ic { margin-left: 16px; }
+  .fh-switch { margin-left: 16px; }
+  .popup select { height: 26px; margin-top: -5px; }
+  .popup { height: 16px; }
+  #togFilm::after, #togTop::after { content: ""; position: absolute; inset: -10px -24px; }
+  #togFilm { position: relative; }
+}
 
 /* full screen: the whole step */
 #step2:fullscreen { max-height: none; width: 100vw; height: 100vh; border: 0; border-radius: 0; }
@@ -698,7 +718,7 @@ body.culling { background: #000; color-scheme: dark; }
 @media (max-width: 900px) and (min-width: 641px) {
   .fl kbd { display: none; }
   .tools { gap: 8px; }
-  .popup { width: 118px; }
+  .popup { min-width: 118px; }
 }
 @media (max-width: 760px) and (min-width: 641px) {
   .fh-lbl, .fh-flags { display: none !important; }
@@ -713,12 +733,12 @@ body.culling { background: #000; color-scheme: dark; }
   .tools { min-height: 40px; padding-top: 4px; padding-bottom: 4px; }
 }
 /* a phone on its side: the photo first; the filmstrip goes (← → and swipes still move on) */
+@media (max-height: 460px) and (min-width: 641px) and (pointer: coarse) { .film, #togFilm { display: none !important; } }
 @media (max-height: 460px) and (min-width: 641px) {
   body.culling .top, body.culling .stepper { height: 36px; }
   body.culling .top { padding-top: 5px; }
   body.culling .stepper { padding-top: 7px; }
   body.culling .tagline { display: none; }
-  .film, #togFilm { display: none !important; }
   .tools { min-height: 36px; padding-top: 2px; padding-bottom: 2px; }
   .fl, .lr .btn.go2 { height: 28px; }
   .ov { font-size: 12px; }

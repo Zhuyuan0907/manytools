@@ -94,7 +94,7 @@ html[data-world="daily"] #photo, html[data-world="photo"] #daily { display: none
 @media (hover: none) and (pointer: coarse) and (min-width: 641px) { .on-pc { display: none; } .on-pad { display: inline; } }
 @media (max-width: 640px), (orientation: landscape) and (max-height: 500px) { .on-pc, .on-pad { display: none; } .on-phone { display: inline; } }
 /* 照片挑選 is for a computer (or a tablet): a phone (a finger on a small screen) doesn't get it offered at all */
-@media (pointer: coarse) and (max-width: 640px), (pointer: coarse) and (orientation: landscape) and (max-height: 500px) {
+@media (pointer: coarse) and (max-width: 600px), (pointer: coarse) and (orientation: landscape) and (max-height: 500px) {
   .desk-tool { display: none !important; }
   .stack .desk-tool + img { display: block !important; }
   /* the row after it is the group's first now: no hairline above it */
@@ -104,7 +104,7 @@ html[data-world="daily"] #photo, html[data-world="photo"] #daily { display: none
   .ask .opt { padding-left: 14px; }
 }
 /* the drop area's icons without 照片挑選's: 圖片壓縮 and 照片參數 overlap as the pair did (fanned the same way) */
-@media (pointer: coarse) and (max-width: 640px) {
+@media (pointer: coarse) and (max-width: 600px) {
   .stack img.desk-tool + img { margin-left: 0 !important; transform: rotate(-6deg) !important; }
   .stack .desk-tool + img + img { display: block !important; margin-left: -16px; transform: rotate(8deg) !important; }
 }
