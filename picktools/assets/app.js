@@ -51,6 +51,8 @@
     if (['"Myriad Pro"', '"Myriad Web Pro"'].some((f) => w(`${f}, monospace`) !== w('monospace'))) document.documentElement.classList.add('myriad');
   } catch {}
   const WEBKIT = /AppleWebKit/.test(navigator.userAgent) && !/Chrome\/|Chromium\/|Android/.test(navigator.userAgent);
+  const FIREFOX = /Firefox\//.test(navigator.userAgent);
+  const MAC = /Mac/.test(navigator.platform || navigator.userAgent);
   // saving straight into a folder: Chrome and Edge on a computer
   const CAN_DIR = typeof window.showDirectoryPicker === 'function' && !PHONE;
   const collator = new Intl.Collator('zh-Hant-TW', { numeric: true, sensitivity: 'base' });
@@ -265,8 +267,9 @@
       for (const it of fresh) byKey.set(it.key, it);
       items = items.concat(fresh);
       sources = sources.concat(added.filter((s) => s.n));
+      const inChosen = S.folder ? items.find((it) => it.dir === S.folder) : null;
       placeDirs();
-      if (S.folder && !items.some((it) => it.dir === S.folder)) S.folder = '';
+      if (inChosen) S.folder = inChosen.dir;
       sortItems();
     }
     loading = false;
@@ -768,6 +771,8 @@
   // A 24 MP photo on screen means decoding 96 MB (about half a second) and moving it to the screen, which is what made
   // holding → stutter. A preview the size it's shown at (assets/preview.js, in workers, off the page's thread) decodes
   // in a tenth of that. They're made ahead, the way you're going, a few at a time, the thumbnail from the same decode.
+  let pvSrc = null, pvFails = 0;
+  if (PV) fetch('assets/preview.js').then((r) => (r.ok ? r.blob() : null)).then((b) => { if (b) pvSrc = URL.createObjectURL(new Blob([b], { type: 'text/javascript' })); }).catch(() => {});
   const PV_WORKERS = WEBKIT ? 2 : clamp((navigator.hardwareConcurrency || 4) - 2, 1, 4);
   const previews = new Map();   // it → { url, long }
   const pvBad = new Set(), pvBusy = new Set(), pvWait = new Map(), pvWorkers = [];
@@ -788,7 +793,14 @@
     if (v && !pvStale.has(it)) return Promise.resolve(v);
     let w = pvWait.get(it);
     if (!w) { let res; w = { p: new Promise((r) => { res = r; }) }; w.res = res; pvWait.set(it, w); }
-    if (urgent && !pvBusy.has(it)) pvUrgent = [it, ...pvUrgent.filter((x) => x !== it)].slice(0, 6);
+    if (urgent && !pvBusy.has(it)) {
+      pvUrgent = [it, ...pvUrgent.filter((x) => x !== it)].slice(0, 6);
+      // WebKit (slow previews, workers renewed anyway): every worker busy with photos further on, one stops for this
+      if (WEBKIT && pvWorkers.length >= PV_WORKERS && pvWorkers.every((x) => x.busy)) {
+        const wk = pvWorkers.find((x) => x.stop && x.job && x.job.it !== it && Math.abs(view.indexOf(x.job.it) - pos) > 1);
+        if (wk) { const st = wk.stop; wk.w.terminate(); pvWorkers.splice(pvWorkers.indexOf(wk), 1); st(); }
+      }
+    }
     pvPump();
     return w.p;
   }
@@ -814,13 +826,14 @@
   function pvPump() {
     for (;;) {
       const ok = (x) => x && (!previews.has(x) || pvStale.has(x)) && !pvBusy.has(x) && !pvNo(x) && byKey.has(x.key);
+      if (!pvFreeOk()) return;
       let it = null;
       while (!it && pvUrgent.length) { const x = pvUrgent.shift(); if (ok(x)) it = x; }
       while (!it && pvThumbs.length) { const x = pvThumbs.pop(); if (ok(x) && !x.thumb && !previews.has(x)) it = x; }
       while (!it && pvPlanned.length) { const x = pvPlanned.shift(); if (ok(x)) it = x; }
       if (!it) { pvIdle(); return; }
-      const wk = scrub && pvWorkers.some((x) => x.busy) ? null : pvFree();
-      if (!wk) { pvUrgent.unshift(it); return; }
+      const wk = pvFree();
+      if (!wk) return;
       pvRun(wk, it);
     }
   }
@@ -830,10 +843,12 @@
     clearTimeout(pvIdleTimer);
     pvIdleTimer = setTimeout(() => { for (const wk of [...pvWorkers]) if (!wk.busy) { wk.w.terminate(); pvWorkers.splice(pvWorkers.indexOf(wk), 1); } }, 15000);
   }
+  // a worker to take a job: while keys repeat fast, only one at a time (the rest of the machine draws the moving)
+  const pvFreeOk = () => pvOn && !(scrub && pvWorkers.some((x) => x.busy)) && (pvWorkers.some((x) => !x.busy) || pvWorkers.length < PV_WORKERS);
   function pvFree() {
     const x = pvWorkers.find((v) => !v.busy);
     if (x || pvWorkers.length >= PV_WORKERS) return x || null;
-    try { const v = { w: new Worker('assets/preview.js'), busy: false, done: 0 }; pvWorkers.push(v); return v; } catch { pvOn = false; return null; }
+    try { const v = { w: new Worker(pvSrc || 'assets/preview.js'), busy: false, done: 0 }; pvWorkers.push(v); return v; } catch { pvOn = false; return null; }
   }
   async function pvRun(wk, it) {
     wk.busy = true; pvBusy.add(it);
@@ -843,13 +858,21 @@
     let r;
     try {
       const blob = it.url ? await demoBlob(it, ctl.signal) : await blobOf(it), long = pvLong(it);
-      const ext = (/\.([^.]+)$/.exec(it.name) || [])[1] || '', type = { png: 'image/png', webp: 'image/webp', heic: 'image/heic', heif: 'image/heif' }[ext.toLowerCase()] || 'image/jpeg';
-      r = await new Promise((res) => { wk.w.onmessage = ({ data }) => res(data); wk.w.onerror = () => res({ error: 'worker' }); wk.w.postMessage({ blob, type, long }); });
+      const ext = (/\.([^.]+)$/.exec(it.name) || [])[1] || '', type = { png: 'image/png', webp: 'image/webp', gif: 'image/gif', avif: 'image/avif', heic: 'image/heic', heif: 'image/heif' }[ext.toLowerCase()] || blob.type || 'image/jpeg';
+      r = await new Promise((res) => {
+        const t = setTimeout(() => res({ error: 'timeout', dead: true }), 20000);
+        wk.stop = () => { clearTimeout(t); res({ error: 'stopped', aborted: true }); };
+        wk.w.onmessage = ({ data }) => { clearTimeout(t); res(data); };
+        wk.w.onerror = (e) => { if (e && e.preventDefault) e.preventDefault(); clearTimeout(t); res({ error: 'worker', dead: true }); };
+        wk.w.postMessage({ blob, type, long, decoder: FIREFOX });
+      });
       r.long = long;
     } catch (e) { r = { error: String(e), aborted: !!(ctl && ctl.signal.aborted) }; }
-    pvBusy.delete(it); wk.busy = false; wk.job = null;
+    pvBusy.delete(it); wk.busy = false; wk.job = null; wk.stop = null;
+    const drop = () => { wk.w.terminate(); const i = pvWorkers.indexOf(wk); if (i >= 0) pvWorkers.splice(i, 1); };
+    if (r.dead) { drop(); if (++pvFails >= 4) pvOn = false; }
     // WebKit keeps a decoded photo's memory until its worker goes: a fresh one every other photo
-    if (WEBKIT && ++wk.done >= 2) { wk.w.terminate(); pvWorkers.splice(pvWorkers.indexOf(wk), 1); }
+    else if (WEBKIT && ++wk.done >= 2) drop();
     const w = pvWait.get(it);
     pvWait.delete(it);
     if (!byKey.has(it.key) || r.aborted) { if (w) w.res(null); pvPump(); return; }
@@ -938,8 +961,8 @@
     const v = previews.get(it);
     if (v && !S.grid && v.long < pvLong(it) * 0.85) pvStale.add(it);   // made for a smaller window: a bigger one is asked for below
     let best = null;
-    if (v && !(useFull && p && p.ok)) { const d = pvImg(it); if (d.ok) best = d.img; }
-    if (!best && p && p.ok && !useFull && (!v || WEBKIT)) best = p.img;   // no preview (yet): the whole photo, as decoded at the pause
+    if (v && !(p && p.ok && (useFull || pvStale.has(it)))) { const d = pvImg(it); if (d.ok) best = d.img; }
+    if (!best && p && p.ok && !useFull && (!v || WEBKIT || pvStale.has(it))) best = p.img;   // no preview (yet): the whole photo, as decoded at the pause
     if (best) { best.classList.add('in'); frame.replaceChildren(best); }
     else {
       const t = thumbUrl(it);
@@ -951,6 +974,8 @@
     const swap = (img) => {
       if (gen !== showGen) return;
       img.classList.add('in');
+      // zoomed in: a preview that comes now goes under the whole photo (never over it)
+      if (Z.on && img.classList.contains('pv')) { const f = pics.get(it); if (f && frame.contains(f.img)) { if (!frame.contains(img)) frame.prepend(img); return; } }
       frame.replaceChildren(img);
       layout();
       stage.classList.remove('loading');
@@ -980,15 +1005,15 @@
       // photo too, so zooming in is instant
       pvPlan();
       if (!(scrub && WEBKIT)) for (const d of [1, 2]) { const n = view[pos + d * pvDir]; if (n && previews.has(n) && !pvNo(n)) pvImg(n); }
-      // (WebKit, where previews come slowly: the whole photo and the next one decoded as soon as you pause, as before
-      // there were previews, so stepping stays sharp)
+      // (In WebKit, which can decode on the page's own thread, only when a moment's rest still shows the thumbnail:
+      // the previews keep up there too, and a whole photo decoded on a timer can hold the next key)
       preTimer = setTimeout(() => {
         if (gen !== showGen || Z.on || S.grid) return;
+        const f0 = frame.firstElementChild;
+        if (WEBKIT && f0 && !f0.classList.contains('ph')) return;
         const q = pic(it);
-        q.ready.then((ok) => { const f = frame.firstElementChild; if (ok && gen === showGen && !Z.on && (!f || f.classList.contains('ph'))) swap(q.img); });
-        const n = view[pos + pvDir];
-        if (WEBKIT && n && !pvNo(n)) q.ready.then(() => { if (gen === showGen) pic(n); });
-      }, WEBKIT ? (scrub ? 170 : 60) : 900);
+        q.ready.then((ok) => { const f = frame.firstElementChild; if (ok && gen === showGen && !Z.on && (!f || f.classList.contains('ph'))) q.img.decode().then(() => swap(q.img), () => swap(q.img)); });
+      }, WEBKIT ? 600 : 900);
     } else {
       // the next ones (and the one before), once you stop for a moment: as many as the pictures kept, so none of them
       // pushes out the next; a demo photo is a download, so only the next one
@@ -1174,7 +1199,7 @@
     for (const [it, c] of stripCells) if (!shown.has(it)) { c.remove(); stripCells.delete(it); }
   }
   function stripCell(it) {
-    const c = el('div', { class: 'cell', 'data-k': it.key, title: it.name }, el('span', { class: 'c-no' }), el('span', { class: 'c-pic' }));
+    const c = el('div', { class: 'cell', 'data-k': it.key, title: it.name, role: 'button', 'aria-label': it.name }, el('span', { class: 'c-no' }), el('span', { class: 'c-pic' }));
     fitThumb(c, it);
     return c;
   }
@@ -1194,9 +1219,9 @@
   // a finger (or pen) drags it sideways; a tap still picks
   let stripDragged = false;
   strip.addEventListener('pointerdown', (e) => {
+    stripDragged = false;
     if (e.pointerType === 'mouse') return;
     const x0 = e.clientX, s0 = stripX;
-    stripDragged = false;
     const move = (ev) => { if (Math.abs(ev.clientX - x0) > 8) stripDragged = true; if (stripDragged) scrollStrip(s0 - (ev.clientX - x0)); };
     const up = () => { strip.removeEventListener('pointermove', move); strip.removeEventListener('pointerup', up); strip.removeEventListener('pointercancel', up); };
     strip.setPointerCapture(e.pointerId);
@@ -1469,8 +1494,9 @@
     const by = new Map();
     for (const it of items) by.set(it.dir, (by.get(it.dir) || 0) + 1);
     const dirs = [...by.keys()].sort(collator.compare), mark = (on) => (on ? '✓ ' : '\u3000 ');
-    fill($('#srcMenu'), el('option', { value: 'f:', text: `上次讀入（${num(items.length)}）` }),
-      ...(dirs.length > 1 ? dirs.map((d) => el('option', { value: `f:${d}`, text: `${d || '（最上層）'}（${num(by.get(d))}）`, disabled: d ? null : '' })) : []),
+    const fmark = (on) => (MAC ? '' : mark(on));   // a Mac's menu checks the chosen one itself
+    fill($('#srcMenu'), el('option', { value: 'f:', text: `${fmark(!S.folder)}上次讀入（${num(items.length)}）` }),
+      ...(dirs.length > 1 ? dirs.map((d) => el('option', { value: `f:${d}`, text: `${fmark(!!d && S.folder === d)}${d || '（最上層）'}（${num(by.get(d))}）`, disabled: d ? null : '' })) : []),
       el('hr'),
       el('option', { value: 's:time', text: `${mark(S.sort === 'time')}依拍攝時間排序` }),
       el('option', { value: 's:folder', text: `${mark(S.sort === 'folder')}依資料夾排序` }));
@@ -1524,8 +1550,12 @@
   function travel(from, to) {
     if (!from.length) return;
     to.push(here());
-    const v = from.pop();
-    if (v.folder && !items.some((it) => it.dir === v.folder)) v.folder = '';   // its photos taken out since
+    let v;
+    do {
+      v = from.pop();
+      if (v.folder && !items.some((it) => it.dir === v.folder)) v.folder = '';   // its photos taken out since
+    } while (from.length && v.filter === S.filter && v.folder === S.folder && v.grid === S.grid);   // nothing would change: further
+    if (v.filter === S.filter && v.folder === S.folder && v.grid === S.grid) { to.pop(); histButtons(); return; }
     if (v.filter !== S.filter || v.folder !== S.folder) {
       if (v.filter !== 'all') lastFilter = v.filter;
       S.filter = v.filter; S.folder = v.folder;
@@ -1623,6 +1653,8 @@
     if (menu && menu.closest('.fhead')) {
       if (e.key === 'Tab' || (!menu.$mouse && (e.key === ' ' || e.key === 'Enter'))) return;
       menu.blur();
+      // blurring doesn't stop the menu's own handling of this key (an arrow would change it)
+      if (/^(Arrow(Up|Down|Left|Right)|Page(Up|Down)|Home|End)$/.test(e.key)) e.preventDefault();
     } else if (menu && !e.metaKey && !e.ctrlKey && !e.altKey && /^(ArrowLeft|ArrowRight|Home|End|Delete|Backspace|[pPxXuU`0iIzZgGeEfF?])$/.test(e.key)) menu.blur();
     else if (e.target.closest && e.target.closest('input[type="text"], select, textarea')) return;
     const k = e.key, mod = e.metaKey || e.ctrlKey;

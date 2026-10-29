@@ -143,7 +143,7 @@
     if (plain && (k === 'f' || k === 'F')) { e.preventDefault(); full(); return; }
     if (plain && (k === '-' || k === '+' || k === '=')) { e.preventDefault(); size(k === '-' ? 1 / 1.2 : 1.2); return; }
     if (plain && (k === 'ArrowUp' || k === 'ArrowDown')) { e.preventDefault(); if (list.length && pos >= 0) tell({ type: 'go', i: clamp(pos + (k === 'ArrowUp' ? -cols : cols), 0, list.length - 1) }); return; }
-    if (k === '?' || k === 'Tab' || k === 'Escape' && document.fullscreenElement || (e.metaKey || e.ctrlKey) && !/^[zZ]$/.test(k)) return;
+    if (k === '?' || k === 'Tab' || k === 'Escape' && document.fullscreenElement || (e.metaKey || e.ctrlKey) && !/^[zZlL]$/.test(k)) return;
     if (k.length === 1 || /^(Arrow|Page|Home|End|Delete|Backspace|Enter|Escape)/.test(k)) {
       e.preventDefault();
       tell({ type: 'key', key: k, shift: e.shiftKey, meta: e.metaKey, ctrl: e.ctrlKey, alt: e.altKey, caps: !!(e.getModifierState && e.getModifierState('CapsLock')) });

@@ -405,7 +405,7 @@ body.culling { background: #000; color-scheme: dark; }
   body.culling .brand-text { gap: 0; margin-top: -2.5px; }
   body.culling .wordmark { font-size: 11px; line-height: 11px; font-weight: 400; letter-spacing: 0; color: #929292; }
   body.culling .wordmark .w-love, body.culling .wordmark .w-tool { color: inherit; }
-  body.culling .tagline { display: block; margin-top: 1px; font-size: 17px; line-height: 17px; font-weight: 400; letter-spacing: 0; color: #929292; }
+  body.culling .tagline { display: block; margin-top: 0; font-size: 17px; line-height: 17px; font-weight: 400; letter-spacing: 0; color: #929292; }
   body.culling .privacy { display: none; }
   body.culling .demo-tag { align-self: flex-start; margin: 1px 0 0 16px; padding: 0 6px; border: 1px solid #424242; border-radius: 3px; background: none; color: #929292; font-size: 11px; font-weight: 400; line-height: 15px; }
   body.culling .stepper { grid-column: 2; grid-row: 1; align-self: start; height: 57px; padding: 27.5px 9.5px 0 0; background: #000; border: 0; border-radius: 0; box-shadow: none; }
@@ -531,26 +531,27 @@ body.culling { background: #000; color-scheme: dark; }
 .fhead button { padding: 0; cursor: pointer; }
 .fhead button:not(.win) { font: inherit; }
 .fh-ic, .fh-lbl, .fh-flag { border: 0; background: none; color: inherit; }
-.fh-win { display: flex; gap: 10px; flex: none; }
+.fh-win { display: flex; gap: 10px; flex: none; position: relative; top: 1px; }
 .fh-menu { position: relative; display: inline-flex; align-items: center; }
 .fh-menu select { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; font-size: 13px; -webkit-appearance: none; appearance: none; color: #e6e6e6; background: #2b2b2b; }
 .fh-menu select option, .fh-menu select hr { color: #e6e6e6; background: #2b2b2b; }
+.fh-menu:has(select:focus-visible) .win, .fh-src:has(select:focus-visible) .fh-src-text { outline: 1px solid #929292; outline-offset: 2px; }
 /* a little window: a frame with a title strip (three dots) and its number */
 .win { position: relative; display: grid; place-items: center; box-sizing: border-box; width: 27px; height: 17px; border: 1px solid #4d4d4d; border-top-width: 3px; background: #000; color: #666; font-weight: 700; font-size: 13px; line-height: 13px; }
 .win::before { content: ""; position: absolute; left: 0; top: -2px; width: 5px; height: 1px; background: repeating-linear-gradient(90deg, #2b2b2b 0 1px, transparent 1px 2px); }
 .win.on { border-color: #b2b2b2; color: #b2b2b2; }
 .win.on::before { background: repeating-linear-gradient(90deg, #646464 0 1px, transparent 1px 2px); }
 .fhead .win { padding-top: 0; }
-.fh-dots { flex: none; width: 1px; height: 17px; margin: 0 10px; background: repeating-linear-gradient(#515151 0 1px, transparent 1px 4px); }
+.fh-dots { flex: none; position: relative; top: 1px; width: 1px; height: 17px; margin: 0 10px; background: repeating-linear-gradient(#515151 0 1px, transparent 1px 4px); }
 .fh-dots + .fh-ic { margin-left: 0; }
-.fh-ic { flex: none; display: grid; place-items: center; height: 17px; color: #4d4d4d; }
+.fh-ic { flex: none; position: relative; top: 1px; display: grid; place-items: center; height: 17px; color: #4d4d4d; }
 .fh-ic + .fh-ic { margin-left: 11.5px; }
 .fh-ic + .fh-dots { margin-left: 11.5px; }
 .fhead button.fh-ic:disabled { cursor: default; }
 @media (hover: hover) { .fhead button.fh-ic:not(:disabled):hover, .win:not(.on):hover { color: #8a8a8a; } .fh-menu:hover .win.on { color: #d4d4d4; } }
 .fh-src { flex: 0 1 auto; min-width: 0; }
 .fh-src-text { position: relative; top: 2px; display: flex; align-items: baseline; min-width: 0; overflow: hidden; }
-#srcName { flex: 0 1000 auto; min-width: 3em; margin-right: 21.5px; overflow: hidden; text-overflow: ellipsis; }
+#srcName { flex: 1 1 0; max-width: max-content; min-width: 3em; margin-right: 21.5px; overflow: hidden; text-overflow: ellipsis; }
 .fh-pos { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .fh-pos b { color: #fff; font-weight: 400; margin-left: 1.5px; }
 .caret { flex: none; width: 0; height: 0; margin: 0 0 1px 6.5px; border: 3px solid transparent; border-bottom: 0; border-top-color: #929292; }
@@ -558,7 +559,7 @@ body.culling { background: #000; color-scheme: dark; }
 .fh-lbl { order: 0; position: relative; top: 1px; }
 .fh-flags { order: 1; display: flex; gap: 7px; margin-left: 10px; }
 .fh-flags[hidden] { display: none; }
-.popup { order: 2; display: block; min-width: 146px; height: 16px; margin-left: 10.5px; }
+.popup { order: 2; position: relative; top: 1px; display: block; min-width: 146px; height: 16px; margin-left: 10.5px; }
 .fh-switch { order: 3; }
 @media (hover: hover) { .fh-lbl:hover { color: #c4c4c4; } }
 /* the filter's flags: 留用, 未標註旗標, 排除 */
@@ -569,15 +570,15 @@ body.culling { background: #000; color-scheme: dark; }
 @media (hover: hover) { .fh-flag:not(.on):hover { color: #8a8a8a; } }
 /* its menu, a sunken field with Lightroom's up/down stepper */
 .popup select {
-  display: block; width: 100%; height: 16px; margin: 0; padding: 0 18px 0 11px; border: 1px solid #404040; border-radius: 0;
-  -webkit-appearance: none; appearance: none; background: #333 url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14'%3E%3ClinearGradient id='g' x1='0' y1='0' x2='0' y2='1'%3E%3Cstop offset='0' stop-color='%23424242'/%3E%3Cstop offset='.08' stop-color='%233a3a3a'/%3E%3Cstop offset='1' stop-color='%23272727'/%3E%3C/linearGradient%3E%3Crect width='1' height='14' fill='%232f2e2e'/%3E%3Crect x='1' width='1' height='14' fill='%23000'/%3E%3Crect x='2' width='1' height='14' fill='%23404040'/%3E%3Crect x='3' width='10' height='14' fill='url(%23g)'/%3E%3Crect x='13' width='1' height='14' fill='%23000'/%3E%3Cpath d='M5.5 6.3 8 3.6 10.5 6.3z M5.5 7.9 8 10.6 10.5 7.9z' fill='%23757575' stroke='%23262626' stroke-width='.5'/%3E%3C/svg%3E") right top / 14px 14px no-repeat;
+  display: block; width: 100%; height: 16px; margin: 0; padding: 2px 18px 0 11px; border: 1px solid #404040; border-radius: 0;
+  -webkit-appearance: none; appearance: none; background: #333 url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14'%3E%3ClinearGradient id='g' x1='0' y1='0' x2='0' y2='1'%3E%3Cstop offset='0' stop-color='%23424242'/%3E%3Cstop offset='.08' stop-color='%233a3a3a'/%3E%3Cstop offset='1' stop-color='%23272727'/%3E%3C/linearGradient%3E%3Crect width='1' height='14' fill='%232f2e2e'/%3E%3Crect x='1' width='1' height='14' fill='%23000'/%3E%3Crect x='2' width='1' height='14' fill='%23404040'/%3E%3Crect x='3' width='10' height='14' fill='url(%23g)'/%3E%3Crect x='3' width='10' height='1' fill='%234c4c4c'/%3E%3Crect x='13' width='1' height='14' fill='%23000'/%3E%3Cpath d='M5.2 6.1 8 3.1 10.8 6.1z M5.2 8 8 11 10.8 8z' fill='%23757575' stroke='%23262626' stroke-width='.5'/%3E%3C/svg%3E") right top / 14px 14px no-repeat;
   box-shadow: inset 0 0 0 1px #000, inset 1px 1px 0 1px #2e2e2e; color: #929292; font: 13px/14px var(--lr-font); text-shadow: 0 .5px 0 #202020; cursor: pointer;
 }
 .popup select option { background: #2b2b2b; color: #e6e6e6; text-shadow: none; }
 /* the switch: the knob down with the filter off, up with it on */
 .fh-switch { position: relative; flex: none; width: 11px; height: 16px; margin-left: 9px; box-sizing: border-box; border: 1px solid #515151; background: #232323; box-shadow: inset 0 0 0 1px #1a1a1a; }
-.fh-switch i { position: absolute; left: 1px; right: 1px; bottom: 2px; height: 5.5px; background: linear-gradient(#a2a2a2, #575757); box-shadow: inset 1px 0 0 rgba(255, 255, 255, .22), 0 1px 0 #1c1c1c; }
-.fh-switch.on i { top: 2px; bottom: auto; }
+.fh-switch i { position: absolute; left: 1px; right: 1px; bottom: 1px; height: 5px; background: linear-gradient(#a2a2a2, #575757); box-shadow: inset 1px 0 0 rgba(255, 255, 255, .22), 0 1px 0 #1c1c1c; }
+.fh-switch.on i { top: 1px; bottom: auto; }
 
 /* the filmstrip, as Lightroom's: in a #424242 frame, square grey cells edge to edge (a light line, the body, a dark
    line), the number and the flag at the top, the photo in a thin black frame; the one you're on light grey, its photo
@@ -589,7 +590,7 @@ body.culling { background: #000; color-scheme: dark; }
 .c-no { position: absolute; left: 6.5px; top: 1px; font-weight: 700; font-size: 10px; line-height: 10px; color: #585858; pointer-events: none; }
 .c-pic { position: absolute; left: 50%; top: 50%; margin: -1px 0 0 -1px; transform: translate(-50%, -50%); overflow: hidden; background: #6f6f6f; box-shadow: 0 0 0 1px #000; pointer-events: none; }
 .c-pic img { position: absolute; left: 0; top: 0; display: block; width: 100%; height: 100%; object-fit: cover; }
-.cell.cur { background: #cbcbcb; border-left-color: #cbcbcb; border-right-color: #8e8e8e; outline: 1px solid #e0e0e0; outline-offset: -1.5px; }
+.cell.cur { background: #cbcbcb; border-left-color: #cbcbcb; border-right-color: #8e8e8e; box-shadow: inset 0 0 0 1px #e0e0e0; }
 .cell.cur .c-no { color: #979797; }
 .cell.cur .c-pic { box-shadow: 0 0 0 1px #000, 0 0 0 3px #eaeaea; }
 .cell.is-keep .c-pic { box-shadow: 0 0 0 1px #fff; }
@@ -613,8 +614,8 @@ body.culling { background: #000; color-scheme: dark; }
 .film-end.prev { left: -16px; }
 .film-end.next { right: -16px; }
 .film-end::before { content: ""; position: absolute; top: calc(50% - 5px); left: 5px; border: 5px solid transparent; }
-.film-end.prev::before { left: 6.5px; border-left-width: 0; border-right-color: #929292; }
-.film-end.next::before { left: 3.5px; border-right-width: 0; border-left-color: #929292; }
+.film-end.prev::before { left: 5.5px; border-left-width: 0; border-right-color: #929292; }
+.film-end.next::before { left: 4.5px; border-right-width: 0; border-left-color: #929292; }
 /* the panels' triangles, Lightroom's: ▲ above (the top bar), ▼ under the filmstrip */
 .panel-tog { display: none; padding: 0; border: 0; background: none; cursor: pointer; }
 .panel-tog::before { content: ""; display: block; width: 0; height: 0; margin: 0 auto; border: 6px solid transparent; }
