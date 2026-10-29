@@ -666,6 +666,10 @@ body.culling { background: #000; color-scheme: dark; }
   #togFilm { position: relative; }
 }
 
+/* the sweep between the light steps and the dark one (app.js), as the home page's between 日常 and 拍攝 */
+.sweep { position: fixed; inset: 0; z-index: 1000; overflow: hidden; touch-action: none; }
+.sweep i { position: absolute; left: 50%; top: 50%; display: block; will-change: transform; }
+
 /* full screen: the whole step */
 #step2:fullscreen { max-height: none; width: 100vw; height: 100vh; border: 0; border-radius: 0; }
 /* only there for the phones' "‹ 加照片" (/shared/mobile-nav.js clicks it) */

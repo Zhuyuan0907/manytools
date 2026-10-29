@@ -1,61 +1,74 @@
-/* 照片挑選's second window: every photo as a grid on another screen, dark like Lightroom Classic's secondary display.
-   The cells, flags and colours are the pick tool's own grid (app.css), kept in step. */
+/* 照片挑選's second window, as Lightroom Classic's secondary display (measured from the user's screen at 2x): black,
+   a 15 px strip on top with its grip, the grid of grey cells (a light line left and top, a dark one right and
+   bottom, the photo framed in black, the one you're on lighter with its photo matted), Lightroom's scrollbar, and the
+   toolbar under it: the source and what's in it, and the 縮圖 slider. */
 :root {
-  --bg: #1f1f20;
-  --bar: #2a2a2b;
-  --text: #cfcfd2;
-  --dim: #96969b;
-  --hi: #f4f4f5;
-  --rej: #e46a59;
   --font: "Myriad Pro", "Myriad Web Pro", "Source Sans 3 Web", -apple-system, BlinkMacSystemFont, "PingFang TC", "Noto Sans TC Web", "Noto Sans TC", "Microsoft JhengHei", "Heiti TC", sans-serif;
-  --i-flag: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M3.2 15V1.4h1.3v.8h8.8l-2.1 3.4 2.1 3.4H4.5V15z'/%3E%3C/svg%3E");
-  --i-rej: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cmask id='m'%3E%3Crect width='16' height='16' fill='%23fff'/%3E%3Cpath d='M6.6 3.6l3.6 3.6M10.2 3.6L6.6 7.2' stroke='%23000' stroke-width='1.6' stroke-linecap='round'/%3E%3C/mask%3E%3Cpath mask='url(%23m)' d='M3.2 15V1.4h1.3v.8h8.8l-2.1 3.4 2.1 3.4H4.5V15z'/%3E%3C/svg%3E");
   color-scheme: dark;
 }
 * { box-sizing: border-box; }
 html, body { height: 100%; margin: 0; }
 body {
-  display: grid; grid-template-rows: auto minmax(0, 1fr); grid-template-columns: minmax(0, 1fr); overflow: hidden; background: var(--bg); color: var(--text);
-  font: 15px/1.5 var(--font); -webkit-font-smoothing: antialiased; user-select: none; -webkit-user-select: none;
+  display: grid; grid-template-rows: 18px minmax(0, 1fr) auto auto; grid-template-columns: minmax(0, 1fr); overflow: hidden;
+  background: #000; color: #929292; font: 13px/16px var(--font); -webkit-font-smoothing: antialiased; user-select: none; -webkit-user-select: none;
 }
 [hidden] { display: none !important; }
 p { margin: 0; }
 button { font: inherit; }
 
-.bar { display: flex; align-items: center; gap: 18px; height: 42px; padding: 0 12px 0 14px; background: var(--bar); border-bottom: 1px solid #111112; white-space: nowrap; }
-.logo { flex: none; border-radius: 6px; }
-.pos { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; color: var(--dim); }
-.pos b { color: var(--hi); font-weight: 600; }
-.counts { display: flex; gap: 16px; flex: none; color: var(--dim); font-size: .93rem; }
-.counts span { display: inline-flex; align-items: center; gap: 5px; }
-.counts b { color: var(--text); font-weight: 600; }
-.counts i { width: 12px; height: 12px; background: currentColor; -webkit-mask: var(--i-flag) center / contain no-repeat; mask: var(--i-flag) center / contain no-repeat; }
-.counts .n-drop i { -webkit-mask-image: var(--i-rej); mask-image: var(--i-rej); }
-.size { display: flex; gap: 2px; flex: none; }
-.bar button { height: 28px; min-width: 32px; padding: 0 9px; display: inline-grid; place-items: center; border: 0; border-radius: 5px; background: none; color: var(--dim); cursor: pointer; }
-.bar button:hover { background: #3a3a3d; color: var(--hi); }
-.bar .full { flex: none; color: var(--text); font-size: .92rem; }
+/* the strip on top: 15 px, a #424242 line, 2 px of black; its grip (a triangle of dots) */
+.top { position: relative; height: 18px; border-bottom: 2px solid #000; }
+.top::after { content: ""; position: absolute; left: 0; right: 0; top: 15px; height: 1px; background: #424242; }
+.grip { position: absolute; left: calc(50% - 10px); top: 1px; width: 20px; height: 13px; padding: 0; border: 0; cursor: pointer;
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='13' height='7' fill='%23bdbdbd'%3E%3Cpath d='M0 0h1v1H0zM2 0h1v1H2zM4 0h1v1H4zM6 0h1v1H6zM8 0h1v1H8zM10 0h1v1h-1zM12 0h1v1h-1zM2 2h1v1H2zM4 2h1v1H4zM6 2h1v1H6zM8 2h1v1H8zM10 2h1v1h-1zM4 4h1v1H4zM6 4h1v1H6zM8 4h1v1H8zM6 6h1v1H6z'/%3E%3C/svg%3E") center / 13px 7px no-repeat; opacity: .9; }
+.grip:hover { opacity: 1; filter: brightness(1.2); }
 
-.grid { position: relative; overflow-y: auto; outline: none; scrollbar-color: #48484c transparent; }
+/* the grid (only the rows on screen exist), 4 px of black on its left, Lightroom's scrollbar on its right */
+.grid { position: relative; overflow-y: auto; outline: none; padding-left: 4px; scrollbar-color: #9a9a9a #333; }
+.grid::-webkit-scrollbar { width: 16px; }
+.grid::-webkit-scrollbar-track { background: linear-gradient(90deg, #797979 0 2px, #000 2px 4px, #333 4px); }
+.grid::-webkit-scrollbar-thumb { border-left: 4px solid transparent; background: linear-gradient(90deg, #767676, #979797 25%, #a1a1a1 45%, #a1a1a1 70%, #8d8d8d) padding-box; border-radius: 0 3px 3px 0; min-height: 24px; }
 .grid-in { position: relative; }
-.c { position: absolute; display: flex; flex-direction: column; gap: 4px; padding: 10px 10px 0; border-radius: 4px; background: #2b2b2d; color: var(--dim); cursor: pointer; overflow: hidden; }
-.c:hover { background: #333336; }
-.c.picked { background: #444447; }
-.c.cur { background: #6a6a6f; color: var(--hi); box-shadow: inset 0 0 0 1px #a2a2a7; }
-/* Lightroom's cell number, big and faint behind the photo */
-.no { position: absolute; right: 9px; top: 3px; font-size: 1.5rem; font-weight: 700; line-height: 1.2; color: rgba(255, 255, 255, .07); }
-.c.cur .no { color: rgba(255, 255, 255, .16); }
-.pic { position: relative; flex: 1 1 auto; min-height: 0; display: grid; place-items: center; overflow: hidden; container-type: size; }
-.pic img { display: block; width: min(100cqw, 100cqh); height: min(100cqw, 100cqh); object-fit: contain; }
+.c { position: absolute; border-left: 1px solid #a2a2a2; border-right: 1px solid #424242; border-top: 1px solid #797979; border-bottom: 1px solid #424242;
+  background: #929292; box-shadow: inset 0 1px 0 #a2a2a2; cursor: pointer; contain: strict; }
+.c.picked:not(.cur) { background: #adadad; box-shadow: inset 0 1px 0 #bdbdbd; }
+.c.cur { background: #cbcbcb; border-left-color: #ebebeb; box-shadow: inset 0 1px 0 #ebebeb, inset 0 -1px 0 #ebebeb, inset -1px 0 0 #ebebeb; }
+.pic { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); overflow: hidden; background: #6f6f6f; box-shadow: 0 0 0 1px #000; pointer-events: none; }
+.pic img { position: absolute; left: 0; top: 0; display: block; width: 100%; height: 100%; object-fit: cover; }
 .pic img:not([src]) { visibility: hidden; }   /* no thumbnail (yet): the cell, not a broken-picture frame */
-.c.is-drop img { opacity: .3; }
-.name { flex: none; height: 22px; font-size: .8rem; line-height: 22px; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.c.is-keep::before, .c.is-drop::before { content: ""; position: absolute; left: 6px; top: 6px; z-index: 1; width: 22px; height: 22px; border-radius: 5px; background: rgba(18, 18, 19, .72); }
-.c.is-keep::after, .c.is-drop::after { content: ""; position: absolute; left: 11px; top: 11px; z-index: 1; width: 12px; height: 12px; background: #fff; -webkit-mask: var(--i-flag) center / contain no-repeat; mask: var(--i-flag) center / contain no-repeat; }
-.c.is-drop::after { background: var(--rej); -webkit-mask-image: var(--i-rej); mask-image: var(--i-rej); }
+.c.cur .pic { box-shadow: 0 0 0 1px #000, 0 0 0 4px #e3e3e3, 0 0 0 5px #000; }
+/* flags: a white frame and a little white flag for 留用 (as the user's Lightroom), a black flag and a faded photo for 排除 */
+.c.is-keep .pic { box-shadow: 0 0 0 1px #fff; }
+.c.cur.is-keep .pic { box-shadow: 0 0 0 1px #fff, 0 0 0 4px #e3e3e3, 0 0 0 5px #000; }
+.c.is-drop .pic img { opacity: .3; }
+.c.is-keep::after, .c.is-drop::after { content: ""; position: absolute; left: 6px; top: 6px; width: 7px; height: 9px; pointer-events: none;
+  background: linear-gradient(#fff, #fff) 1px 1px / 6px 4px no-repeat, linear-gradient(#d9d9d9, #d9d9d9) 0 0 / 1px 9px no-repeat; }
+.c.is-drop::after { background: linear-gradient(#111, #111) 1px 1px / 6px 4px no-repeat, linear-gradient(#2b2b2b, #2b2b2b) 0 0 / 1px 9px no-repeat; }
 
-.empty { position: fixed; inset: 42px 0 0; display: grid; place-items: center; align-content: center; padding: 24px; text-align: center; color: var(--dim); font-size: 1.05rem; line-height: 1.8; pointer-events: none; }
-/* the pick tool's window went away: the grid stays, this says what happens next */
-.state { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; padding: 3px 12px; border-radius: 999px; background: #3a3020; color: #f0c674; font-size: .86rem; }
-/* narrow: the note's words before the counts (the counts are of a page that has closed) */
-@media (max-width: 1000px) { .state:not([hidden]) ~ .counts { display: none; } }
+/* the toolbar: a #424242 line, black; the source and what's in it on the left, 縮圖 on the right; ▼ under it */
+.bar { position: relative; display: flex; align-items: center; height: 36px; padding: 0 16px 0 17px; border-top: 1px solid #424242; white-space: nowrap; }
+.src { flex: 1 1 auto; min-width: 0; display: flex; align-items: baseline; overflow: hidden; }
+#sSrc { flex: 0 1000 auto; min-width: 3em; margin-right: 21.5px; overflow: hidden; text-overflow: ellipsis; }
+.pos { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.pos b { color: #fff; font-weight: 400; margin-left: 1.5px; }
+.caret { flex: none; width: 0; height: 0; margin: 0 0 1px 6.5px; border: 3px solid transparent; border-bottom: 0; border-top-color: #929292; }
+.zoom { flex: none; display: grid; justify-items: start; gap: 2px; margin-left: 24px; width: 90px; padding-top: 3px; }
+.zoom span { line-height: 13px; margin-left: 2px; }
+/* the slider: a sunken pill with ticks above it, and a light pointed knob */
+.zoom input { -webkit-appearance: none; appearance: none; width: 90px; height: 14px; margin: 0; padding: 0; background: transparent; cursor: pointer;
+  background: repeating-linear-gradient(90deg, #929292 0 1px, transparent 1px 9.7px) 6px 0 / 78px 3px no-repeat; }
+.zoom input::-webkit-slider-runnable-track { height: 5px; margin-top: 6px; border-radius: 3px; background: #000; box-shadow: 0 0 0 1px #2c2c2c, inset 0 1px 1px #1a1a1a; }
+.zoom input::-moz-range-track { height: 5px; border-radius: 3px; background: #000; box-shadow: 0 0 0 1px #2c2c2c; }
+.zoom input::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 10px; height: 10px; margin-top: -4px; border: 0;
+  background: linear-gradient(#ececec, #a3a3a3); clip-path: polygon(50% 0, 100% 45%, 100% 85%, 85% 100%, 15% 100%, 0 85%, 0 45%); }
+.zoom input::-moz-range-thumb { width: 10px; height: 10px; border: 0; border-radius: 0; background: linear-gradient(#ececec, #a3a3a3); clip-path: polygon(50% 0, 100% 45%, 100% 85%, 85% 100%, 15% 100%, 0 85%, 0 45%); }
+.tog { height: 11px; padding: 0; border: 0; background: none; cursor: pointer; }
+.tog::before { content: ""; display: block; width: 0; height: 0; margin: 2px auto 0; border: 6px solid transparent; border-bottom: 0; border-top-color: #5f5f5f; }
+body.no-bar .bar { display: none; }
+body.no-bar .tog::before { border-bottom: 6px solid #5f5f5f; border-top: 0; }
+.tog:hover::before { filter: brightness(1.6); }
+
+/* nothing to show; the pick tool's window gone (a Lightroom message box over the grid) */
+.empty { position: fixed; inset: 18px 0 47px; display: grid; place-items: center; align-content: center; padding: 24px; text-align: center; color: #929292; font-size: 1.05rem; line-height: 1.8; pointer-events: none; }
+.msg { position: fixed; left: 50%; top: 34px; transform: translateX(-50%); z-index: 2; max-width: calc(100vw - 32px); padding: 8px 18px; border-radius: 6px;
+  background: rgba(20, 20, 19, .94); color: #fff; font-size: 15px; line-height: 22px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; pointer-events: none; }

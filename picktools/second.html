@@ -4,28 +4,24 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="robots" content="noindex">
-<title>照片挑選・副螢幕</title>
+<title>照片挑選 - 輔助顯示視窗</title>
 <link rel="icon" href="assets/logo.svg" type="image/svg+xml">
 <link rel="stylesheet" href="/fonts/noto-sans-tc.css">
 <link rel="stylesheet" href="/fonts/source-sans-3.css">
 <link rel="stylesheet" href="assets/second.css">
 </head>
 <body>
-<!-- 照片挑選's second window (Lightroom's secondary display): every photo as a grid, following the one you're on in
-     the pick tool's window (assets/second.js). -->
-<header class="bar">
-  <img class="logo" src="assets/logo.svg" alt="" width="22" height="22">
-  <p class="pos" id="sPos">副螢幕</p>
-  <p class="state" id="sState" hidden>照片挑選關掉了・再打開放進照片，這裡會自動換上</p>
-  <p class="counts" id="sCounts"></p>
-  <div class="size" role="group" aria-label="縮圖大小">
-    <button type="button" id="sSmaller" title="縮圖小一點（−）" aria-label="縮圖小一點"><svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><rect x="4" y="4" width="4.5" height="4.5" rx=".8"/><rect x="9.75" y="4" width="4.5" height="4.5" rx=".8"/><rect x="15.5" y="4" width="4.5" height="4.5" rx=".8"/><rect x="4" y="9.75" width="4.5" height="4.5" rx=".8"/><rect x="9.75" y="9.75" width="4.5" height="4.5" rx=".8"/><rect x="15.5" y="9.75" width="4.5" height="4.5" rx=".8"/><rect x="4" y="15.5" width="4.5" height="4.5" rx=".8"/><rect x="9.75" y="15.5" width="4.5" height="4.5" rx=".8"/><rect x="15.5" y="15.5" width="4.5" height="4.5" rx=".8"/></svg></button>
-    <button type="button" id="sBigger" title="縮圖大一點（＋）" aria-label="縮圖大一點"><svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><rect x="4" y="4" width="7" height="7" rx="1"/><rect x="13" y="4" width="7" height="7" rx="1"/><rect x="4" y="13" width="7" height="7" rx="1"/><rect x="13" y="13" width="7" height="7" rx="1"/></svg></button>
-  </div>
-  <button type="button" class="full" id="sFull" title="全螢幕（F）">全螢幕</button>
-</header>
+<!-- 照片挑選's second window, as Lightroom's secondary display: every photo as a grid, following the one you're on in
+     the pick tool's window (assets/second.js). A black strip on top, the grid, the toolbar under it. -->
+<div class="top"><button type="button" class="grip" id="sGrip" title="全螢幕（F）" aria-label="全螢幕"></button></div>
 <main class="grid" id="sGrid" tabindex="-1" aria-label="所有照片"><div class="grid-in" id="sIn"></div></main>
+<p class="msg" id="sState" role="status" hidden>照片挑選關掉了・再打開放進照片，這裡會自動換上</p>
 <p class="empty" id="sEmpty">打開「照片挑選」放進照片，所有照片就會排在這裡。<br>這個視窗可以一直開著：換一批照片，這裡會自動換上。</p>
+<footer class="bar" id="sBar">
+  <p class="src"><span id="sSrc">上次讀入</span><span class="pos" id="sPos"></span><i class="caret" aria-hidden="true"></i></p>
+  <label class="zoom"><span>縮圖</span><input type="range" id="sSize" min="110" max="420" step="1" aria-label="縮圖大小（−、＋）"></label>
+</footer>
+<button type="button" class="tog" id="sTog" tabindex="-1" title="隱藏或顯示工具列" aria-label="隱藏或顯示工具列"></button>
 <script src="assets/second.js"></script>
 </body>
 </html>

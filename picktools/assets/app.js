@@ -515,9 +515,42 @@
     if (n === 2) return items.length > 0 && !loading;
     return items.length > 0 && !loading && counts().keep + counts().none > 0;
   }
+  // Between the light steps (1 放入照片, 3 存下來) and the dark one (2 挑照片, Lightroom's), the home page's sweep:
+  // bands cross from the bottom left to the top right, the last one in the colour of where you're going covers the
+  // screen, the step changes under it, and it moves on. Not with reduced motion.
+  let turning = false;
   function goto(n, force) {
-    if (!force && !allowed(n)) return;
+    if (turning || (!force && !allowed(n))) return;
     const was = S.step;
+    if ((was === 2) !== (n === 2) && !matchMedia('(prefers-reduced-motion: reduce)').matches && !document.fullscreenElement) {
+      turning = true;
+      sweep(n === 2, () => enter(n, was)).finally(() => { turning = false; });
+      return;
+    }
+    enter(n, was);
+  }
+  const SWEEP = { dark: ['#9a3dbf', '#3b1f4a', '#000'], light: ['#3b1f4a', '#9a3dbf', '#faf7fc'] };
+  const frame2 = () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(() => r())));
+  async function sweep(dark, atCovered) {
+    const box = $('#sweep'), W = innerWidth, H = innerHeight;
+    const across = (W + H) / Math.SQRT2, thick = across * 1.25, long = Math.hypot(W, H) * 2, far = (thick + across) / 2 + 8;
+    const at = (d) => `translate(${(d * Math.SQRT1_2).toFixed(1)}px, ${(-d * Math.SQRT1_2).toFixed(1)}px) rotate(45deg)`;
+    const DUR = 420, STEP = 45, bands = [...box.children];
+    bands.forEach((band, i) => Object.assign(band.style, { width: `${long}px`, height: `${thick}px`, marginLeft: `${-long / 2}px`, marginTop: `${-thick / 2}px`, background: SWEEP[dark ? 'dark' : 'light'][i] }));
+    box.hidden = false;
+    const runs = bands.slice(0, 2).map((band, i) => band.animate([{ transform: at(-far) }, { transform: at(far) }], { duration: DUR, delay: i * STEP, easing: 'cubic-bezier(.45, 0, .2, 1)', fill: 'both' }));
+    const last = bands[2];
+    const inn = last.animate([{ transform: at(-far) }, { transform: at(0) }], { duration: DUR * 0.55, delay: 2 * STEP, easing: 'cubic-bezier(.45, 0, 1, 1)', fill: 'both' });
+    try { await inn.finished; } catch {}
+    try { atCovered(); } catch (e) { console.error(e); }
+    await frame2();   // the new step is on screen under the band
+    const out = last.animate([{ transform: at(0) }, { transform: at(far) }], { duration: DUR * 0.6, easing: 'cubic-bezier(0, 0, .2, 1)', fill: 'forwards' });
+    inn.cancel();
+    try { await out.finished; } catch {}
+    box.hidden = true;
+    for (const r of [...runs, out]) r.cancel();
+  }
+  function enter(n, was) {
     S.step = n;
     for (let i = 1; i <= 3; i++) $(`#step${i}`).hidden = i !== n;
     document.body.classList.toggle('culling', n === 2);
@@ -1365,17 +1398,17 @@
   }
   function sendList() {
     sentGen = viewGen; sentAny = true;
-    post('list', { list: view.map((it) => [it.key, it.name, it.dir]), filter: S.filter, used: document.hasFocus() ? Date.now() : usedAt });
+    post('list', { list: view.map((it) => [it.key, it.name, it.dir]), filter: S.filter, src: S.folder, used: document.hasFocus() ? Date.now() : usedAt });
   }
   function sendState() {
     const flags = new Int8Array(view.length);
     view.forEach((it, i) => { flags[i] = flagOf(it); });
     const picked = S.grid && sel.size > 1 ? view.reduce((a, it, i) => (sel.has(it) ? (a.push(i), a) : a), []) : [];
-    post('state', { len: view.length, pos, flags, sel: picked, counts: shownCounts(), filter: S.filter });
+    post('state', { len: view.length, pos, flags, sel: picked, counts: shownCounts(), filter: S.filter, src: S.folder });
   }
   async function sendThumbs(list) {
     const out = [];
-    for (const it of list) { try { out.push({ k: it.key, blob: new Blob([await it.thumb.arrayBuffer()], { type: 'image/jpeg' }), turn: it.turn }); } catch {} }
+    for (const it of list) { try { const [w, h] = dims(it); out.push({ k: it.key, blob: new Blob([await it.thumb.arrayBuffer()], { type: 'image/jpeg' }), turn: it.turn, ratio: w / h }); } catch {} }
     if (out.length) post('thumbs', { list: out });
   }
   function queueSecond() {
