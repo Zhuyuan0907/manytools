@@ -5,12 +5,12 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#ffffff">
 <title>ZhuyuanLovePick・照片挑選</title>
-<meta name="description" content="幾千張照片也能快速挑：Google Drive 下載的 ZIP 直接放進來，用鍵盤一張一張看，跟 Lightroom 一樣 P 留用、X 排除、U 取消，也可以先讓 AI 照你的標準初選（審核、精選、選最好的一張）。挑好的照原本的資料夾存成資料夾或 ZIP。旗標會自動記住，下次接著挑。照片只在你的電腦裡處理，不會上傳。">
+<meta name="description" content="幾千張照片也能快速挑：Google Drive 下載的 ZIP 直接放進來，用鍵盤一張一張看，跟 Lightroom 一樣 P 留用、X 排除、U 取消，挑好的照原本的資料夾存成資料夾或 ZIP。旗標會自動記住，下次接著挑。照片只在你的電腦裡處理，不會上傳。">
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="ZhuyuanTools">
 <meta property="og:locale" content="zh_TW">
 <meta property="og:title" content="ZhuyuanLovePick・照片挑選">
-<meta property="og:description" content="幾千張照片也能快速挑：Google Drive 下載的 ZIP 直接放進來，用鍵盤一張一張看，跟 Lightroom 一樣 P 留用、X 排除、U 取消，也可以先讓 AI 照你的標準初選（審核、精選、選最好的一張）。挑好的照原本的資料夾存成資料夾或 ZIP。旗標會自動記住，下次接著挑。照片只在你的電腦裡處理，不會上傳。">
+<meta property="og:description" content="幾千張照片也能快速挑：Google Drive 下載的 ZIP 直接放進來，用鍵盤一張一張看，跟 Lightroom 一樣 P 留用、X 排除、U 取消，挑好的照原本的資料夾存成資料夾或 ZIP。旗標會自動記住，下次接著挑。照片只在你的電腦裡處理，不會上傳。">
 <meta property="og:url" content="https://tools.zhuyuan.tw/pick">
 <meta property="og:image" content="https://tools.zhuyuan.tw/pick/assets/og.png">
 <meta property="og:image:width" content="1200">
@@ -34,7 +34,7 @@
     <span class="demo-tag" id="demoTag" hidden title="照片是網站提供的示範，挑一挑、存下來看看">示範模式</span>
     <p class="privacy">
       <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="10" width="16" height="11" rx="2"></rect><path d="M8 10V7a4 4 0 0 1 8 0v3"></path></svg>
-      <span class="privacy-long">照片只在你的電腦裡處理，不會上傳（AI 初選才會傳縮圖給 AI）。</span><span class="privacy-short">不上傳</span>
+      <span class="privacy-long">照片只在你的電腦裡處理，不會上傳到任何伺服器。</span><span class="privacy-short">不上傳</span>
     </p>
   </header>
 
@@ -42,9 +42,8 @@
     <p class="m-step" id="mStep" aria-hidden="true"></p>
     <ol>
       <li><button type="button" data-goto="1"><span class="dot">1</span><span class="lbl">放入照片</span></button></li>
-      <li><button type="button" data-goto="4"><span class="dot">2</span><span class="lbl">AI 初選</span></button></li>
-      <li><button type="button" data-goto="2"><span class="dot">3</span><span class="lbl">挑照片</span></button></li>
-      <li><button type="button" data-goto="3"><span class="dot">4</span><span class="lbl">檢視下載</span></button></li>
+      <li><button type="button" data-goto="2"><span class="dot">2</span><span class="lbl">挑照片</span></button></li>
+      <li><button type="button" data-goto="3"><span class="dot">3</span><span class="lbl">檢視下載</span></button></li>
     </ol>
   </nav>
   <!-- the culling screen, as Lightroom's: ▲ hides the bar above (F5) -->
@@ -111,69 +110,8 @@
       </div>
       <div class="panel-foot">
         <span class="foot-note" id="note1">還沒有放入照片。</span>
-        <button type="button" class="btn" id="next1ai" disabled title="先讓 AI 和這台電腦看過一遍：連拍分組、清晰度、照你的標準給建議">AI 初選</button>
         <button type="button" class="btn primary" id="next1" disabled>開始挑 →</button>
       </div>
-    </section>
-
-    <!-- ============ AI 初選 (step 4, shown second) ============ -->
-    <!-- The photos in sets taken one after another (a burst kept together), a set at a time side by side: what this
-         computer measured (which frame of a burst is sharpest, exposure) and what the AI says by the user's standard;
-         照建議 with one key. The sets on the left, the standard and the run on the right. Dark, as 挑照片. -->
-    <section class="panel fill aip" id="step4" aria-labelledby="h4t" hidden>
-      <h2 class="sr" id="h4t">AI 初選</h2>
-      <aside class="ai-list" aria-label="照片組">
-        <div class="ai-lh">
-          <b id="aiCount"></b>
-          <span class="ai-show" role="radiogroup" aria-label="顯示">
-            <label><input type="radio" name="aishow" value="all" checked><span>全部</span></label>
-            <label><input type="radio" name="aishow" value="todo"><span>待看</span></label>
-            <label><input type="radio" name="aishow" value="done"><span>已決定</span></label>
-          </span>
-        </div>
-        <ol class="ai-sets" id="aiSets"></ol>
-      </aside>
-      <div class="ai-main">
-        <div class="ai-head">
-          <button type="button" class="ai-nav" id="aiPrev" title="上一組（↑）" aria-label="上一組"><svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="M10 3 5 8l5 5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
-          <p class="ai-title" id="aiTitle"></p>
-          <button type="button" class="ai-nav" id="aiNext" title="下一組（↓）" aria-label="下一組"><svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="m6 3 5 5-5 5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
-        </div>
-        <div class="ai-stage" id="aiStage">
-          <div class="ai-grid" id="aiGrid"></div>
-          <div class="ai-one" id="aiOne" hidden></div>
-          <p class="ai-wait" id="aiWait" hidden></p>
-        </div>
-        <div class="ai-say">
-          <div class="ai-words"><p class="ai-sum" id="aiSum"></p><p class="ai-cur" id="aiCur"></p></div>
-          <div class="ai-acts">
-            <button type="button" class="btn small" id="aiAllDrop" title="這組每一張都排除（Shift＋X）">這組都不要</button>
-            <button type="button" class="btn small" id="aiAllKeep" title="這組每一張都留用（Shift＋P）">這組全留</button>
-            <button type="button" class="btn small primary" id="aiAccept" title="照建議標好，到下一組（Enter）">照建議 <kbd>Enter</kbd></button>
-          </div>
-        </div>
-      </div>
-      <aside class="ai-std" id="aiStd" aria-label="我的標準">
-        <div class="ai-sh"><h3>我的標準</h3><button type="button" class="link-btn" id="aiReset" title="這個用途的設定回到預設">預設</button></div>
-        <div class="ai-task" role="radiogroup" aria-label="用途">
-          <label><input type="radio" name="aitask" value="review"><span><b>審核</b><i>擋下不能公開的：放上 Flickr 前</i></span></label>
-          <label><input type="radio" name="aitask" value="select"><span><b>精選</b><i>從大量照片挑出精彩的：球賽、活動</i></span></label>
-          <label><input type="radio" name="aitask" value="best"><span><b>最好的一張</b><i>幾張裡選最好看的：人像、IG</i></span></label>
-        </div>
-        <div class="ai-opts" id="aiOpts"></div>
-        <label class="ai-extra"><span>我的規則</span><textarea id="aiExtra" rows="2" maxlength="200" placeholder="例如：掛紅色掛繩的人不要清楚入鏡"></textarea></label>
-        <div class="ai-run">
-          <p class="ai-local" id="aiLocal"></p>
-          <p class="ai-conn" id="aiConn"></p>
-          <form class="ai-code" id="aiCodeBox" hidden><input type="password" id="aiCode" placeholder="輸入邀請碼" autocomplete="off" aria-label="邀請碼"><button type="submit" class="btn small">確定</button></form>
-          <div class="ai-go"><select id="aiModel" aria-label="AI 模型"></select><button type="button" class="btn primary small" id="aiRun">開始 AI 分析</button></div>
-          <p class="ai-note">AI 分析會把縮小的照片（長邊 768 px）經本站傳給 AI（Google Gemini 等）看，不保存。清晰度、曝光、連拍分組在你的電腦裡算。</p>
-        </div>
-        <div class="ai-tot">
-          <p id="aiTot"></p>
-          <div class="ai-tot-b"><button type="button" class="btn small" id="aiAcceptAll">全部照建議</button><button type="button" class="btn primary small" id="next4">到挑照片 →</button></div>
-        </div>
-      </aside>
     </section>
 
     <!-- ============ STEP 2 ============ -->

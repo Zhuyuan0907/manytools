@@ -1,9 +1,7 @@
 /* ZhuyuanLovePick — culling thousands of photos in the browser: what a photo team gets from Google Drive, picked by
    keyboard. Three steps: 1 ZIPs (Drive's download, as it is), folders or photos in → 2 one photo at a time, the way
    Lightroom Classic's Library does it: P 留用, X 排除, U takes the flag off, ← →, Z for 100 % (it stays on while you
-   go through a burst), G for a grid, I for the photo's details in the corner (before it, if wanted, AI 初選: this
-   computer finds the bursts and their sharpest frames, an AI judges sets of photos by the user's standard, and its
-   advice is taken a set at a time) → 3 the kept ones where they were, in a
+   go through a burst), G for a grid, I for the photo's details in the corner → 3 the kept ones where they were, in a
    Finder window (the photographers sort into folders themselves), then saved with their folders into a folder
    (Chrome, Edge) or a ZIP, one photo as itself.
    A ZIP is read where it lies: its directory, then each photo's first part for the time, camera and the little
@@ -143,7 +141,6 @@
   //       thumb (Blob | null: none in the file | undefined: not read), turn (the thumbnail still needs the photo's
   //       orientation), n (place in the sorted list) }
   let items = [];
-  let itemsGen = 0;   // bumped when photos come in or go (AI 初選's sets are made again)
   const byKey = new Map();
   let sources = [];   // { id, name, kind: 'zip' | 'folder' | 'files', n }
   let skipped = { raw: 0, other: 0, same: 0 };
@@ -270,7 +267,6 @@
       await readAll(fresh);
       for (const it of fresh) byKey.set(it.key, it);
       items = items.concat(fresh);
-      itemsGen++;
       sources = sources.concat(added.filter((s) => s.n));
       const inChosen = S.folder ? items.find((it) => it.dir === S.folder) : null;
       placeDirs();
@@ -283,7 +279,7 @@
     if (!fresh.length) toast(skipped.same && !skipped.raw && !skipped.other ? '這些照片已經放進來了' : '裡面沒有找到照片（JPG、HEIC、PNG）', 5000);
     else if (skip.length) toast(`加了 ${num(fresh.length)} 張・略過 ${skip.join('、')}`, 5000);
     renderStep1();
-    if (fresh.length) { rebuildView(back === 2 ? current() : firstOpen()); goto(back === 4 || (back !== 2 && S.route === 'ai') ? 4 : 2); } else if (back !== 1 && items.length) goto(back); else renderStepper();
+    if (fresh.length) { rebuildView(back === 2 ? current() : firstOpen()); goto(2); } else if (back !== 1 && items.length) goto(back); else renderStepper();
   }
   // Folders are shown from where the photos part ways: "SITCON 2027/王小明/…" with everyone under "SITCON 2027"
   // reads as "王小明".
@@ -397,12 +393,7 @@
   }
 
   // ---------- marks, kept in this browser ----------
-  // In one store, by the photo's key: its flag; and for AI 初選 ('m|', 'a|', 'd|' before the key) what this computer
-  // measured, what the AI said, and the sets whose advice was taken (by their first photo).
   const marks = new Map();   // key → 1 留用 | -1 排除
-  const measured = new Map();   // key → { sharp, mean, hi, lo, hash, sig }
-  const verdicts = new Map();   // key → { v: 'keep' | 'maybe' | 'drop', rank, issues, why, sum, sig (the standard), model }
-  const decided = new Set();
   const db = (() => {
     let p = null;
     const open = () => p || (p = new Promise((res, rej) => {
@@ -416,11 +407,11 @@
         const d = await open();
         await new Promise((res) => {
           const rq = d.transaction('marks').objectStore('marks').openCursor();
-          rq.onsuccess = () => { const c = rq.result; if (c) { const k = c.key, p = k.slice(0, 2); if (p === 'm|') measured.set(k.slice(2), c.value); else if (p === 'a|') verdicts.set(k.slice(2), c.value); else if (p === 'd|') decided.add(k.slice(2)); else if (p !== 'c|') marks.set(k, c.value); c.continue(); } else res(); };   // ('c|': a day's categories, no more)
+          rq.onsuccess = () => { const c = rq.result; if (c) { if (!c.key.startsWith('c|')) marks.set(c.key, c.value); c.continue(); } else res(); };   // ('c|': a day's categories, no more)
           rq.onerror = () => res();
         });
       },
-      async put(list) {   // [[key, 1 | -1 | 0 | a value]] (nothing: taken out)
+      async put(list) {   // [[key, 1 | -1 | 0]]
         const d = await open(), tx = d.transaction('marks', 'readwrite'), st = tx.objectStore('marks');
         for (const [k, v] of list) { if (v) st.put(v, k); else st.delete(k); }
         await new Promise((r) => { tx.oncomplete = tx.onerror = tx.onabort = r; });
@@ -475,8 +466,8 @@
   const SAVED = 'zt-pick';
   // step 3: fdir (the folder open, '' the top), fview ('icons' | 'list'), fsort ('name' | 'time' | 'size') and fdesc,
   // fall (the photos not picked shown too), ftile (the icons' size)
-  const S = { step: 1, filter: 'all', folder: '', sort: 'time', auto: true, info: true, tip: true, grid: false, take: 'keep', flags: false, film: true, fdir: '', fview: 'icons', fsort: 'name', fdesc: false, fall: false, ftile: 150, route: 'pick' };
-  const KEPT = ['sort', 'auto', 'info', 'tip', 'flags', 'film', 'fview', 'fsort', 'fdesc', 'ftile', 'route'];   // route: after photos come in, 'ai' (AI 初選) or 'pick'
+  const S = { step: 1, filter: 'all', folder: '', sort: 'time', auto: true, info: true, tip: true, grid: false, take: 'keep', flags: false, film: true, fdir: '', fview: 'icons', fsort: 'name', fdesc: false, fall: false, ftile: 150 };
+  const KEPT = ['sort', 'auto', 'info', 'tip', 'flags', 'film', 'fview', 'fsort', 'fdesc', 'ftile'];
   try { const o = JSON.parse(localStorage.getItem(SAVED)) || {}; for (const k of KEPT) if (k in o) S[k] = o[k]; } catch {}
   const remember = () => { try { localStorage.setItem(SAVED, JSON.stringify(Object.fromEntries(KEPT.map((k) => [k, S[k]])))); } catch {} };
   let view = [];   // the photos shown, in order
@@ -520,14 +511,11 @@
   }
 
   // ---------- steps ----------
-  // AI 初選 is step 4 but comes second: 放入照片 → AI 初選 → 挑照片 → 檢視下載. The dark ones: 挑照片 and AI 初選.
-  const ORDER = [1, 4, 2, 3];
-  const STEP_NAMES = { 1: '放入照片', 4: 'AI 初選', 2: '挑照片', 3: '檢視下載' };
-  const DARK = (n) => n === 2 || n === 4;
+  const STEP_NAMES = ['放入照片', '挑照片', '檢視下載'];
   function allowed(n) {
     if (export_.busy) return n === 3;
     if (n === 1) return true;
-    if (n === 2 || n === 4) return items.length > 0 && !loading;
+    if (n === 2) return items.length > 0 && !loading;
     return items.length > 0 && !loading && counts().keep + counts().none > 0;
   }
   // Between the light steps (1 放入照片, 3 存下來) and the dark one (2 挑照片, Lightroom's), the home page's sweep:
@@ -537,9 +525,9 @@
   function goto(n, force) {
     if (turning || (!force && !allowed(n))) return;
     const was = S.step;
-    if (DARK(was) !== DARK(n) && !matchMedia('(prefers-reduced-motion: reduce)').matches && !document.fullscreenElement) {
+    if ((was === 2) !== (n === 2) && !matchMedia('(prefers-reduced-motion: reduce)').matches && !document.fullscreenElement) {
       turning = true;
-      sweep(DARK(n), () => enter(n, was)).finally(() => { turning = false; });
+      sweep(n === 2, () => enter(n, was)).finally(() => { turning = false; });
       return;
     }
     enter(n, was);
@@ -567,9 +555,8 @@
   }
   function enter(n, was) {
     S.step = n;
-    for (const i of ORDER) $(`#step${i}`).hidden = i !== n;
-    document.body.classList.toggle('culling', DARK(n));
-    document.body.classList.toggle('aiing', n === 4);
+    for (let i = 1; i <= 3; i++) $(`#step${i}`).hidden = i !== n;
+    document.body.classList.toggle('culling', n === 2);
     document.body.classList.toggle('reviewing', n === 3);
     if (n !== 3) closePeek();
     if (n === 2) { if (was !== 2) { if (!current()) rebuildView(firstOpen()); requestAnimationFrame(() => { layout(); show(); refresh(); }); tip(); } }
@@ -577,23 +564,20 @@
     // back in step 3 after a save: ready to save again (unless a save is still going)
     if (n === 3) { if (was !== 3 && !export_.busy) fresh3(); else renderStep3(); }
     if (n === 1 && was !== 1) renderStep1();
-    if (n === 4) enterAI(was);
-    else if (was === 4) leaveAI();
     renderStepper();
   }
   document.addEventListener('click', (e) => { const b = e.target.closest('[data-goto]'); if (b && !b.disabled) goto(+b.dataset.goto); });
-  $('#next1').addEventListener('click', () => { if (S.route !== 'pick') { S.route = 'pick'; remember(); } goto(2); });
-  $('#next1ai').addEventListener('click', () => { if (S.route !== 'ai') { S.route = 'ai'; remember(); } goto(4); });
+  $('#next1').addEventListener('click', () => goto(2));
   for (const b of $$('.go2')) b.addEventListener('click', () => goto(3));
   function renderStepper() {
     for (const b of $$('.stepper button')) {
       const n = +b.dataset.goto;
       b.classList.toggle('current', n === S.step);
-      b.classList.toggle('done', ORDER.indexOf(n) < ORDER.indexOf(S.step));
+      b.classList.toggle('done', n < S.step);
       b.disabled = n !== S.step && !allowed(n);
       b.setAttribute('aria-current', n === S.step ? 'step' : 'false');
     }
-    $('#mStep').replaceChildren(`步驟 ${ORDER.indexOf(S.step) + 1}／4・`, el('b', { text: STEP_NAMES[S.step] }));
+    $('#mStep').replaceChildren(`步驟 ${S.step}／3・`, el('b', { text: STEP_NAMES[S.step - 1] }));
   }
 
   // ---------- step 1 ----------
@@ -625,7 +609,6 @@
     $('#drop .drop-title .d-desk').textContent = n ? '再加 ZIP 或資料夾：拖進這裡' : '把 ZIP 或資料夾拖進這裡';
     $('#note1').replaceChildren(...(!n ? ['還沒有放入照片。'] : ['共 ', el('b', { text: num(n) }), ` 張・${sources.length} 個來源`]));
     $('#next1').disabled = !allowed(2);
-    $('#next1ai').disabled = !allowed(4);
     $('#next1').textContent = done ? '接著挑 →' : '開始挑 →';
     renderFolders();
   }
@@ -633,7 +616,6 @@
     if (loading) return;
     sources = sources.filter((x) => x !== s);
     items = items.filter((it) => { if (it.src !== s) return true; byKey.delete(it.key); forget(it); return false; });
-    itemsGen++;
     placeDirs(); sortItems();
     if (S.folder && !items.some((it) => it.dir === S.folder)) S.folder = '';
     rebuildView(firstOpen());
@@ -1091,7 +1073,6 @@
       exp.length ? el('span', {}, ...exp) : null,
       it.fl || it.lens ? el('span', { text: it.fl && it.lens ? `${it.fl} (${it.lens})` : it.fl || it.lens }) : null,
       el('span', { text: [it.when, it.cam, it.dir].filter(Boolean).join('・') }),
-      verdicts.has(it.key) ? el('span', { class: 'ov-ai', text: `AI ${aiWord(verdicts.get(it.key).v)}${verdicts.get(it.key).why ? `：${verdicts.get(it.key).why}` : ''}` }) : null,
     ];
   }
   function info(it) {
@@ -1764,595 +1745,6 @@
     pos = i;
     show(); refresh();
   }
-
-  // ---------- AI 初選 (step 4, shown second): this computer measures, the AI judges by your standard, you decide ----------
-  // "Good" is two things. What's wrong for anyone — a shaken or missed frame, closed eyes, a ruined exposure, the same
-  // moment five times — and what depends on taste and purpose. The first is measured here where it can be (free,
-  // private, at once): bursts by time and look, and which frame of a burst is sharpest. Sharpness is only compared
-  // inside a burst, where the frames show the same thing (across different photos a smooth face measures "soft" beside
-  // a busy crowd). The rest is the AI's, asked the question the user's purpose needs (server/ai.js): 審核 (what mustn't
-  // go up on Flickr; everything else passes), 精選 (a game's thousands down to the good ones), 最好的一張 (a few,
-  // ranked; the sets' winners meet in a final). It sees a set of up to eight photos taken one after another, compares
-  // them, and says for each what it is and why: words, not stars. Nothing is flagged until its advice is taken (Enter,
-  // or 全部照建議); any photo can be changed (P, X, U).
-  const AI_SAVED = 'zt-pick-ai';
-  const TASK_DEFAULTS = {
-    review: { keep: 0, avoid: ['awkward', 'indecent', 'privacy', 'nophoto', 'broken'], focus: [], strict: 2, tilt: 'any', fg: 'any', extra: '' },
-    select: { keep: 1, avoid: [], focus: ['moment', 'face', 'whole', 'story'], strict: 2, tilt: 'any', fg: 'any', extra: '' },
-    best: { keep: 1, avoid: [], focus: ['face', 'eyes', 'light', 'clean'], strict: 2, tilt: 'any', fg: 'any', extra: '' },
-  };
-  const WORDS = { review: { keep: '可以放', maybe: '要看一下', drop: '不能放' }, select: { keep: '精選', maybe: '備選', drop: '不要' }, best: { keep: '第一', maybe: '備選', drop: '不要' } };
-  const AVOID_L = { awkward: ['尷尬瞬間', '吃東西、嘴巴大開、閉眼、怪表情'], indecent: ['不雅', '走光、內衣、不雅姿勢或手勢'], privacy: ['隱私', '看得清楚的螢幕、證件、手機畫面、個資'], nophoto: ['不拍照的人', '有「不拍照」標示，或在躲鏡頭的人'], negative: ['負面形象', '睡覺、很無聊、滑手機、冷清'], broken: ['技術失敗', '糊到看不清、全黑、全白'] };
-  const FOCUS_L = { moment: ['瞬間', '動作、手勢、互動的高峰'], face: ['表情', '自然、專注或笑'], eyes: ['眼神', '眼睛睜開、看著重點'], whole: ['主體完整', '不被擋、不切到頭手腳'], story: ['故事性', '看得出在做什麼'], clean: ['背景乾淨', '沒有雜物、路人'], light: ['光線', '受光好、膚色好看'], frame: ['構圖', '位置、線條、留白'], mood: ['氛圍', '情緒、顏色'] };
-  const AI = { task: 'review', per: {}, model: '', code: '', status: null, running: false, stopping: false, err: '', sets: [], gen: -1, at: 0, cur: 0, one: false, show: 'all', todo: 0, doneN: 0, mDone: 0, mTotal: 0 };
-  try {
-    const v = JSON.parse(localStorage.getItem(AI_SAVED)) || {};
-    if (TASK_DEFAULTS[v.task]) AI.task = v.task;
-    if (v.per && typeof v.per === 'object') AI.per = v.per;
-    AI.model = String(v.model || ''); AI.code = String(v.code || '');
-  } catch {}
-  const keepAI = () => { try { localStorage.setItem(AI_SAVED, JSON.stringify({ task: AI.task, per: AI.per, model: AI.model, code: AI.code })); } catch {} };
-  const std = () => ({ task: AI.task, ...TASK_DEFAULTS[AI.task], ...(AI.per[AI.task] || {}), ...(AI.task === 'best' ? { keep: 1 } : {}) });
-  const stdSig = () => JSON.stringify(std());   // what a verdict was judged by: another standard, and it's old
-  const aiWord = (v) => (WORDS[AI.task] || WORDS.select)[v] || '';
-  const curSet = () => AI.sets[AI.at] || null;
-  const hm = (t) => { const d = new Date(t); return `${pad2(d.getUTCHours())}:${pad2(d.getUTCMinutes())}`; };
-  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-  const pend = [];   // measures and verdicts to keep, written a batch at a time
-  let pendTimer = 0;
-  const keepLater = (k, v) => { pend.push([k, v]); clearTimeout(pendTimer); pendTimer = setTimeout(() => save(pend.splice(0)), pend.length > 100 ? 0 : 800); };
-
-  // ---------- AI 初選: the measuring, in workers (assets/judge.js) ----------
-  const J_MAX = WEBKIT ? 2 : clamp((navigator.hardwareConcurrency || 4) - 2, 1, 4);
-  const jWorkers = [], jQueue = [];
-  let jSeq = 0, jIdle = 0;
-  const STAMP = (() => { try { return new URL(document.currentScript.src).searchParams.get('v') || ''; } catch { return ''; } })();
-  // a job: 'measure' (the measures, a thumbnail if there's none) or 'ai' (the 768 px JPEG); 'ai' first in line
-  function judgeJob(it, mode) {
-    return new Promise((res) => { const j = { it, mode, res }; if (mode === 'ai') jQueue.unshift(j); else jQueue.push(j); jPump(); });
-  }
-  function jPump() {
-    clearTimeout(jIdle);
-    while (jQueue.length) {
-      let wk = jWorkers.find((x) => !x.busy);
-      if (!wk) {
-        if (jWorkers.length >= J_MAX) return;
-        try { wk = { w: new Worker(`assets/judge.js${STAMP ? `?v=${STAMP}` : ''}`), busy: false, n: 0 }; } catch { for (const j of jQueue.splice(0)) j.res({ error: 'worker' }); return; }
-        jWorkers.push(wk);
-      }
-      jRun(wk, jQueue.shift());
-    }
-    // nothing to do for a while: the workers go (and the memory of their decodes)
-    jIdle = setTimeout(() => { for (const wk of [...jWorkers]) if (!wk.busy) { wk.w.terminate(); jWorkers.splice(jWorkers.indexOf(wk), 1); } }, 20000);
-  }
-  async function jRun(wk, job) {
-    wk.busy = true;
-    const { it, mode } = job;
-    let r;
-    try {
-      const blob = it.heic && !WEBKIT ? await heicJpeg(it, mode === 'ai' ? 768 : 1024) : await blobOf(it);
-      const ext = ((/\.([^.]+)$/.exec(it.name) || [])[1] || '').toLowerCase();
-      const type = { png: 'image/png', webp: 'image/webp', gif: 'image/gif', avif: 'image/avif' }[ext] || (it.heic && !WEBKIT ? 'image/jpeg' : blob.type || 'image/jpeg');
-      const id = ++jSeq;
-      r = await new Promise((res) => {
-        const t = setTimeout(() => res({ error: 'timeout', dead: true }), 30000);
-        wk.w.onmessage = ({ data }) => { if (data.id === id) { clearTimeout(t); res(data); } };
-        wk.w.onerror = (e) => { if (e && e.preventDefault) e.preventDefault(); clearTimeout(t); res({ error: 'worker', dead: true }); };
-        wk.w.postMessage({ id, blob, type, mode, decoder: FIREFOX, thumb: mode === 'measure' && !it.thumb });
-      });
-    } catch (e) { r = { error: String(e) }; }
-    wk.busy = false;
-    // WebKit keeps a decoded photo's memory until its worker goes: a fresh one every few
-    if (r.dead || (WEBKIT && ++wk.n >= 4)) { wk.w.terminate(); jWorkers.splice(jWorkers.indexOf(wk), 1); }
-    job.res(r);
-    jPump();
-  }
-  let measuring = null;
-  function measureAll() {
-    if (measuring) return measuring;
-    const todo = items.filter((it) => !measured.has(it.key));
-    if (!todo.length) return Promise.resolve();
-    AI.mDone = 0; AI.mTotal = todo.length;
-    const gen = itemsGen;
-    let last = 0;
-    measuring = Promise.all(todo.map((it) => judgeJob(it, 'measure').then((r) => {
-      if (r && r.m) {
-        measured.set(it.key, r.m);
-        keepLater(`m|${it.key}`, r.m);
-        if (!it.w && r.fw) { it.w = r.fw; it.h = r.fh; }
-        if (r.thumb && !it.thumb) { it.thumb = r.thumb; it.turn = 1; thumbArrived(it); }
-      }
-      AI.mDone++;
-      if (Date.now() - last > 300) { last = Date.now(); renderRun(); if (!AI.sets.length) renderSet(); }
-    }))).then(() => { measuring = null; if (S.step === 4 && gen === itemsGen) { AI.gen = -1; enterAI(4); } else renderRun(); });
-    return measuring;
-  }
-
-  // ---------- AI 初選: bursts and sets ----------
-  // A burst: frames a second or two apart that look alike (their 64-bit hashes differ in 20 bits or fewer; different
-  // photos differ in about 30), or 10 s apart and nearly the same (10). A set: what the AI sees at once, up to eight
-  // photos taken one after another (everyone's, in time), a burst kept whole; a new one after two minutes of nothing.
-  const ham = (a, b) => { let d = 0; for (let i = 0; i < 16; i += 4) { let x = parseInt(a.slice(i, i + 4), 16) ^ parseInt(b.slice(i, i + 4), 16); while (x) { d += x & 1; x >>= 1; } } return d; };
-  function buildSets() {
-    const list = items.slice().sort((a, b) => (a.t ?? Infinity) - (b.t ?? Infinity) || a.n - b.n);
-    const up = new Map(), find = (x) => { while (up.get(x) !== x) { up.set(x, up.get(up.get(x))); x = up.get(x); } return x; };
-    for (const it of list) up.set(it, it);
-    for (let i = 0; i < list.length; i++) {
-      const a = list[i], ma = measured.get(a.key);
-      for (let j = i - 1; j >= 0 && i - j <= 12; j--) {
-        const b = list[j], dt = (a.t - b.t) / 1000;
-        if (!(dt <= 10)) break;
-        const mb = measured.get(b.key), h = ma && mb ? ham(ma.hash, mb.hash) : 64;
-        if ((dt <= 2 && h <= 20) || h <= 10 || (!(ma && mb) && dt <= 1 && a.cam === b.cam)) up.set(find(a), find(b));
-      }
-    }
-    const groups = new Map();
-    for (const it of list) { const r = find(it); if (!groups.has(r)) groups.set(r, []); groups.get(r).push(it); }
-    const sets = [];
-    let cur = null, lastT = null;
-    for (const g of groups.values()) {
-      for (let k = 0; k < g.length; k += 8) {
-        const part = g.slice(k, k + 8), gap = lastT != null && part[0].t != null ? (part[0].t - lastT) / 1000 : 0;
-        if (!cur || cur.items.length + part.length > 8 || gap > 120) { cur = { items: [], bursts: [] }; sets.push(cur); }
-        const b = part.length > 1 ? cur.bursts.push(part) : 0;
-        for (const it of part) { cur.items.push(it); it.burst = b; it.inSet = cur; }
-        lastT = part[part.length - 1].t ?? lastT;
-      }
-    }
-    sets.forEach((s, i) => { s.id = s.items[0].key; s.i = i; s.err = ''; });
-    AI.sets = sets;
-  }
-
-  // ---------- AI 初選: what's said about a photo (the AI's, else this computer's) ----------
-  const sharpOf = (it) => (measured.get(it.key) || {}).sharp || 0;
-  function localSays(it) {
-    const m = measured.get(it.key), set = it.inSet, st = std();
-    if (!m || !set) return null;
-    if (it.burst && st.keep) {
-      const burst = set.bursts[it.burst - 1], ranked = burst.slice().sort((a, b) => sharpOf(b) - sharpOf(a)), r = ranked.indexOf(it), top = sharpOf(ranked[0]);
-      if (r < st.keep) return { v: 'keep', why: r ? '這組連拍第二清楚' : '這組連拍最清楚', issues: [] };
-      const rel = top ? m.sharp / top : 1;
-      return rel < 0.7 ? { v: 'drop', why: `比同組最清楚的那張模糊（${Math.round(rel * 100)}%）`, issues: ['手震'] } : { v: 'drop', why: '同組有更清楚的', issues: ['同組有更好的'] };
-    }
-    if (m.sharp < 9) return { v: 'maybe', why: '幾乎沒有清楚的地方（也可能是故意的）', issues: ['失焦'] };
-    if (m.lo > 0.5) return { v: 'maybe', why: '大半是黑的', issues: ['太暗'] };
-    if (m.hi > 0.35) return { v: 'maybe', why: '大片過曝', issues: ['過曝'] };
-    return null;
-  }
-  function says(it) {
-    const a = verdicts.get(it.key);
-    if (a) return { ...a, src: 'ai', old: a.sig !== stdSig() };
-    const l = localSays(it);
-    return l ? { ...l, src: 'local' } : null;
-  }
-  // what this computer tells the AI about a photo: where it stands in its burst, if it's nearly all soft or dark
-  function noteFor(it) {
-    const m = measured.get(it.key), set = it.inSet;
-    if (!m || !set) return '';
-    const out = [];
-    if (it.burst) {
-      const burst = set.bursts[it.burst - 1], top = Math.max(...burst.map(sharpOf));
-      out.push(`連拍裡清晰度是最清楚那張的 ${top ? Math.round((m.sharp / top) * 100) : 100}%`);
-    } else if (m.sharp < 9) out.push('幾乎沒有清楚的地方');
-    if (m.lo > 0.5) out.push('大半是黑的'); else if (m.mean < 45) out.push('偏暗');
-    if (m.hi > 0.35) out.push('大片過曝');
-    return out.join('，');
-  }
-
-  // ---------- AI 初選: asking the AI (through server/ai.js) ----------
-  const b64 = (blob) => new Promise((ok, no) => { const r = new FileReader(); r.onload = () => ok(String(r.result).slice(String(r.result).indexOf(',') + 1)); r.onerror = no; r.readAsDataURL(blob); });
-  const AI_ERR = { off: 'AI 還沒設定：只用這台電腦的分析', nocred: 'AI 那邊暫時沒有可用的帳號（Antigravity 要重新登入）', model: '這個模型不能用了，換一個', quota: 'AI 的額度用完了，等一下再試', busy: '同時太多人在用，等一下再試', net: '連不到 AI', code: '邀請碼不對', answer: 'AI 的回答看不懂', ai: 'AI 出錯了', photo: '照片太大' };
-  async function aiStatus(force) {
-    if (AI.status && !force) return AI.status;
-    try { const r = await fetch('api/ai/status', { headers: { 'X-Code': AI.code }, cache: 'no-store' }); AI.status = r.ok ? await r.json() : { on: false }; }
-    catch { AI.status = { on: false, net: true }; }
-    if (AI.status.models && AI.status.models.length && !AI.status.models.some((m) => m.id === AI.model)) AI.model = AI.status.models[0].id;
-    return AI.status;
-  }
-  // (final: the winners of different sets, no bursts among them)
-  async function judge(list, std0, final) {
-    const shots = await Promise.all(list.map((it) => judgeJob(it, 'ai')));
-    if (shots.some((r) => !r.jpg)) return { error: 'decode' };
-    const photos = await Promise.all(list.map(async (it, k) => ({ jpg: await b64(shots[k].jpg), burst: final ? 0 : it.burst || 0, note: final ? '' : noteFor(it) })));
-    for (let attempt = 0; ; attempt++) {
-      let r, j;
-      try { r = await fetch('api/ai/judge', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ code: AI.code, model: AI.model, std: std0, photos }) }); j = await r.json().catch(() => ({})); }
-      catch { j = { error: 'net' }; r = { ok: false, status: 0 }; }
-      if (r.ok) return j;
-      if ((r.status === 429 || r.status === 0) && attempt < 2) { await sleep(8000 * (attempt + 1)); continue; }
-      return { error: j.error || 'ai', status: r.status };
-    }
-  }
-  async function runAI() {
-    if (AI.running) { AI.stopping = true; renderRun(); return; }
-    const st = await aiStatus(true);
-    if (!st.on) { AI.err = AI_ERR.off; renderRun(); return; }
-    if (!st.ok) { AI.err = AI.code ? AI_ERR.code : ''; renderRun(); $('#aiCode').focus(); return; }
-    AI.running = true; AI.stopping = false; AI.err = '';
-    renderRun();
-    await measureAll();
-    if (AI.gen !== itemsGen) { buildSets(); AI.gen = itemsGen; }
-    const sig = stdSig(), std0 = std(), stale = (s) => s.items.some((it) => { const v = verdicts.get(it.key); return !v || v.sig !== sig; });
-    const order = [...AI.sets.slice(AI.at), ...AI.sets.slice(0, AI.at)].filter((s) => !decided.has(s.id) && stale(s));
-    for (const s of order) s.err = '';
-    AI.todo = order.length; AI.doneN = 0;
-    let i = 0;
-    const lane = async () => {
-      while (i < order.length && !AI.stopping) {
-        const set = order[i++];
-        set.busy = true; renderRow(set);
-        const j = await judge(set.items, std0);
-        set.busy = false;
-        if (j.error) {
-          set.err = AI_ERR[j.error] || '沒有成功';
-          if (['off', 'nocred', 'model', 'code', 'quota'].includes(j.error)) { AI.stopping = true; AI.err = AI_ERR[j.error]; if (j.error === 'code') AI.status.ok = false; }
-        } else {
-          set.err = '';
-          set.items.forEach((it, k) => { const p = j.photos[k], v = { v: p.verdict, rank: p.rank || 0, issues: p.issues, why: p.why, sum: j.summary, sig, model: j.model }; verdicts.set(it.key, v); keepLater(`a|${it.key}`, v); });
-        }
-        AI.doneN++;
-        renderRow(set); renderRun(); renderTot();
-        if (set === curSet()) renderSet();
-      }
-    };
-    await Promise.all([lane(), lane()]);
-    if (AI.task === 'best' && !AI.stopping) await finalRound(sig, std0);
-    AI.running = false; AI.stopping = false;
-    const failed = AI.sets.filter((s) => s.err).length;
-    if (failed && !AI.err) AI.err = `${num(failed)} 組沒有成功：再按一次「繼續 AI 分析」重試`;
-    renderAI();
-  }
-  // 最好的一張 over more than one set: each set's first meet, eight at a time, until one is left
-  async function finalRound(sig, std0) {
-    let round = AI.sets.map((s) => s.items.find((it) => (verdicts.get(it.key) || {}).v === 'keep')).filter(Boolean);
-    while (round.length > 1 && !AI.stopping) {
-      AI.err = `決賽：${num(round.length)} 張比一次…`; renderRun();
-      const next = [];
-      for (let k = 0; k < round.length; k += 8) {
-        const part = round.slice(k, k + 8);
-        if (part.length === 1) { next.push(part[0]); continue; }
-        const j = await judge(part, std0, true);
-        if (j.error) { AI.err = AI_ERR[j.error] || '決賽沒有成功'; return; }
-        part.forEach((it, n) => {
-          const p = j.photos[n], old = verdicts.get(it.key), v = { ...old, v: p.verdict === 'keep' ? 'keep' : 'maybe', why: p.verdict === 'keep' ? `決賽勝出：${p.why}` : `決賽輸了：${p.why}`, sig };
-          verdicts.set(it.key, v); keepLater(`a|${it.key}`, v);
-          if (p.verdict === 'keep') next.push(it);
-        });
-      }
-      round = next;
-    }
-    AI.err = '';
-  }
-
-  // ---------- AI 初選: taking the advice ----------
-  function applyFlags(ch) {
-    ch = ch.filter((c) => c.from !== c.to);
-    if (!ch.length) return 0;
-    undo.push({ ch, at: null });
-    if (undo.length > 300) undo.shift();
-    for (const c of ch) if (c.to) marks.set(c.it.key, c.to); else marks.delete(c.it.key);
-    save(ch.map((c) => [c.it.key, c.to]));
-    return ch.length;
-  }
-  // 'say': the photos not flagged yet as advised (可留 / 備選 left for you); 'keep' / 'drop': all of them
-  function takeSet(set, how) {
-    const ch = set.items.map((it) => {
-      const from = flagOf(it);
-      if (how === 'keep') return { it, from, to: 1 };
-      if (how === 'drop') return { it, from, to: -1 };
-      const s = says(it);
-      return { it, from, to: from || !s ? from : s.v === 'keep' ? 1 : s.v === 'drop' ? -1 : 0 };
-    });
-    applyFlags(ch);
-    if (!decided.has(set.id)) { decided.add(set.id); save([[`d|${set.id}`, 1]]); }
-    renderRow(set);
-  }
-  function nextTodo(from) {
-    for (let k = 1; k <= AI.sets.length; k++) { const s = AI.sets[(from + k) % AI.sets.length]; if (!decided.has(s.id)) return s.i; }
-    return -1;
-  }
-  function accept(how) {
-    const set = curSet();
-    if (!set) return;
-    takeSet(set, how);
-    const n = nextTodo(set.i);
-    renderTot();
-    if (n >= 0 && n !== set.i) goSet(n); else { renderAI(); toast('每一組都決定好了・可以到「挑照片」細看'); }
-  }
-  function acceptAll() {
-    const todo = AI.sets.filter((s) => !decided.has(s.id) && s.items.some((it) => says(it)));
-    if (!todo.length) { toast('沒有還沒決定、又有建議的組'); return; }
-    let keep = 0, drop = 0;
-    for (const s of todo) for (const it of s.items) { if (flagOf(it)) continue; const v = (says(it) || {}).v; if (v === 'keep') keep++; else if (v === 'drop') drop++; }
-    if (!confirm(`照建議標好 ${num(todo.length)} 組：留用 ${num(keep)} 張、排除 ${num(drop)} 張（「${aiWord('maybe')}」和沒有建議的不動；已經標過的不改）？之後還能一張張改，⌘Z 可以復原。`)) return;
-    const ch = [];
-    for (const s of todo) {
-      for (const it of s.items) { const from = flagOf(it), v = (says(it) || {}).v; if (!from && (v === 'keep' || v === 'drop')) ch.push({ it, from, to: v === 'keep' ? 1 : -1 }); }
-      decided.add(s.id);
-    }
-    applyFlags(ch);
-    save(todo.map((s) => [`d|${s.id}`, 1]));
-    renderAI();
-    toast(`照建議標好 ${num(todo.length)} 組`);
-  }
-  function flagCur(f) {
-    const set = curSet(), it = set && set.items[AI.cur];
-    if (!it) return;
-    applyFlags([{ it, from: flagOf(it), to: f }]);
-    flashAI(SAID[f]);
-    if (S.auto && AI.cur < set.items.length - 1) AI.cur++;
-    renderSet(); renderRow(set); renderTot();
-  }
-  function undoAI() {
-    let u = undo.pop();
-    while (u && !(u.ch = u.ch.filter((c) => byKey.get(c.it.key) === c.it)).length) u = undo.pop();
-    if (!u) { toast('沒有可以復原的'); return; }
-    for (const c of u.ch) if (c.from) marks.set(c.it.key, c.from); else marks.delete(c.it.key);
-    save(u.ch.map((c) => [c.it.key, c.from]));
-    const set = u.ch[0].it.inSet;
-    if (set && set !== curSet()) goSet(set.i); else renderAI();
-    toast(u.ch.length > 1 ? `復原了 ${num(u.ch.length)} 張` : '復原了');
-  }
-  let flashTimer = 0;
-  function flashAI(text) { const w = $('#aiWait'); if (AI.one) return; w.textContent = text; w.hidden = false; w.classList.add('flash'); clearTimeout(flashTimer); flashTimer = setTimeout(() => { w.hidden = true; w.classList.remove('flash'); }, 700); }
-
-  // ---------- AI 初選: on screen ----------
-  function enterAI(was) {
-    measureAll();
-    if (measuring) { AI.sets = []; AI.gen = -1; }   // the sets once every photo's measured (their bursts need it)
-    else if (AI.gen !== itemsGen) {
-      buildSets(); AI.gen = itemsGen;
-      if (AI.at >= AI.sets.length) AI.at = 0;
-      if (was !== 4) { const n = nextTodo(-1); AI.at = n >= 0 ? n : 0; AI.cur = 0; }
-      renderList();
-    }
-    aiStatus().then(() => renderRun());
-    renderAI();
-    $('#aiStage').focus({ preventScroll: true });
-  }
-  function leaveAI() { AI.one = false; }
-  function renderAI() {
-    if (S.step !== 4) return;
-    renderList(); renderSet(); renderStd(); renderRun(); renderTot();
-  }
-  const rows = new Map();   // set → its row in the list
-  function rowFor(set) {
-    const n = el('li', { class: 'ai-row', 'data-i': set.i },
-      el('span', { class: 'ar-pics' }, ...set.items.slice(0, 4).map((it) => el('span', { class: 'ar-pic' }, thumbImg(it)))),
-      el('span', { class: 'ar-t' }, el('b'), el('span')), el('span', { class: 'ar-s' }));
-    rows.set(set, n);
-    return n;
-  }
-  function renderRow(set) {
-    const n = rows.get(set);
-    if (!n) return;
-    const done = decided.has(set.id), vs = set.items.map(says), c = { keep: 0, maybe: 0, drop: 0 };
-    for (const v of vs) if (v) c[v.v]++;
-    const ai = vs.some((v) => v && v.src === 'ai'), old = vs.some((v) => v && v.old);
-    n.className = `ai-row${set === curSet() ? ' on' : ''}${done ? ' done' : ''}${set.busy ? ' busy' : ''}${set.err ? ' err' : ''}`;
-    const [b, sp] = n.children[1].children, it0 = set.items[0];
-    b.textContent = it0.t != null ? hm(it0.t) : '—';
-    sp.textContent = `${num(set.items.length)} 張${set.bursts.length ? `・連拍 ${set.bursts.length} 組` : ''}`;
-    // what's said, in the job's words: 審核 the problems, 精選 how many are good, 最好的一張 where the first is
-    const said = AI.task === 'review' ? [c.drop ? `${aiWord('drop')} ${c.drop}` : '', c.maybe ? `要看 ${c.maybe}` : ''].filter(Boolean).join('・') || (c.keep ? '都可以放' : '')
-      : AI.task === 'best' ? (c.keep ? '★ 第一' : c.maybe ? `備選 ${c.maybe}` : c.drop ? `不要 ${c.drop}` : '')
-      : [c.keep ? `${aiWord('keep')} ${c.keep}` : '', c.maybe ? `備選 ${c.maybe}` : '', c.drop ? `不要 ${c.drop}` : ''].filter(Boolean).join('・');
-    n.children[2].textContent = set.busy ? 'AI 看中…' : set.err ? set.err : done ? `✓ 留用 ${set.items.filter((it) => flagOf(it) === 1).length}` : said ? `${ai ? '' : '本機・'}${old ? '舊・' : ''}${said}` : '';
-    n.hidden = (AI.show === 'todo' && done) || (AI.show === 'done' && !done);
-  }
-  function renderList() {
-    if (S.step !== 4) return;
-    const ol = $('#aiSets');
-    if (ol.children.length !== AI.sets.length || ![...rows.keys()].every((s) => AI.sets[s.i] === s)) {
-      rows.clear();
-      ol.replaceChildren(...AI.sets.map(rowFor));
-    }
-    for (const s of AI.sets) renderRow(s);
-    const done = AI.sets.filter((s) => decided.has(s.id)).length;
-    $('#aiCount').textContent = `${num(AI.sets.length)} 組・決定了 ${num(done)}`;
-  }
-  $('#aiSets').addEventListener('click', (e) => { const r = e.target.closest('.ai-row'); if (r) goSet(+r.dataset.i); });
-  for (const r of $$('input[name="aishow"]')) r.addEventListener('change', () => { AI.show = r.value; renderList(); r.blur(); });
-  function goSet(i) {
-    if (!AI.sets.length) return;
-    const was = curSet();
-    AI.at = clamp(i, 0, AI.sets.length - 1); AI.cur = 0;
-    if (was) renderRow(was);
-    renderRow(curSet());
-    const row = rows.get(curSet());
-    if (row) row.scrollIntoView({ block: 'nearest' });
-    renderSet();
-  }
-  $('#aiPrev').addEventListener('click', () => goSet(AI.at - 1));
-  $('#aiNext').addEventListener('click', () => goSet(AI.at + 1));
-
-  // the set, side by side: as big as they fit; a burst's frames share a coloured bar; under each, what's said
-  const BURST_C = ['#e3b341', '#5fb0ff', '#ff7ab6', '#7ee08a'];
-  function picFor(it, big) {
-    const img = thumbImg(it);
-    // the preview (made in step 2's workers) once it's there: the one shown big first, the set's next
-    if (!pvNo(it)) pvAsk(it, big).then((v) => { if (v && img.isConnected) { img.src = v.url; img.style.transform = ''; } });
-    return img;
-  }
-  function renderSet() {
-    if (S.step !== 4) return;
-    const set = curSet(), grid = $('#aiGrid'), one = $('#aiOne'), wait = $('#aiWait');
-    if (!set) {
-      grid.replaceChildren(); one.hidden = true;
-      wait.hidden = false; wait.classList.remove('flash');
-      wait.textContent = measuring ? `正在看每張照片的清晰度、曝光，找出連拍… ${num(AI.mDone)}／${num(AI.mTotal)}` : '沒有照片';
-      $('#aiTitle').textContent = ''; fill($('#aiSum')); fill($('#aiCur'));
-      return;
-    }
-    AI.cur = clamp(AI.cur, 0, set.items.length - 1);
-    pvPlanned = set.items.filter((it) => !previews.has(it) && !pvNo(it));
-    pvPump();
-    const it0 = set.items[0], itN = set.items[set.items.length - 1];
-    $('#aiTitle').replaceChildren(el('b', { text: `第 ${num(set.i + 1)}／${num(AI.sets.length)} 組` }),
-      `・${it0.t != null ? `${hm(it0.t)}${itN.t !== it0.t && itN.t != null ? ` – ${hm(itN.t)}` : ''}` : ''}・${num(set.items.length)} 張${set.bursts.length ? `（連拍 ${set.bursts.length} 組）` : ''}${decided.has(set.id) ? '・✓ 決定了' : ''}`);
-    grid.hidden = AI.one; one.hidden = !AI.one;
-    if (AI.one) {
-      const it = set.items[AI.cur], s = says(it);
-      one.replaceChildren(el('div', { class: 'ao-pic' }, picFor(it, true)), tileWords(it, s, AI.cur));
-    } else {
-      const W = grid.clientWidth || 800, H = grid.clientHeight || 500, n = set.items.length;
-      let best = 1, size = 0;
-      for (let c = 1; c <= n; c++) { const r = Math.ceil(n / c), s = Math.min((W - 10 * (c - 1)) / c / 1.5, (H - 10 * (r - 1)) / r - 46); if (s > size) { size = s; best = c; } }
-      grid.style.gridTemplateColumns = `repeat(${best}, minmax(0, 1fr))`;
-      grid.style.gridTemplateRows = `repeat(${Math.ceil(n / best)}, minmax(0, 1fr))`;
-      grid.replaceChildren(...set.items.map((it, k) => {
-        const s = says(it), f = flagOf(it);
-        return el('div', { class: `at${k === AI.cur ? ' cur' : ''}${f === 1 ? ' is-keep' : f === -1 ? ' is-drop' : ''}${s ? ` v-${s.v}${s.old ? ' old' : ''}` : ''}`, 'data-k': k, style: it.burst ? `--b:${BURST_C[(it.burst - 1) % 4]}` : null },
-          it.burst ? el('span', { class: 'at-burst', text: `連拍 ${'ABCD'[(it.burst - 1) % 4]}` }) : null,
-          el('div', { class: 'at-pic' }, picFor(it, false)),
-          el('span', { class: 'at-n', text: String(k + 1) }), el('span', { class: 'at-flag', 'aria-hidden': 'true' }),
-          el('span', { class: 'at-btns' }, el('button', { type: 'button', class: 'at-b at-bk', 'data-f': '1', title: '留用（P），再按一次取消', 'aria-label': '留用' }), el('button', { type: 'button', class: 'at-b at-bx', 'data-f': '-1', title: '排除（X），再按一次取消', 'aria-label': '排除' })),
-          tileWords(it, s, k));
-      }));
-    }
-    if (!wait.classList.contains('flash')) wait.hidden = true;
-    // what's said about the set, and the photo the keys are on
-    const v0 = set.items.map(says).find((s) => s && s.src === 'ai');
-    fill($('#aiSum'), v0 && v0.sum ? el('span', {}, el('b', { text: 'AI：' }), v0.sum, v0.old ? el('i', { text: '（舊標準）' }) : null)
-      : set.busy ? 'AI 看中…' : set.err ? set.err : set.items.some(localSays) ? el('span', {}, el('b', { text: '本機：' }), set.bursts.length && std().keep ? '連拍留最清楚的' : '只量了清晰度和曝光', '・按「開始 AI 分析」看構圖、表情、能不能放') : '還沒有建議');
-    const it = set.items[AI.cur], s = says(it), m = measured.get(it.key);
-    fill($('#aiCur'), el('b', { text: `${AI.cur + 1}．${it.name}` }), s ? `　${s.src === 'ai' ? 'AI' : '本機'} ${aiWord(s.v)}${s.why ? `：${s.why}` : ''}${s.issues && s.issues.length ? `（${s.issues.join('、')}）` : ''}` : '',
-      m ? el('span', { class: 'ai-m' }, `　清晰度 ${Math.round(m.sharp)}・亮度 ${Math.round((m.mean / 255) * 100)}%`) : null);
-  }
-  function tileWords(it, s, k) {
-    return el('div', { class: 'at-say' }, s ? el('b', { class: `at-v ${s.src}`, text: `${s.src === 'ai' ? '' : '本機 '}${aiWord(s.v)}${s.rank && AI.task === 'best' ? ` #${s.rank}` : ''}` }) : el('b', { class: 'at-v none', text: '—' }),
-      el('span', { class: 'at-why', text: s ? s.why || (s.issues || []).join('、') : '' }));
-  }
-  $('#aiGrid').addEventListener('click', (e) => {
-    const t = e.target.closest('.at');
-    if (!t) return;
-    AI.cur = +t.dataset.k;
-    const b = e.target.closest('.at-b');
-    if (b) { const it = curSet().items[AI.cur], f = +b.dataset.f; flagCur(flagOf(it) === f ? 0 : f); return; }
-    if (e.detail === 2) { AI.one = true; }
-    renderSet();
-  });
-  $('#aiOne').addEventListener('click', (e) => { if (e.detail === 2) { AI.one = false; renderSet(); } });
-  new ResizeObserver(() => { if (S.step === 4 && !AI.one) renderSet(); }).observe($('#aiStage'));
-  $('#aiAccept').addEventListener('click', () => accept('say'));
-  $('#aiAllKeep').addEventListener('click', () => accept('keep'));
-  $('#aiAllDrop').addEventListener('click', () => accept('drop'));
-  $('#aiAcceptAll').addEventListener('click', acceptAll);
-  $('#next4').addEventListener('click', () => goto(2));
-
-  // the standard (right): what for, what matters, a rule in words
-  function seg(name, now, opts) {
-    return el('span', { class: 'ai-seg', role: 'radiogroup' }, ...opts.map(([v, label, title]) => el('label', { title: title || null },
-      el('input', { type: 'radio', name, value: String(v), checked: String(now) === String(v) ? '' : null }), el('span', { text: label }))));
-  }
-  function chips(name, on, dict) {
-    return el('span', { class: 'ai-chips' }, ...Object.entries(dict).map(([k, [label, title]]) => el('label', { title },
-      el('input', { type: 'checkbox', name, value: k, checked: on.includes(k) ? '' : null }), el('span', { text: label }))));
-  }
-  const optRow = (label, ...kids) => el('div', { class: 'ai-opt' }, el('span', { class: 'ai-ol', text: label }), ...kids);
-  function renderStd() {
-    for (const r of $$('input[name="aitask"]')) r.checked = r.value === AI.task;
-    const st = std(), o = $('#aiOpts');
-    if (o.contains(document.activeElement)) return;
-    const burst = seg('aikeep', st.keep, AI.task === 'review' ? [[0, '都看'], [1, '只留 1 張', '連拍只放最好的一張']] : [[1, '留 1 張'], [2, '留 2 張'], [0, '都看']]);
-    const look = [optRow('構圖', seg('aitilt', st.tilt, [['straight', '要正'], ['any', '都可以'], ['love', '喜歡斜']])), optRow('前景', seg('aifg', st.fg, [['no', '不要'], ['any', '都可以'], ['love', '喜歡']]))];
-    if (AI.task === 'review') fill(o, optRow('擋下', chips('aiavoid', st.avoid, AVOID_L)), optRow('連拍', burst));
-    else if (AI.task === 'select') fill(o, optRow('嚴格', seg('aistrict', st.strict, [[1, '寬鬆'], [2, '一般'], [3, '嚴格']])), optRow('連拍', burst), optRow('重視', chips('aifocus', st.focus, FOCUS_L)), ...look);
-    else fill(o, optRow('重視', chips('aifocus', st.focus, FOCUS_L)), ...look);
-    const x = $('#aiExtra');
-    if (document.activeElement !== x) x.value = st.extra || '';
-  }
-  function setStd(patch) {
-    AI.per[AI.task] = { ...(AI.per[AI.task] || {}), ...patch };
-    keepAI();
-    if (AI.sets.length) { for (const s of AI.sets) renderRow(s); renderSet(); renderRun(); }
-  }
-  for (const r of $$('input[name="aitask"]')) r.addEventListener('change', () => { AI.task = r.value; keepAI(); renderAI(); });
-  $('#aiOpts').addEventListener('change', (e) => {
-    const t = e.target, st = std();
-    if (t.name === 'aiavoid' || t.name === 'aifocus') {
-      const key = t.name === 'aiavoid' ? 'avoid' : 'focus', set = new Set(st[key]);
-      if (t.checked) set.add(t.value); else set.delete(t.value);
-      setStd({ [key]: [...set] });
-    } else if (t.name === 'aikeep') setStd({ keep: +t.value });
-    else if (t.name === 'aistrict') setStd({ strict: +t.value });
-    else if (t.name === 'aitilt') setStd({ tilt: t.value });
-    else if (t.name === 'aifg') setStd({ fg: t.value });
-    if (Date.now() - ptrAt < 4000) t.blur();
-  });
-  let extraTimer = 0;
-  $('#aiExtra').addEventListener('input', (e) => { clearTimeout(extraTimer); extraTimer = setTimeout(() => setStd({ extra: e.target.value.trim().slice(0, 200) }), 500); });
-  $('#aiReset').addEventListener('click', () => { delete AI.per[AI.task]; keepAI(); renderAI(); });
-
-  // the run: this computer's part, the AI's
-  function renderRun() {
-    if (S.step !== 4) return;
-    const st = AI.status;
-    $('#aiLocal').textContent = measuring ? `這台電腦分析中：${num(AI.mDone)}／${num(AI.mTotal)} 張` : `這台電腦：清晰度、曝光、連拍分組 ✓ ${num(items.length)} 張`;
-    const old = AI.sets.some((s) => s.items.some((it) => { const v = verdicts.get(it.key); return v && v.sig !== stdSig(); }));
-    const all = AI.sets.length && AI.sets.every((s) => s.items.every((it) => { const v = verdicts.get(it.key); return v && v.sig === stdSig(); }));
-    $('#aiConn').textContent = AI.running ? (AI.err || `AI 看中：${num(AI.doneN)}／${num(AI.todo)} 組${AI.stopping ? '（停下中）' : ''}`)
-      : AI.err || (!st ? '連線中…' : st.net ? '連不到伺服器' : !st.on ? AI_ERR.off : !st.ok ? '要邀請碼才能用 AI' : all ? `AI 都看完了${old ? '' : ''}` : old ? '標準改了：再按一次，照新的標準重看' : 'AI 準備好了');
-    $('#aiCodeBox').hidden = !st || !st.on || st.ok;
-    const sel = $('#aiModel'), models = (st && st.models) || [];
-    if (sel.options.length !== models.length) fill(sel, ...models.map((m) => el('option', { value: m.id, text: m.label })));
-    sel.value = AI.model; sel.disabled = AI.running; sel.hidden = !models.length;
-    const run = $('#aiRun');
-    run.disabled = !st || !st.on || !st.ok || (!AI.running && all);
-    run.textContent = AI.running ? (AI.stopping ? '停下中…' : '停止') : old ? '照新標準重看' : all ? 'AI 都看完了' : AI.doneN ? '繼續 AI 分析' : '開始 AI 分析';
-    run.classList.toggle('primary', !AI.running);
-  }
-  function renderTot() {
-    if (S.step !== 4) return;
-    let keep = 0, drop = 0, todo = 0;
-    for (const it of items) { const f = flagOf(it); if (f === 1) keep++; else if (f === -1) drop++; }
-    for (const s of AI.sets) if (!decided.has(s.id)) todo++;
-    // 最好的一張: the one that's first now, and a way to it
-    const first = AI.task === 'best' && items.find((it) => { const v = verdicts.get(it.key); return v && v.v === 'keep' && v.sig === stdSig() && /^決賽勝出/.test(v.why || ''); });
-    $('#aiTot').replaceChildren(...(first ? [el('span', { class: 'ai-first' }, '★ 第一：', el('button', { type: 'button', class: 'link-btn', onclick: () => { goSet(first.inSet.i); AI.cur = first.inSet.items.indexOf(first); renderSet(); }, text: first.name })), el('br')] : []),
-      '留用 ', el('b', { text: num(keep) }), '・排除 ', el('b', { text: num(drop) }), `・還有 ${num(todo)} 組沒決定`);
-    $('#aiCount').textContent = `${num(AI.sets.length)} 組・決定了 ${num(AI.sets.length - todo)}`;
-    $('#aiAcceptAll').disabled = !todo;
-  }
-  $('#aiRun').addEventListener('click', runAI);
-  $('#aiModel').addEventListener('change', (e) => { AI.model = e.target.value; keepAI(); e.target.blur(); });
-  $('#aiCodeBox').addEventListener('submit', async (e) => {
-    e.preventDefault();
-    AI.code = $('#aiCode').value.trim(); keepAI();
-    const st = await aiStatus(true);
-    AI.err = st.ok ? '' : AI_ERR.code;
-    if (st.ok) { $('#aiCode').value = ''; toast('邀請碼對了，可以用 AI 了'); }
-    renderRun();
-  });
-
-  // keys: ← → the photos of the set, ↑ ↓ the sets, Enter takes the advice, P X U as in 挑照片, Z / space one big
-  function onKey4(e) {
-    if (S.step !== 4) return;
-    const t = e.target, k = e.key, mod = e.metaKey || e.ctrlKey;
-    if (t.closest && t.closest('input:not([type="radio"]):not([type="checkbox"]), textarea, select')) return;
-    if (t.closest && t.closest('input') && /^Arrow/.test(k)) return;
-    if (mod && !e.altKey && !e.shiftKey && (k === 'z' || k === 'Z')) { e.preventDefault(); undoAI(); return; }
-    if (mod || e.altKey) return;
-    if ((k === ' ' || k === 'Enter') && t.closest && t.closest('button, a, label')) return;
-    const set = curSet(), n = set ? set.items.length : 0;
-    let done = true;
-    if (/^[1-9]$/.test(k) && +k <= n) { AI.cur = +k - 1; renderSet(); }
-    else switch (k) {
-      case 'ArrowRight': if (AI.cur < n - 1) { AI.cur++; renderSet(); } else goSet(AI.at + 1); break;
-      case 'ArrowLeft': if (AI.cur > 0) { AI.cur--; renderSet(); } else if (AI.at > 0) { goSet(AI.at - 1); AI.cur = curSet().items.length - 1; renderSet(); } break;
-      case 'ArrowDown': case 'PageDown': goSet(AI.at + 1); break;
-      case 'ArrowUp': case 'PageUp': goSet(AI.at - 1); break;
-      case 'Enter': accept('say'); break;
-      case 'p': case 'P': if (e.shiftKey) accept('keep'); else flagCur(1); break;
-      case 'x': case 'X': case 'Delete': case 'Backspace': if (e.shiftKey) accept('drop'); else flagCur(-1); break;
-      case 'u': case 'U': case '0': flagCur(0); break;
-      case 'z': case 'Z': case ' ': AI.one = !AI.one; renderSet(); break;
-      case 'Escape': if (AI.one) { AI.one = false; renderSet(); } else done = false; break;
-      default: done = false;
-    }
-    if (done) e.preventDefault();
-  }
-  document.addEventListener('keydown', onKey4);
 
   // ---------- step 3: the picked photos where they were, as a Finder window ----------
   // The photographers sort their photos into folders themselves (攤位, 議程, 幕後花絮…) and picking leaves them there.

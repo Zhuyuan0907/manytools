@@ -20,8 +20,6 @@
      POST /pick/api/stats/processed   ← { files }   (picked photos saved)
    The photo tool's Flickr links are asked from here (server/flickr.js), so the API key stays on this machine:
      GET  /exif/api/flickr/status, /exif/api/flickr/rest?method=…, /exif/api/flickr/oembed?url=…
-  照片挑選's AI 初選 asks its AI from here (server/ai.js), so the AI's address and key stay on this machine:
-     GET  /pick/api/ai/status       POST /pick/api/ai/judge
    照片挑選's second window is /pick/second. Its demo, /pick/demo, is the one place photos come from this server:
    demo.zip at the top of the site (not in git), unpacked once into server/data/pick-demo, each photo served on its
    own (with byte ranges, so the page reads just the start of each for its time and thumbnail):
@@ -32,7 +30,6 @@ const http = require('http');
 const fs = require('fs');
 const path = require('path');
 const flickr = require('./flickr');
-const ai = require('./ai');
 
 const ROOT = path.resolve(__dirname, '..');
 const PORT = +process.env.PORT || 8080;
@@ -326,7 +323,6 @@ function route(req, res, url) {
 http.createServer((req, res) => {
   const url = (req.url || '/').split('?')[0];
   if (flickr.handle(req, res, url, send)) return;
-  if (ai.handle(req, res, url, send)) return;
   if (url.includes('/api/') && handleApi(req, res, url)) return;
   if (req.method !== 'GET' && req.method !== 'HEAD') return send(res, 405, 'method not allowed', 'text/plain');
   route(req, res, url);
