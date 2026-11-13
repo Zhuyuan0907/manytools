@@ -107,7 +107,7 @@
         <b>把影片拖到這裡</b>
         <span>或<button type="button" class="imp-link" id="impPick">選擇檔案…</button>・可以一次放很多支</span>
       </div>
-      <p class="imp-formats">MP4・MOV・M4V・MKV・WebM（H.264、H.265、AV1、VP9）・聲音 MP3、M4A、WAV・圖片 JPG、PNG</p>
+      <p class="imp-formats">MP4・MOV・TS・MKV・WebM（H.264、H.265、AV1、VP9）・聲音 MP3、M4A、WAV・圖片 JPG、PNG</p>
       <ol class="imp-how">
         <li><b>拖到時間軸</b><span>第一支影片會照它的大小、影格速率建立序列</span></li>
         <li><b>剪</b><span><span class="nb"><kbd>C</kbd> 剃刀切開</span>・<span class="nb"><kbd>Delete</kbd> 刪掉</span>・<span class="nb"><kbd>⇧</kbd><kbd>Delete</kbd> 刪掉並補起來</span></span></li>
@@ -163,7 +163,7 @@
           <button type="button" class="tab on" data-tab="prg" role="tab"><span id="prgTabName">節目：(無序列)</span><i class="tab-menu" data-menu="prg" title="面板選單">≡</i></button>
         </div>
         <div class="tab-body mon" data-body="prg" id="prgMon">
-          <div class="mon-view" id="prgView"><div class="mon-frame" id="prgFrame"><div class="layers" id="layers"></div><div class="mon-off" id="prgOffline" hidden><b>媒體離線</b><span id="prgOfflineName"></span></div></div><div class="xf" id="xf" hidden><i data-h="nw"></i><i data-h="ne"></i><i data-h="sw"></i><i data-h="se"></i></div></div>
+          <div class="mon-view" id="prgView"><div class="mon-frame" id="prgFrame"><div class="layers" id="layers"></div><div class="mon-off" id="prgOffline" hidden><b id="prgOfflineT">媒體離線</b><span id="prgOfflineName"></span></div></div><div class="xf" id="xf" hidden><i data-h="nw"></i><i data-h="ne"></i><i data-h="sw"></i><i data-h="se"></i></div></div>
           <div class="mon-bar">
             <span class="tc tc-blue" id="prgTc">00:00:00:00</span>
             <label class="mon-sel"><select id="prgZoom" aria-label="縮放層級"><option value="fit">適合</option><option value="25">25%</option><option value="50">50%</option><option value="75">75%</option><option value="100">100%</option></select></label>

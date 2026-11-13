@@ -200,6 +200,9 @@ kbd { display: inline-block; min-width: 1.5em; padding: 0 4px; border-radius: 3p
 .pi.off .pi-name { color: #d9534f; }
 .pi.off .pi-pic::after { content: "離線"; position: absolute; inset: 0; display: grid; place-items: center; background: rgba(0, 0, 0, .6); color: #e87b73; font-size: 11px; }
 .pi.cant .pi-pic::after { content: "無法預覽"; position: absolute; left: 0; right: 0; top: 0; padding: 1px 0; background: rgba(120, 30, 30, .8); color: #fff; font-size: 10px; text-align: center; }
+/* an MP4 being made of it: how far, along the strip's edge */
+.pi-conv { position: absolute; left: 0; right: 0; top: 0; padding: 1px 0 2px; background: rgba(0, 0, 0, .72); color: #e6e6e6; font-size: 10px; text-align: center; font-variant-numeric: tabular-nums; }
+.pi-conv::after { content: ""; position: absolute; left: 0; bottom: 0; width: var(--p, 0%); height: 2px; background: var(--blue); transition: width .2s linear; }
 /* the list */
 .prj-items.list { display: block; padding: 0 0 6px; }
 .pl-head, .pl-row { display: grid; grid-template-columns: minmax(120px, 2.4fr) 70px 90px minmax(90px, 1fr); align-items: center; gap: 8px; padding: 0 8px; }
@@ -212,6 +215,7 @@ kbd { display: inline-block; min-width: 1.5em; padding: 0 4px; border-radius: 3p
 .pl-name { display: flex; align-items: center; gap: 6px; }
 .pl-name i { flex: none; width: 10px; height: 10px; border-radius: 2px; background: var(--c, var(--c-video)); }
 .pl-row.off .pl-name { color: #d9534f; }
+.pl-row .pl-conv { color: var(--blue-2); font-variant-numeric: tabular-nums; }
 .prj-bar { flex: none; display: flex; align-items: center; gap: 4px; height: 30px; padding: 0 8px; }
 .pb { width: 24px; height: 22px; display: grid; place-items: center; padding: 0; border: 0; border-radius: 3px; background: none; color: #8f8f8f; }
 .pb:hover:not(:disabled) { color: #e6e6e6; background: #2e2e2e; }

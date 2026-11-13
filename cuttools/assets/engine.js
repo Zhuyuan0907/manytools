@@ -1,4 +1,5 @@
-/* 影片剪輯's media engine: what's in a file, its pictures and the shape of its sound, and the finished film — with
+/* 影片剪輯's media engine: what's in a file, its pictures and the shape of its sound, an MP4 copy of one the browser
+   can't play as it is (a dashcam's .TS), and the finished film — with
    Mediabunny (reading media files, writing MP4) and the browser's WebCodecs (decoding, encoding; the graphics card's
    when it has them). Nothing leaves the computer. app.js uses it as window.CutEngine.
    The film is made one of two ways:
@@ -13,6 +14,7 @@
   if (!MB) return;
   const E = {};
   const EPS = 1e-4;
+  const REMUX = new URL('remux.js', (document.currentScript && document.currentScript.src) || location.href).href;
 
   // ---------- what's in a file ----------
   E.probe = async (file) => {
@@ -80,6 +82,34 @@
     }
     return out;
   };
+
+  // ---------- a video the browser can't play as it is (a dashcam's .TS) → an MP4 that it can ----------
+  // Its packets copied, nothing decoded (remux.js, in a worker: the copying would hold the page still). The MP4 is kept
+  // in the browser's private files as name where it can be. → { file (the MP4), disk (kept there), dropped (tracks left
+  // out) }; hooks: { progress(p) }, and hooks.cancel() is set to stop it
+  E.remux = (file, name, hooks) => new Promise((ok, no) => {
+    let w, timer = 0, over = false;
+    try { w = new Worker(REMUX); } catch (e) { no(e); return; }
+    const end = (fn) => { if (over) return; over = true; clearTimeout(timer); w.terminate(); fn(); };
+    w.onmessage = (e) => {
+      const d = e.data;
+      if (d.progress != null) { if (!over) hooks.progress(d.progress); }
+      else if (d.done) end(() => ok(d));
+      else if (d.error != null) end(() => no(d.canceled ? new Canceled() : new Error(d.error)));
+    };
+    w.onerror = (e) => { e.preventDefault(); end(() => no(new Error(e.message || 'worker'))); };
+    // (one that doesn't answer a stop is stopped anyway: what it left in the private files goes at the next start)
+    hooks.cancel = () => { w.postMessage({ cancel: true }); timer = setTimeout(() => end(() => no(new Canceled())), 3000); };
+    w.postMessage({ file, name, disk: !!(navigator.storage && navigator.storage.getDirectory) });
+  });
+  // the MP4s kept in the private files (name → handle), and taking one away
+  const keptDir = async () => (await navigator.storage.getDirectory()).getDirectoryHandle('cut-mp4');
+  E.kept = async () => {
+    const out = new Map();
+    try { for await (const [name, h] of (await keptDir()).entries()) if (h.kind === 'file') out.set(name, h); } catch {}
+    return out;
+  };
+  E.unkeep = async (name) => { try { await (await keptDir()).removeEntry(name); } catch {} };
 
   // ---------- key frames (where a copied clip can start) ----------
   E.keyTimes = async (info) => {

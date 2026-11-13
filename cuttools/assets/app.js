@@ -5,7 +5,8 @@
    選取 A, 波紋編輯 B, 滾動編輯 N, 比率伸縮 R, 剃刀 C, 外滑 Y, 內滑 U, 手形 H, 縮放 Z, 文字 T; I / O, 插入 , 覆蓋 .,
    提取 ; 擷取 ', ⌘K, 波紋刪除, J K L, 靠齊, 連結的選取, 效果控制項 (運動, 不透明度, 速度, 音量), 速度/持續時間.
    Media are read with Mediabunny (engine.js) and played by the browser's own <video> / <audio> elements, one pair per
-   track, kept in step with one clock; the sound goes through Web Audio (volume, mute, solo, the meters). The film is
+   track, kept in step with one clock (a video they can't play as it is, a dashcam's .TS, is first copied into an MP4
+   that they can, in a worker); the sound goes through Web Audio (volume, mute, solo, the meters). The film is
    made by engine.js: copied as it is when it can be (one camera's clips), else drawn and encoded frame by frame.
    The project is kept in this browser (IndexedDB) without the files: put the same files in again and the clips come
    back (Premiere's offline media and relinking). Nothing is uploaded; on a server only the count of films saved is. */
@@ -96,7 +97,9 @@
   // ---------- the project ----------
   // media: { id, key, file, name, size, mod, kind ('video' | 'audio' | 'still'), info (engine.probe), dur (s), w, h,
   //          rate, hasV, hasA, url, poster (canvas), peaks, hover (frames for scrubbing), off (no file), cant (this
-  //          browser can't show it), srcIn / srcOut (the 來源 monitor's marks, s) }
+  //          browser can't show it), conv (0–1 while an MP4 it can show is made of it, else null), mp4 (that MP4, used
+  //          from then on: url and info are its), kept (the MP4 is in the browser's private files), from (the file's
+  //          own format, when it plays as an MP4), srcIn / srcOut (the 來源 monitor's marks, s) }
   // seq:   { name, rate, w, h, clips, markers, in, out (frames | null), tracks: { V1: { lock, out, sync }, A1: { lock,
   //          mute, solo, sync } … }, targets (track names), patch: { v, a } }
   // clip:  { id, mid, track, start, dur (frames), in (s, into the media), speed (1 = 100%), link (the clip of the same
@@ -184,7 +187,7 @@
   let keepTimer = 0;
   function keepLater() { clearTimeout(keepTimer); keepTimer = setTimeout(keepNow, 800); }
   function keepNow() {
-    const media = P.media.map((m) => ({ id: m.id, key: m.key, name: m.name, size: m.size, mod: m.mod, kind: m.kind, dur: m.dur, w: m.w, h: m.h, rate: m.rate, hasV: m.hasV, hasA: m.hasA, srcIn: m.srcIn, srcOut: m.srcOut }));
+    const media = P.media.map((m) => ({ id: m.id, key: m.key, name: m.name, size: m.size, mod: m.mod, kind: m.kind, dur: m.dur, w: m.w, h: m.h, rate: m.rate, hasV: m.hasV, hasA: m.hasA, from: m.from, srcIn: m.srcIn, srcOut: m.srcOut }));
     db.put('project', { v: 1, name: P.name, seqN: P.seqN, media, seq: P.seq, at: Date.now() }).catch(() => {});
   }
   async function restore() {
@@ -192,7 +195,7 @@
     try { p = await db.get('project'); } catch {}
     if (!p || !p.media || !p.media.length) return false;
     P.name = p.name || '未命名'; P.seqN = p.seqN || 0;
-    P.media = p.media.map((m) => ({ ...m, file: null, info: null, url: null, poster: null, peaks: null, off: true }));
+    P.media = p.media.map((m) => ({ ...m, file: null, info: null, url: null, poster: null, peaks: null, off: true, conv: null, mp4: null, kept: false }));
     P.seq = p.seq || null;
     return true;
   }
@@ -250,7 +253,11 @@
           m.hasV = !!info.video; m.hasA = !!info.audio;
           if (!m.hasV) m.kind = 'audio';
           if (m.hasV) { m.w = info.video.width; m.h = info.video.height; m.rate = rateOf(info.video.fps); }
-          m.cant = !(await canPlay(m));
+          // a dashcam's .TS no browser plays as it is (nor every browser an MKV): when its pictures can be decoded,
+          // an MP4 that plays is made of it after this (convertLater)
+          m.cant = /transport/i.test(info.format) || !(await canPlay(m));
+          m.conv = m.cant && m.hasV && info.video.canDecode && !/^(MP4|QuickTime)/i.test(info.format) ? 0 : null;
+          m.from = m.mp4 = null; m.kept = false;
           if (m.hasV && info.video.canDecode) m.poster = await E.thumb(info, Math.min(1, m.dur / 3), 320).catch(() => null);
         }
       } catch (e) {
@@ -267,12 +274,70 @@
     if (bad.length) toast(`讀不到：${bad.slice(0, 3).join('、')}${bad.length > 3 ? ` 等 ${bad.length} 個` : ''}`, 5000);
     else if (relinked && !added) toast(`接回 ${relinked} 個離線的媒體`);
     else if (added) toast(`匯入 ${added} 個項目${relinked ? `・接回 ${relinked} 個` : ''}`);
-    const cants = fresh.filter((m) => m.cant);
+    const cants = fresh.filter((m) => m.cant && m.conv == null), convs = fresh.filter((m) => m.conv != null);
     if (cants.length) toast(`這個瀏覽器不能播放「${cants[0].name}」（${(cants[0].info && cants[0].info.video && cants[0].info.video.codec || '').toUpperCase() || '這種格式'}）：可以用 Safari 或 Edge 打開，或仍然直接輸出`, 7000);
-    // the sound's shape for the waveforms, in the background
-    for (const m of fresh) if (m.hasA && !m.peaks && m.info) E.peaks(m.info, 100).then((pk) => { m.peaks = pk; renderTimeline(); if (S.srcMedia === m) SRC.drawWave(); }).catch(() => {});
+    else if (convs.length) toast(`瀏覽器不能直接播放${convs.length > 1 ? `這 ${convs.length} 支${convs.every((m) => /transport/i.test(m.info.format)) ? ' TS ' : ''}影片` : `「${convs[0].name}」`}，正在轉成 MP4（畫面和聲音照原檔，不重新壓縮）`, 6000);
+    for (const m of convs) convertLater(m);
+    // the sound's shape for the waveforms, in the background (a converted video's: from its MP4, when it's made)
+    for (const m of fresh) if (m.hasA && !m.peaks && m.info && m.conv == null) wave(m);
     if (fresh.length && S.mode === 'import') setMode('edit');
     keepLater(); renderTimeline(); PL.refresh(); renderTabs();
+  }
+  const wave = (m) => E.peaks(m.info, 100).then((pk) => { m.peaks = pk; renderTimeline(); if (S.srcMedia === m) SRC.drawWave(); }).catch(() => {});
+  // A video the browser can't play as it is (a dashcam's .TS): its packets copied into an MP4 that it can (E.remux, in
+  // a worker), one video at a time, its progress on its item. The MP4 is what's played, shown and made into the film
+  // from then on — the same pictures and sound. Kept in the browser's private files where it can be, so the video is
+  // back by itself next time; taken away with the video
+  const CONV = { queue: [], cur: null, hooks: null };
+  const pctOf = (m) => `${Math.floor((m.conv || 0) * 100)}%`;
+  const slateName = (m) => (!m ? '' : m.conv != null ? `${m.name}・${pctOf(m)}` : m.name);
+  function convertLater(m) { if (CONV.cur !== m && !CONV.queue.includes(m)) CONV.queue.push(m); convertNext(); }
+  async function convertNext() {
+    if (CONV.cur || !CONV.queue.length) return;
+    const m = CONV.cur = CONV.queue.shift(), name = `${m.id}.mp4`;
+    CONV.hooks = { progress: (p) => { m.conv = p; paintConv(m); } };
+    try {
+      const r = await E.remux(m.file, name, CONV.hooks);
+      if (mediaById(m.id) !== m) { if (r.disk) E.unkeep(name); return; }
+      if (r.dropped.length) console.warn('轉成 MP4 時沒有帶過去：', r.dropped);
+      await useMp4(m, r.file, r.disk);
+    } catch (e) {
+      if (!(e && e.canceled) && mediaById(m.id) === m) {
+        console.error(e);
+        m.conv = null; renderPrj(); PL.refresh(); renderMeta(); if (S.srcMedia === m) SRC.open(m, true);
+        toast(`「${m.name}」沒辦法轉成 MP4，這個瀏覽器不能預覽它（仍然可以直接輸出）`, 6000);
+      }
+    } finally { CONV.cur = null; CONV.hooks = null; convertNext(); }
+  }
+  function stopConverting(ms) {
+    CONV.queue = CONV.queue.filter((m) => !ms.includes(m));
+    if (CONV.cur && ms.includes(CONV.cur) && CONV.hooks && CONV.hooks.cancel) CONV.hooks.cancel();
+  }
+  // the MP4 in use from now on
+  async function useMp4(m, file, kept) {
+    const info = await E.probe(file);
+    if (!info || !info.video) throw new Error('unreadable MP4');
+    m.off = false;
+    if (m.url) URL.revokeObjectURL(m.url);
+    if (!m.from) m.from = (m.info && m.info.format) || 'MPEG Transport Stream';
+    m.mp4 = file; m.kept = kept; m.url = URL.createObjectURL(file); m.info = info; m.dur = info.duration; m.hasA = !!info.audio; m.hover = null;
+    m.cant = !(await canPlay(m));
+    // (a browser that won't play it from its private files plays a copy of it in memory)
+    if (m.cant && kept) { URL.revokeObjectURL(m.url); m.url = URL.createObjectURL(new Blob([await file.arrayBuffer()], { type: 'video/mp4' })); m.cant = !(await canPlay(m)); }
+    m.conv = null;
+    if (!m.poster && info.video.canDecode) m.poster = await E.thumb(info, Math.min(1, m.dur / 3), 320).catch(() => null);
+    if (m.hasA && !m.peaks) wave(m);
+    renderPrj(); renderTimeline(); PL.refresh(); renderMeta(); keepLater();
+    if (S.srcMedia === m) SRC.open(m, true);
+    if (S.mode === 'export' && P.seq && !EX.running) refreshExport(false);
+  }
+  // its progress where it shows: its item, the monitors' notes
+  function paintConv(m) {
+    for (const n of $$(`[data-id="${m.id}"] .pi-conv`, prjItems)) { n.style.setProperty('--p', pctOf(m)); n.textContent = `轉換中 ${pctOf(m)}`; }
+    for (const n of $$(`[data-id="${m.id}"] .pl-conv`, prjItems)) n.textContent = mediaLine(m);
+    if (PL.slateM === m) $('#prgOfflineName').textContent = slateName(m);
+    if (SRC.m === m) { const s = $('#srcSlate span'); if (s) s.textContent = slateName(m); }
+    if (S.srcMedia === m || (S.prjSel.size === 1 && S.prjSel.has(m.id))) renderMeta();
   }
   const fileIn = $('#fileIn');
   const pickFiles = () => fileIn.click();
@@ -305,6 +370,7 @@
   const labelOf = (m) => (m.kind === 'still' ? 'var(--c-still)' : m.kind === 'audio' ? 'var(--c-audio)' : 'var(--c-video)');
   function mediaLine(m) {
     if (m.off) return '離線';
+    if (m.conv != null) return `轉換中 ${pctOf(m)}`;
     if (m.kind === 'still') return `${m.w}×${m.h}`;
     const v = m.info && m.info.video;
     return [v ? `${m.w}×${m.h}` : '', v ? `${(Math.round(fpsOf(m.rate) * 100) / 100)} fps` : '', m.hasA ? '有聲音' : ''].filter(Boolean).join('・');
@@ -324,7 +390,7 @@
       fill(prjItems, el('div', { class: 'pl-head' }, el('span', { text: '名稱' }), el('span', { text: '影格速率' }), el('span', { text: '媒體持續時間' }), el('span', { text: '影片資訊' })),
         ...list.map((m) => el('div', { class: `pl-row${S.prjSel.has(m.id) ? ' sel' : ''}${m.off ? ' off' : ''}`, 'data-id': m.id, draggable: m.off ? null : 'true', title: m.name },
           el('span', { class: 'pl-name', style: `--c:${labelOf(m)}` }, el('i'), m.name), el('span', { text: m.rate ? `${Math.round(fpsOf(m.rate) * 100) / 100} fps` : '' }),
-          el('span', { text: dur(m) }), el('span', { text: mediaLine(m) }))));
+          el('span', { text: dur(m) }), el('span', { class: m.conv != null ? 'pl-conv' : null, text: mediaLine(m) }))));
       return;
     }
     fill(prjItems, ...list.map((m) => {
@@ -333,7 +399,8 @@
       else if (m.kind === 'audio') pic.append(Object.assign(svgUse('i-aud'), { classList: 'pi-aud' }));
       pic.append(el('span', { class: 'pi-badge', style: `--c:${labelOf(m)}` }));
       if (m.kind !== 'still') pic.append(el('span', { class: 'pi-dur', text: dur(m) }));
-      return el('div', { class: `pi${S.prjSel.has(m.id) ? ' sel' : ''}${m.off ? ' off' : ''}${m.cant ? ' cant' : ''}`, 'data-id': m.id, draggable: m.off ? null : 'true', title: `${m.name}\n${mediaLine(m)}` }, pic, el('span', { class: 'pi-name', text: m.name }));
+      if (m.conv != null) pic.append(el('span', { class: 'pi-conv', style: `--p:${pctOf(m)}`, text: `轉換中 ${pctOf(m)}` }));
+      return el('div', { class: `pi${S.prjSel.has(m.id) ? ' sel' : ''}${m.off ? ' off' : ''}${m.cant && m.conv == null ? ' cant' : ''}`, 'data-id': m.id, draggable: m.off ? null : 'true', title: `${m.name}\n${mediaLine(m)}` }, pic, el('span', { class: 'pi-name', text: m.name }));
     }));
   }
   $('#prjSearch').addEventListener('input', renderPrj);
@@ -366,7 +433,7 @@
     const pic = e.target.closest('.pi-pic'), it = pic && pic.closest('[data-id]');
     if (!it || e.buttons) return;
     const m = mediaById(it.dataset.id);
-    if (!m || m.off || m.kind !== 'video' || !m.info || !m.info.video.canDecode) return;
+    if (!m || m.off || m.conv != null || m.kind !== 'video' || !m.info || !m.info.video.canDecode) return;
     const r = pic.getBoundingClientRect(), x = clamp((e.clientX - r.left) / r.width, 0, 0.999);
     if (!m.hover) {
       m.hover = [];
@@ -395,7 +462,9 @@
     const used = P.seq ? P.seq.clips.filter((c) => ids.includes(c.mid)) : [];
     if (used.length && !confirm(`時間軸上有 ${used.length} 個剪輯用到這些項目，會一起拿掉。要清除嗎？`)) return;
     if (used.length) { begin('清除'); P.seq.clips = P.seq.clips.filter((c) => !ids.includes(c.mid)); commit(); }
-    for (const id of ids) { const m = mediaById(id); if (m && m.url) URL.revokeObjectURL(m.url); if (S.srcMedia === m) SRC.close(); }
+    const gone = ids.map(mediaById).filter(Boolean);
+    stopConverting(gone);
+    for (const m of gone) { if (S.srcMedia === m) SRC.close(); if (m.url) URL.revokeObjectURL(m.url); if (m.kept) E.unkeep(`${m.id}.mp4`); }
     P.media = P.media.filter((m) => !ids.includes(m.id));
     S.prjSel.clear();
     renderPrj(); keepLater(); renderTimeline(); PL.refresh();
@@ -513,13 +582,17 @@
     dur() { return this.m ? this.m.dur : 0; },
     time() { return !this.m ? 0 : this.m.kind === 'still' ? this.still : this.el ? this.el.currentTime : 0; },
     playing() { return !!(this.el && !this.el.paused); },
-    open(m) {
+    // (quiet: shown again in place — the tab and the keys stay where they are)
+    open(m, quiet) {
       this.close();
       if (!m || m.off) return;
       this.m = m; S.srcMedia = m;
       const frame = $('#srcFrame');
       if (m.kind === 'still') {
         frame.append(el('img', { src: m.url, alt: '' }));
+      } else if (m.kind === 'video' && m.cant) {
+        // nothing to play (yet): a note where the picture would be
+        frame.append(el('div', { class: 'mon-off', id: 'srcSlate' }, el('b', { text: m.conv != null ? '正在轉成 MP4' : '無法預覽' }), el('span', { text: slateName(m) })));
       } else {
         const v = document.createElement(m.kind === 'audio' ? 'audio' : 'video');
         v.preload = 'auto'; v.playsInline = true; v.src = m.url;
@@ -534,8 +607,7 @@
       $('#srcEmpty').hidden = true;
       $('#srcTabName').textContent = `來源：${m.name}`;
       $('#srcDragV').disabled = !m.hasV; $('#srcDragA').disabled = !m.hasA;
-      showTab('src', 'src');
-      setFocus('src');
+      if (!quiet) { showTab('src', 'src'); setFocus('src'); }
       this.fit(); this.render(); renderMeta();
     },
     close() {
@@ -741,14 +813,14 @@
     // a frame shown: every track's element set (when still, each on its frame exactly)
     show(f, exact) {
       const seq = P.seq;
-      let offline = null;
+      let slate = null; // a clip that can't be shown: why (offline, its MP4 being made, a format this browser can't play)
       for (const t of VT) {
         const L = this.lay[t];
         const c = seq ? this.at(t, Math.floor(f)) : null, m = c ? mediaById(c.mid) : null;
         if (!c || (!c.text && (!m || m.off || m.cant))) {
           for (const v of L.vids) { if (!v.hidden) { v.hidden = true; v.pause(); } }
           L.img.hidden = true; L.ttl.hidden = true;
-          if (c && (!m || m.off)) offline = m ? m.name : '';
+          if (c && !slate) slate = { t: !m || m.off ? '媒體離線' : m.conv != null ? '正在轉成 MP4' : '無法預覽', m };
           continue;
         }
         if (c.text) { L.ttl.hidden = false; this.place(L.ttl, c, null); L.img.hidden = true; for (const v of L.vids) { v.hidden = true; v.pause(); } continue; }
@@ -761,12 +833,13 @@
         if (exact) seekTo(v, this.srcTime(c, Math.floor(f)) + 0.25 / (m.rate ? fpsOf(m.rate) : 30));
         if (exact && v.error) { v._tries = 0; this.retry(v); }
       }
-      $('#prgOffline').hidden = offline === null;
-      if (offline !== null) $('#prgOfflineName').textContent = offline;
+      $('#prgOffline').hidden = !slate;
+      this.slateM = slate ? slate.m : null;
+      if (slate) { $('#prgOfflineT').textContent = slate.t; $('#prgOfflineName').textContent = slateName(slate.m); }
       // sound: kept ready on the right spot (it only plays while playing)
       for (const t of AT) {
         const A = this.aud[t], c = seq ? this.at(t, Math.floor(f)) : null, m = c ? mediaById(c.mid) : null;
-        if (!c || !m || m.off || !m.hasA) { for (const a of A.els) { if (!a.paused) a.pause(); a.hidden = true; } continue; }
+        if (!c || !m || m.off || !m.hasA || m.conv != null) { for (const a of A.els) { if (!a.paused) a.pause(); a.hidden = true; } continue; }
         const a = this.pick(A.els, c, m);
         for (const o of A.els) if (o !== a) { if (!o.paused) o.pause(); o.hidden = true; }
         a.hidden = false;
@@ -1887,8 +1960,9 @@
     const v = m.info && m.info.video, a = m.info && m.info.audio;
     fill(body, el('p', { class: 'kv-h', text: m.name }), kv([
       ['類型', m.kind === 'still' ? '圖片' : m.kind === 'audio' ? '聲音' : '影片'], ['大小', fmtBytes(m.size)], ['修改日期', m.mod ? new Date(m.mod).toLocaleString('zh-TW') : ''],
-      ['格式', m.info && m.info.format ? m.info.format : ''], ['長度', m.kind === 'still' ? '' : fmtClock(m.dur)],
-      ['狀態', m.off ? '離線（再匯入一次同一個檔案就會接回來）' : m.cant ? '這個瀏覽器不能播放，可以直接輸出' : '可以播放']]),
+      ['格式', m.from || (m.info && m.info.format) || ''], ['長度', m.kind === 'still' ? '' : fmtClock(m.dur)],
+      ['狀態', m.off ? '離線（再匯入一次同一個檔案就會接回來）' : m.conv != null ? `正在轉成瀏覽器能播放的 MP4（${pctOf(m)}）` : m.cant ? '這個瀏覽器不能播放，可以直接輸出' : m.mp4 ? '可以播放（轉成了 MP4，畫面和聲音照原檔）' : '可以播放'],
+      ...(m.mp4 && !m.off ? [['轉檔', `${fmtBytes(m.mp4.size)} 的 MP4，${m.kept ? '存在這個瀏覽器裡，下次不用再轉；清除這個項目就會刪掉' : '在記憶體裡，關掉分頁就沒了'}`]] : [])]),
       v ? el('p', { class: 'kv-h', text: '影片' }) : null,
       v ? kv([['編碼', `${v.codec ? v.codec.toUpperCase() : ''}${v.str ? `（${v.str}）` : ''}`], ['畫面', `${m.w} × ${m.h}${v.rotation ? `（轉 ${v.rotation}°）` : ''}`], ['影格速率', `${Math.round(fpsOf(m.rate) * 1000) / 1000} fps`], ['位元速率', v.bitrate ? `${(v.bitrate / 1e6).toFixed(1)} Mbps` : '']]) : null,
       a ? el('p', { class: 'kv-h', text: '聲音' }) : null,
@@ -2273,7 +2347,9 @@
   function newProject() {
     if (P.media.length && !confirm('清空整個專案（匯入的媒體和序列）？')) return;
     PL.stop(); SRC.close();
+    stopConverting(P.media);
     for (const m of P.media) if (m.url) URL.revokeObjectURL(m.url);
+    E.kept().then((kept) => { for (const name of kept.keys()) E.unkeep(name); });
     P.media = []; P.seq = null; P.name = '未命名'; P.seqN = 0; S.sel.clear(); S.prjSel.clear(); H.undo.length = 0; H.redo.length = 0;
     db.del('project').catch(() => {});
     renderPrj(); changed(); PL.fit(); $('#projDirty').hidden = true;
@@ -2538,7 +2614,7 @@
       : EX.why ? `要重新編碼（${EX.why}）：每個影格重新畫、重新壓縮，畫質由位元速率決定，時間大約和影片一樣長或更短。` : '重新編碼：每個影格重新畫、重新壓縮。想要最快、畫質不變，選「不重新編碼」。';
     const secs = fr2s(b - a);
     let est;
-    if (copy) est = EX.copyClips.reduce((s, c) => { const m = P.media.find((x) => x.info === c.info); return s + (m ? (m.size * (c.srcOut - c.srcIn)) / Math.max(0.1, m.dur) : 0); }, 0);
+    if (copy) est = EX.copyClips.reduce((s, c) => { const m = P.media.find((x) => x.info === c.info); return s + (m ? ((m.mp4 ? m.mp4.size : m.size) * (c.srcOut - c.srcIn)) / Math.max(0.1, m.dur) : 0); }, 0);
     else est = ((+$('#exRate').value * 1e6 + (ac ? 192e3 : 0)) * secs) / 8;
     $('#exEst').textContent = `約 ${fmtBytes(est)}`;
     $('#exDur').textContent = `長度 ${tcOf(b - a, seq.rate)}`;
@@ -2583,6 +2659,9 @@
   async function runExport() {
     if (EX.running || !P.seq) return;
     const seq = P.seq, [a, b] = exRange(), preset = $('#exPreset').value;
+    // (the film is made from the MP4s: a video still being converted, first)
+    const busy = P.media.find((m) => m.conv != null && seq.clips.some((c) => c.mid === m.id && !c.off && c.start < b && cEnd(c) > a));
+    if (busy) { toast(`「${busy.name}」還在轉成 MP4（${pctOf(busy)}），轉好再匯出`, 4000); return; }
     $('#exProgT').textContent = ''; $('#exProg').hidden = true;
     let name = `${($('#exName').value.trim() || seq.name).replace(/[\\/:*?"<>|]/g, '_')}.mp4`;
     let writable = null, handle = null;
@@ -2639,13 +2718,17 @@
     setTool('sel'); setFocus('tl');
     if (ON_PHONE) { $('#modeImport').hidden = true; $('#modeExport').hidden = true; return; }
     const had = await restore().catch(() => false);
+    // the MP4s of converted videos, kept in this browser: those videos are back at once (any others are taken away)
+    const back = [];
+    for (const [name, h] of await E.kept()) { const m = had && P.media.find((x) => `${x.id}.mp4` === name); if (m) back.push([m, h]); else E.unkeep(name); }
     renderPrj(); renderPrjName(); renderTabs(); renderFx(); renderMeta(); renderInfo(); renderMarks(); renderHist();
     if (had) {
       setMode(P.seq ? 'edit' : 'import');
       if (P.seq) requestAnimationFrame(() => zoomFit());
-      toast('上次的剪輯在這裡：把同樣的影片再放進來就會接回去（媒體離線）', 6500);
+      toast(back.length === P.media.length ? '上次的剪輯在這裡' : '上次的剪輯在這裡：把同樣的影片再放進來就會接回去（媒體離線）', 6500);
       $('#projDirty').hidden = true;
     } else setMode('import');
+    (async () => { for (const [m, h] of back) { try { await useMp4(m, await h.getFile(), true); } catch (e) { console.error(e); E.unkeep(`${m.id}.mp4`); } } })();
     // files dropped on the home page
     if (window.ManyHandoff && window.indexedDB) {
       ManyHandoff.takeAll('cut').then(async (entries) => {
