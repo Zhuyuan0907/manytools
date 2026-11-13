@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="ZhuyuanLoveFormat">
+  <defs>
+    <linearGradient id="zlf-bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#2a9be0"/>
+      <stop offset="1" stop-color="#0a72b3"/>
+    </linearGradient>
+    <clipPath id="zlf-photo"><rect x="10" y="13" width="44" height="38" rx="6"/></clipPath>
+  </defs>
+  <rect width="64" height="64" rx="15" fill="url(#zlf-bg)"/>
+  <!-- a photo: sun and hills -->
+  <rect x="10" y="13" width="44" height="38" rx="6" fill="#fff"/>
+  <g clip-path="url(#zlf-photo)">
+    <path d="M6 52l12-11 7 6 9-9 24 18z" fill="#c7e4f7"/>
+  </g>
+  <circle cx="19" cy="21" r="3" fill="#ffc062"/>
+  <!-- one format into another: arrows round -->
+  <path d="M40.5 19.5a9.5 9.5 0 0 1 7 4.6M47 18.6l.9 5.7-5.6.8" fill="none" stroke="#0b7fc2" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M23.5 44.5a9.5 9.5 0 0 1-7-4.6M17 45.4l-.9-5.7 5.6-.8" fill="none" stroke="#0b7fc2" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+  <!-- the heart -->
+  <path transform="translate(24.6 22.4) scale(.64)" d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" fill="#ff5a4e"/>
+</svg>

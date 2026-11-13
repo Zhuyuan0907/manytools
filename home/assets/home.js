@@ -164,10 +164,10 @@
             if (n) countUp(node, n);
           }
         };
-        set('video.files', f('video') + f('cut'));        // compressed + cut
+        set('video.files', f('video') + f('cut') + f('convert'));   // compressed + cut + converted
         set('pdf.files', f('pdf') + f('watermark'));      // compressed + watermarked
         set('avatar.files', f('avatar') + f('crop'));     // looked up + cropped
-        set('photo.files', f('image') + f('exif') + f('pick'));   // compressed + read + picked
+        set('photo.files', f('image') + f('exif') + f('pick') + f('format'));   // compressed + read + picked + converted
         for (const p of $$('.nums')) p.hidden = !$$('.n-c:not([hidden])', p).length;
       })
       .catch(() => {});
@@ -178,8 +178,9 @@
     video: ['/video', '../videotools/index.html'], cut: ['/cut', '../cuttools/index.html'], pdf: ['/pdf', '../pdftools/local/index.html'], watermark: ['/watermark', '../watermarktools/index.html'],
     avatar: ['/avatar', '../avatartools/index.html'], crop: ['/crop', '../croptools/index.html'], image: ['/image', '../imagetools/index.html'],
     exif: ['/exif', '../exiftools/index.html'], rename: ['/rename', '../renametools/index.html'], pick: ['/pick', '../picktools/index.html'],
+    convert: ['/convert', '../convtools/index.html'], format: ['/format', '../formattools/index.html'],
   };
-  const TOOL_NAME = { video: '影片碼率壓縮', cut: '影片剪輯', pdf: 'PDF 壓縮・拆分', watermark: 'PDF 浮水印', avatar: 'Gravatar 頭貼查詢', crop: '頭貼裁切', image: '圖片壓縮', exif: '照片參數查看', rename: '照片改名稱', pick: '照片挑選' };
+  const TOOL_NAME = { video: '影片碼率壓縮', cut: '影片剪輯', pdf: 'PDF 壓縮・拆分', watermark: 'PDF 浮水印', avatar: 'Gravatar 頭貼查詢', crop: '頭貼裁切', image: '圖片壓縮', exif: '照片參數查看', rename: '照片改名稱', pick: '照片挑選', convert: '影片轉檔', format: '圖片轉檔' };
   const RAW = /\.(cr3|cr2|crw|nef|nrw|arw|srf|sr2|raf|orf|ori|rw2|rwl|dng|pef|ptx|srw|3fr|fff|iiq|erf|kdc|dcr|mef|mos|mrw|x3f|gpr)$/i;
   const kindOf = (name, type) => (/\.zip$/i.test(name) || /zip/.test(type || '') ? 'zip'
     : RAW.test(name) ? 'raw'
@@ -189,9 +190,9 @@
   // what each tool can open
   const TAKES = {
     video: ['video'], cut: ['video', 'image'], pdf: ['pdf'], watermark: ['pdf'], avatar: [], crop: ['image'],
-    image: ['image'], exif: ['image', 'raw'], rename: ['image', 'raw', 'video', 'other'], pick: ['image', 'zip'],
+    image: ['image'], exif: ['image', 'raw'], rename: ['image', 'raw', 'video', 'other'], pick: ['image', 'zip'], convert: ['video'], format: ['image'],
   };
-  const PHOTO_TOOLS = ['pick', 'rename', 'image', 'exif'];
+  const PHOTO_TOOLS = ['pick', 'rename', 'format', 'image', 'exif'];
   const HIDDEN = (n) => n.startsWith('.') || /^(__MACOSX|thumbs\.db|desktop\.ini)$/i.test(n);
 
   // A drop: everything asked for now (the items are gone once the event is over), folders walked after.
@@ -254,7 +255,7 @@
     let entries;
     if ((tool === 'pick' || tool === 'rename') && handles) {
       entries = set.tops.map((t) => (t.dir ? { name: t.name, dir: t.dir } : { name: t.name, handle: t.handle }));
-    } else if (!set.folders && handles && (set.bytes > 300e6 || tool === 'video' || tool === 'cut')) {
+    } else if (!set.folders && handles && (set.bytes > 300e6 || tool === 'video' || tool === 'cut' || tool === 'convert')) {
       entries = set.tops.filter((t, i) => takes.includes(set.files[i].kind)).map((t) => ({ name: t.name, handle: t.handle }));
     } else if (useful.reduce((a, f) => a + f.file.size, 0) <= COPY_LIMIT) {
       entries = useful.map((f) => ({ name: f.file.name, file: f.file, path: f.path }));
@@ -299,8 +300,9 @@
     if (zips && !n) { if (phone) say('ZIP 要用電腦開「照片挑選」，手機請選照片'); else hand('pick', set); return; }
     asking = set;
     $('#askOptsV').hidden = true; $('#askOpts').hidden = false;
-    const can = { pick: !phone && (n - raw > 0 || zips > 0), rename: true, image: n - raw > 0, exif: n > 0 };
-    let best = !phone && (n >= 20 || zips) ? 'pick' : raw === n ? 'exif' : n <= 3 ? 'exif' : 'image';
+    const heic = set.files.filter((f) => /\.(heic|heif|hif)$/i.test(f.file.name)).length;
+    const can = { pick: !phone && (n - raw > 0 || zips > 0), rename: true, format: n - raw > 0, image: n - raw > 0, exif: n > 0 };
+    let best = !phone && (n >= 20 || zips) ? 'pick' : raw === n ? 'exif' : heic === n ? 'format' : n <= 3 ? 'exif' : 'image';
     if (!can[best]) best = PHOTO_TOOLS.find((t) => can[t]);
     // a phone with photos and a ZIP: the photos go on, the ZIP can't (said below, not counted up here)
     const what = [n ? `${num(n)} 張照片` : '', zips && !phone ? `${num(zips)} 個 ZIP` : '', set.folders ? `來自 ${set.tops.filter((t) => t.folder).length} 個資料夾` : ''].filter(Boolean).join('・');
@@ -312,20 +314,22 @@
     $('#askWhy').textContent = phone && zips ? `ZIP 要用電腦開「照片挑選」，這次只會用到這 ${num(n)} 張照片`
       : best === 'pick' ? (zips ? 'ZIP 只有照片挑選可以直接讀' : '這麼多張，通常先挑出要的')
       : raw === n ? '只有 RAW 檔：可以看參數或改名稱，不能壓縮'
+      : best === 'format' ? 'HEIC 很多地方打不開，通常是要轉成 JPG'
       : n <= 3 ? '幾張照片：看看參數，或壓到上限內' : '';
     dlg.showModal();
     $('#askOpts .opt.best').focus();
   }
-  // videos in: cut them or make them smaller (a phone has only the second: 影片剪輯 is for a computer or a tablet);
-  // a camcorder's files (MTS, MXF) are usually the ones to make smaller
+  // videos in: cut them, make them smaller or change their format (a phone has the last two: 影片剪輯 is for a computer
+  // or a tablet); a camcorder's files (MTS, MXF) are usually the ones to make smaller, an MKV or a WebM one to convert
   function askVideo(set) {
-    if (PHONE.matches) { hand('video', set); return; }
     asking = set;
     $('#askOpts').hidden = true; $('#askOptsV').hidden = false;
-    const cam = set.files.some((f) => /\.(mts|m2ts|mxf)$/i.test(f.file.name)), best = cam ? 'video' : 'cut';
+    const name = (re) => set.files.some((f) => re.test(f.file.name));
+    const cam = name(/\.(mts|m2ts|mxf)$/i), odd = name(/\.(mkv|webm)$/i);
+    const best = cam ? 'video' : odd ? 'convert' : PHONE.matches ? 'video' : 'cut';
     $('#askN').textContent = `${num(set.count(['video']))} 部影片`;
     for (const b of $$('#askOptsV .opt')) b.classList.toggle('best', b.dataset.tool === best);
-    $('#askWhy').textContent = cam ? 'MTS、MXF 是業務機錄的檔案，通常是要壓縮' : '';
+    $('#askWhy').textContent = cam ? 'MTS、MXF 是業務機錄的檔案，通常是要壓縮' : odd ? 'MKV、WebM 很多地方不能播，通常是要轉成 MP4' : '';
     dlg.showModal();
     $('#askOptsV .opt.best').focus();
   }
@@ -339,8 +343,9 @@
     if (e.target === dlg && downOut && outside(e)) dlg.close();
   });
   dlg.addEventListener('keydown', (e) => {
-    const i = '1234'.indexOf(e.key);
-    if (i >= 0) { const b = $$('.ask-opts:not([hidden]) .opt', dlg)[i]; if (b && !b.disabled) b.click(); }
+    // (the number on a button: a phone's list starts at 2 when 剪片段 isn't there)
+    const b = $$('.ask-opts:not([hidden]) .opt', dlg).find((x) => x.querySelector('kbd').textContent === e.key && x.offsetParent);
+    if (b && !b.disabled) b.click();
   });
   dlg.addEventListener('close', () => { asking = null; });
 

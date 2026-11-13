@@ -1,0 +1,210 @@
+<!doctype html>
+<html lang="zh-Hant-TW">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#ffffff">
+<title>ZhuyuanLoveFormat・圖片轉檔</title>
+<meta name="description" content="ZhuyuanLoveFormat：把 HEIC、PNG、WebP 這些圖片轉成 JPG、PNG 或 WebP，iPhone 的照片也可以，JPG 保留拍攝時間。圖片只在你的電腦裡處理，不會上傳到任何伺服器。">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="ZhuyuanTools">
+<meta property="og:locale" content="zh_TW">
+<meta property="og:title" content="ZhuyuanLoveFormat・圖片轉檔">
+<meta property="og:description" content="把 HEIC、PNG、WebP 這些圖片轉成 JPG、PNG 或 WebP，iPhone 的照片也可以。圖片只在你的電腦裡處理，不會上傳到任何伺服器。">
+<meta property="og:url" content="https://tools.zhuyuan.tw/format">
+<meta property="og:image" content="https://tools.zhuyuan.tw/format/assets/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" href="assets/logo.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/fonts/noto-sans-tc.css">
+<link rel="stylesheet" href="assets/app.css">
+</head>
+<body>
+<div class="app">
+  <header class="top">
+    <a class="brand" id="brand" href="../home/index.html" title="回到 ZhuyuanTools 首頁">
+      <img class="logo" src="assets/logo.svg" alt="" width="44" height="44">
+      <span class="brand-text">
+        <span class="wordmark">Zhuyuan<span class="w-love">Love</span><span class="w-tool">Format</span></span>
+        <span class="tagline">圖片轉檔工具</span>
+      </span>
+    </a>
+    <p class="privacy">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="10" width="16" height="11" rx="2"></rect><path d="M8 10V7a4 4 0 0 1 8 0v3"></path></svg>
+      <span class="privacy-long">圖片只在你的電腦裡處理，不會上傳到任何伺服器。</span><span class="privacy-short">不上傳</span>
+    </p>
+  </header>
+
+  <nav class="stepper" aria-label="步驟">
+    <p class="m-step" id="mStep" aria-hidden="true"></p>
+    <ol>
+      <li><button type="button" data-goto="1"><span class="dot">1</span><span class="lbl">放入圖片</span></button></li>
+      <li><button type="button" data-goto="2"><span class="dot">2</span><span class="lbl">轉檔設定</span></button></li>
+      <li><button type="button" data-goto="3"><span class="dot">3</span><span class="lbl">下載</span></button></li>
+    </ol>
+  </nav>
+
+  <main>
+    <!-- ============ STEP 1 ============ -->
+    <section class="panel" id="step1" aria-labelledby="h1t">
+      <div class="hero" id="hero">
+        <div class="hero-text">
+          <h2 class="hero-title" id="h1t">HEIC 打不開？<span>轉成 <em>JPG</em> 就好</span></h2>
+          <p class="hero-count" id="heroCount" aria-live="polite">免費・免註冊・圖片不上傳</p>
+        </div>
+        <div class="hero-art" aria-hidden="true">
+          <svg viewBox="0 0 300 160" width="300" height="160">
+            <g class="ha-big">
+              <rect x="6" y="12" width="124" height="96" rx="12" class="ha-page"/>
+              <circle cx="36" cy="40" r="10" class="ha-sun"/>
+              <path d="M16 100l34-38 22 22 16-16 34 32z" class="ha-hill"/>
+              <rect x="33" y="120" width="70" height="30" rx="8" class="ha-chip-bad"/>
+              <text x="68" y="140" class="ha-chip-text">HEIC</text>
+            </g>
+            <g class="ha-arrow"><path d="M142 62h36"/><path d="M170 52l10 10-10 10"/></g>
+            <g class="ha-small">
+              <rect x="196" y="20" width="94" height="88" rx="10" class="ha-page"/>
+              <circle cx="220" cy="44" r="8" class="ha-sun"/>
+              <path d="M204 100l27-31 18 18 13-13 22 26z" class="ha-hill"/>
+              <rect x="215" y="120" width="56" height="26" rx="7" class="ha-chip-ok"/>
+              <text x="243" y="138" class="ha-chip-text">JPG</text>
+              <circle cx="286" cy="22" r="14" class="ha-check-bg"/>
+              <path d="M279.5 22.5l4.5 4.5 8-9" class="ha-check"/>
+            </g>
+          </svg>
+        </div>
+      </div>
+      <div class="panel-body step1-body">
+        <label class="drop" id="drop" for="fileInput">
+          <input type="file" id="fileInput" accept="image/*,.jpg,.jpeg,.png,.webp,.gif,.avif,.bmp,.heic,.heif,.tif,.tiff" multiple aria-label="選擇圖片">
+          <span class="drop-inner">
+            <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="3"></rect><circle cx="9" cy="10" r="2"></circle><path d="m21 16-4.5-4.5L8 20"></path></svg>
+            <span class="drop-title"><span class="d-desk">把圖片拖進這裡</span><span class="d-mob">選擇圖片</span></span>
+            <span class="drop-hint"><span class="d-desk">或點一下選擇檔案・</span>可以一次放很多張</span>
+          </span>
+        </label>
+        <ol class="how" aria-label="怎麼用">
+          <li><span class="how-no">1</span><b>放入圖片</b><span>HEIC・PNG・WebP・JPG 都可以</span></li>
+          <li><span class="how-no">2</span><b>選格式</b><span>JPG、PNG 或 WebP</span></li>
+          <li><span class="how-no">3</span><b>下載</b><span>JPG 會保留拍攝時間</span></li>
+        </ol>
+        <ol class="sources" id="sources" aria-label="已加入的圖片"></ol>
+      </div>
+      <div class="panel-foot">
+        <span class="foot-note" id="note1">還沒有加入圖片。</span>
+        <button type="button" class="btn primary" id="next1" disabled>下一步：轉檔設定 →</button>
+      </div>
+    </section>
+
+    <!-- ============ STEP 2 ============ -->
+    <section class="panel" id="step2" aria-labelledby="h2t" hidden>
+      <div class="panel-head">
+        <span class="step-no" aria-hidden="true">2</span>
+        <div class="head-text">
+          <h2 id="h2t">轉成什麼格式？</h2>
+          <p>設定會套用到每一張圖片。</p>
+        </div>
+      </div>
+      <div class="panel-body">
+        <div class="settings">
+          <div class="set-col">
+            <div class="set">
+              <span class="set-label" id="lblFmt">轉成</span>
+              <div class="seg" role="radiogroup" aria-labelledby="lblFmt">
+                <label><input type="radio" name="fmt" value="image/jpeg" checked><span>JPG</span></label>
+                <label><input type="radio" name="fmt" value="image/png"><span>PNG</span></label>
+                <label id="webpOpt"><input type="radio" name="fmt" value="image/webp"><span>WebP</span></label>
+                <label id="avifOpt" hidden><input type="radio" name="fmt" value="image/avif"><span>AVIF</span></label>
+              </div>
+              <p class="help" id="fmtHelp"></p>
+            </div>
+            <div class="set" id="qSet">
+              <span class="set-label" id="lblQ">畫質</span>
+              <div class="seg" role="radiogroup" aria-labelledby="lblQ">
+                <label><input type="radio" name="q" value="0.92" checked><span>高</span></label>
+                <label><input type="radio" name="q" value="0.85"><span>標準</span></label>
+                <label><input type="radio" name="q" value="0.75"><span>省空間</span></label>
+              </div>
+              <p class="help" id="qHelp"></p>
+            </div>
+            <div class="set" id="bgSet">
+              <span class="set-label" id="lblBg">透明的地方</span>
+              <div class="seg" role="radiogroup" aria-labelledby="lblBg">
+                <label><input type="radio" name="bg" value="#ffffff" checked><span>變白色</span></label>
+                <label><input type="radio" name="bg" value="#000000"><span>變黑色</span></label>
+              </div>
+              <p class="help">JPG 沒有透明，PNG、WebP 的透明背景要填一個顏色</p>
+            </div>
+          </div>
+          <div class="set-col">
+            <div class="set">
+              <label class="set-label" for="maxSide">最長邊</label>
+              <select class="select" id="maxSide">
+                <option value="0">維持原始尺寸</option>
+                <option value="4096">4096 px</option>
+                <option value="3840">3840 px</option>
+                <option value="2560">2560 px</option>
+                <option value="2048">2048 px</option>
+                <option value="1920">1920 px</option>
+                <option value="1280">1280 px</option>
+                <option value="1080">1080 px</option>
+              </select>
+            </div>
+            <div class="set" id="metaSet">
+              <span class="set-label" id="lblMeta">拍攝資訊</span>
+              <div class="seg" role="radiogroup" aria-labelledby="lblMeta">
+                <label><input type="radio" name="meta" value="nogps" checked><span>保留，拿掉位置</span></label>
+                <label><input type="radio" name="meta" value="all"><span>全部保留</span></label>
+                <label><input type="radio" name="meta" value="none"><span>不保留</span></label>
+              </div>
+              <p class="help">拍攝時間、相機、鏡頭；位置是拍照的地點</p>
+            </div>
+            <div class="set">
+              <span class="set-label">接下來會</span>
+              <ul class="plan" id="plan"></ul>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="panel-foot">
+        <button type="button" class="btn back" data-goto="1" aria-label="上一步"><span aria-hidden="true">←</span><span class="lbl">上一步</span></button>
+        <span class="foot-note" id="note2"></span>
+        <button type="button" class="btn primary" id="next2">開始轉檔 →</button>
+      </div>
+    </section>
+
+    <!-- ============ STEP 3 ============ -->
+    <section class="panel" id="step3" aria-labelledby="h3t" hidden>
+      <div class="panel-head">
+        <span class="step-no" aria-hidden="true">3</span>
+        <div class="head-text">
+          <h2 id="h3t">下載</h2>
+          <p id="h3p">轉好的圖片在這裡</p>
+        </div>
+      </div>
+      <div class="panel-body step3-body">
+        <p class="sum" id="sum"></p>
+        <ol class="list" id="results" aria-label="轉檔結果"></ol>
+        <button type="button" class="btn small restart" id="restart"><span aria-hidden="true">↺</span> 換一批圖片重新開始</button>
+      </div>
+      <div class="panel-foot">
+        <button type="button" class="btn back" data-goto="2" aria-label="回去修改設定"><span aria-hidden="true">←</span><span class="lbl">回去修改設定</span></button>
+        <span class="foot-note" id="note3"></span>
+        <button type="button" class="link-btn" id="zipAlt" hidden>下載 ZIP</button>
+        <button type="button" class="btn primary" id="saveAll" disabled>全部下載（ZIP）</button>
+      </div>
+    </section>
+  </main>
+</div>
+
+<div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+
+<script src="/shared/zip.js"></script>
+<script src="assets/exif.js"></script>
+<script src="assets/app.js"></script>
+<script src="/shared/handoff.js" data-tool="format" data-input="#fileInput"></script>
+<script src="/shared/mobile-nav.js"></script>
+<script src="/shared/tools-nav.js" data-tool="format"></script>
+</body>
+</html>

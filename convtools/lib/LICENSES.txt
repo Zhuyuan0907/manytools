@@ -1,0 +1,14 @@
+影片轉檔 (convtools) — the libraries in this folder, loaded only when a conversion needs them:
+
+mediabunny-mp3-encoder-1.60.0.min.js   @mediabunny/mp3-encoder 1.60.0 (npm), MPL-2.0 (licenses/mediabunny-extensions-MPL-2.0.txt).
+                                       Contains a WebAssembly build of LAME (https://lame.sourceforge.io/), LGPL
+                                       (licenses/lame-COPYING.txt, licenses/lame-LICENSE.txt). Source: the npm package's src/
+                                       and https://github.com/Vanilagy/mediabunny/tree/main/packages/mp3-encoder
+mediabunny-aac-encoder-1.60.0.min.js   @mediabunny/aac-encoder 1.60.0 (npm), MPL-2.0 (licenses/mediabunny-extensions-MPL-2.0.txt).
+                                       Contains a WebAssembly build of FFmpeg's AAC encoder (https://ffmpeg.org/), LGPL 2.1
+                                       (licenses/ffmpeg-LICENSE.md, licenses/ffmpeg-COPYING.LGPLv2.1.txt). Source: the npm
+                                       package's src/ and https://github.com/Vanilagy/mediabunny/tree/main/packages/aac-encoder
+gifenc-1.0.3.esm.js                    gifenc 1.0.3 (npm, Matt DesLauriers), MIT (licenses/gifenc-LICENSE.md).
+
+Mediabunny itself (1.60.0, MPL-2.0) is shared from videotools/lib/ (/video/lib/mediabunny.min.js).
+All unmodified.

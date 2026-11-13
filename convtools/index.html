@@ -1,0 +1,247 @@
+<!doctype html>
+<html lang="zh-Hant-TW">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#ffffff">
+<title>ZhuyuanLoveConvert・影片轉檔</title>
+<meta name="description" content="ZhuyuanLoveConvert：把 MOV、MKV、TS、WebM 這些影片轉成 MP4、MOV、WebM、GIF，或只留聲音存成 MP3、M4A、WAV。能不重新壓縮就不壓，幾秒就好。影片只在你的電腦裡處理，不會上傳到任何伺服器。">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="ZhuyuanTools">
+<meta property="og:locale" content="zh_TW">
+<meta property="og:title" content="ZhuyuanLoveConvert・影片轉檔">
+<meta property="og:description" content="把 MOV、MKV、TS、WebM 這些影片轉成 MP4、MOV、WebM、GIF，或只留聲音存成 MP3、M4A、WAV。影片只在你的電腦裡處理，不會上傳到任何伺服器。">
+<meta property="og:url" content="https://tools.zhuyuan.tw/convert">
+<meta property="og:image" content="https://tools.zhuyuan.tw/convert/assets/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" href="assets/logo.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/fonts/noto-sans-tc.css">
+<link rel="stylesheet" href="assets/app.css">
+</head>
+<body>
+<div class="app">
+  <header class="top">
+    <a class="brand" id="brand" href="../home/index.html" title="回到 ZhuyuanTools 首頁">
+      <img class="logo" src="assets/logo.svg" alt="" width="44" height="44">
+      <span class="brand-text">
+        <span class="wordmark">Zhuyuan<span class="w-love">Love</span><span class="w-video">Convert</span></span>
+        <span class="tagline">影片轉檔工具</span>
+      </span>
+    </a>
+    <p class="privacy">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="10" width="16" height="11" rx="2"></rect><path d="M8 10V7a4 4 0 0 1 8 0v3"></path></svg>
+      <span class="privacy-long">影片只在你的電腦裡處理，不會上傳到任何伺服器。</span><span class="privacy-short">不上傳</span>
+    </p>
+  </header>
+
+  <nav class="stepper" aria-label="步驟">
+    <p class="m-step" id="mStep" aria-hidden="true"></p>
+    <ol>
+      <li><button type="button" data-goto="1"><span class="dot">1</span><span class="lbl">放入影片</span></button></li>
+      <li><button type="button" data-goto="2"><span class="dot">2</span><span class="lbl">轉檔設定</span></button></li>
+      <li><button type="button" data-goto="3"><span class="dot">3</span><span class="lbl">轉檔與下載</span></button></li>
+    </ol>
+  </nav>
+
+  <main>
+    <div id="support" class="banner" hidden></div>
+
+    <!-- ============ STEP 1 ============ -->
+    <section class="panel" id="step1" aria-labelledby="h1t">
+      <div class="hero" id="hero">
+        <div class="hero-text">
+          <h2 class="hero-title" id="h1t">影片格式不對？<span>轉成 <em>MP4</em> 就好</span></h2>
+          <p class="hero-count" id="heroCount" aria-live="polite">免費・免註冊・影片不上傳</p>
+        </div>
+        <div class="hero-art" aria-hidden="true">
+          <svg viewBox="0 0 300 170" width="300" height="170">
+            <g class="ha-big">
+              <rect x="6" y="22" width="122" height="96" rx="12" class="ha-page"/>
+              <path d="M6 40h122M6 100h122" class="ha-strip"/>
+              <path d="M18 27v8M34 27v8M50 27v8M66 27v8M82 27v8M98 27v8M114 27v8M18 105v8M34 105v8M50 105v8M66 105v8M82 105v8M98 105v8M114 105v8" class="ha-holes"/>
+              <path d="M58 56v28l24-14z" class="ha-play"/>
+              <rect x="35" y="128" width="64" height="30" rx="8" class="ha-chip-bad"/>
+              <text x="67" y="148" class="ha-chip-text">MOV</text>
+            </g>
+            <g class="ha-arrow">
+              <path d="M140 72h36" /><path d="M168 62l10 10-10 10" />
+            </g>
+            <g class="ha-small">
+              <rect x="194" y="38" width="96" height="74" rx="10" class="ha-page"/>
+              <path d="M194 52h96M194 98h96" class="ha-strip"/>
+              <path d="M205 42v6M219 42v6M233 42v6M247 42v6M261 42v6M275 42v6M205 102v6M219 102v6M233 102v6M247 102v6M261 102v6M275 102v6" class="ha-holes"/>
+              <path d="M235 64v20l17-10z" class="ha-play"/>
+              <rect x="214" y="122" width="56" height="26" rx="7" class="ha-chip-ok"/>
+              <text x="242" y="140" class="ha-chip-text">MP4</text>
+              <circle cx="286" cy="40" r="14" class="ha-check-bg"/>
+              <path d="M279.5 40.5l4.5 4.5 8-9" class="ha-check"/>
+            </g>
+          </svg>
+        </div>
+      </div>
+      <div class="panel-body step1-body">
+        <label class="drop" id="drop" for="fileInput">
+          <input type="file" id="fileInput" accept="video/*,audio/*,.mp4,.mov,.m4v,.mkv,.webm,.ts,.mts,.m2ts,.3gp,.mp3,.m4a,.wav,.aac,.flac,.ogg,.opus" multiple aria-label="選擇影片檔">
+          <span class="drop-inner">
+            <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2.5" y="5" width="14" height="14" rx="2.5"></rect><path d="m16.5 10 5-3v10l-5-3"></path><path d="M9.5 15.5v-6"></path><path d="m7 12 2.5-2.5L12 12"></path></svg>
+            <span class="drop-title"><span class="d-desk">把影片拖進這裡</span><span class="d-mob">選擇影片</span></span>
+            <span class="drop-hint"><span class="d-desk">或點一下選擇檔案・</span>可以一次放很多支</span>
+          </span>
+        </label>
+        <ol class="how" aria-label="怎麼用">
+          <li><span class="how-no">1</span><b>放入影片</b><span>MOV・MKV・TS・WebM・MP4 都可以</span></li>
+          <li><span class="how-no">2</span><b>選格式</b><span>MP4、MOV、WebM、GIF，或只要聲音</span></li>
+          <li><span class="how-no">3</span><b>轉檔並下載</b><span>能不重新壓縮就不壓，幾秒就好</span></li>
+        </ol>
+        <ol class="sources" id="sources" aria-label="已加入的影片"></ol>
+      </div>
+      <div class="panel-foot">
+        <span class="foot-note" id="note1">還沒有加入影片。</span>
+        <button type="button" class="btn primary" id="next1" disabled>下一步：轉檔設定 →</button>
+      </div>
+    </section>
+
+    <!-- ============ STEP 2 ============ -->
+    <section class="panel" id="step2" aria-labelledby="h2t" hidden>
+      <div class="panel-head">
+        <span class="step-no" aria-hidden="true">2</span>
+        <div class="head-text">
+          <h2 id="h2t">轉成什麼格式？</h2>
+          <p>設定會套用到清單裡的每一支影片。</p>
+        </div>
+      </div>
+      <div class="panel-body">
+        <div class="settings">
+          <div class="set-col">
+            <div class="set">
+              <span class="set-label" id="lblFmt">轉成</span>
+              <div class="fmt-rows" role="radiogroup" aria-labelledby="lblFmt">
+                <div class="fmt-row"><span class="fmt-kind">影片</span>
+                  <div class="seg">
+                    <label data-fmt="mp4"><input type="radio" name="fmt" value="mp4" checked><span>MP4</span></label>
+                    <label data-fmt="mov"><input type="radio" name="fmt" value="mov"><span>MOV</span></label>
+                    <label data-fmt="webm"><input type="radio" name="fmt" value="webm"><span>WebM</span></label>
+                    <label data-fmt="gif"><input type="radio" name="fmt" value="gif"><span>GIF</span></label>
+                  </div>
+                </div>
+                <div class="fmt-row"><span class="fmt-kind">只要聲音</span>
+                  <div class="seg">
+                    <label data-fmt="mp3"><input type="radio" name="fmt" value="mp3"><span>MP3</span></label>
+                    <label data-fmt="m4a"><input type="radio" name="fmt" value="m4a"><span>M4A</span></label>
+                    <label data-fmt="wav"><input type="radio" name="fmt" value="wav"><span>WAV</span></label>
+                  </div>
+                </div>
+              </div>
+              <p class="help" id="fmtHelp"></p>
+            </div>
+            <div class="set" id="qSet">
+              <span class="set-label" id="lblQ">畫質</span>
+              <div class="seg" role="radiogroup" aria-labelledby="lblQ">
+                <label><input type="radio" name="q" value="orig" checked><span>原畫質</span></label>
+                <label><input type="radio" name="q" value="high"><span>高</span></label>
+                <label><input type="radio" name="q" value="medium"><span>標準</span></label>
+                <label><input type="radio" name="q" value="low"><span>小</span></label>
+              </div>
+              <p class="help" id="qHelp"></p>
+            </div>
+            <div class="set" id="abSet" hidden>
+              <span class="set-label" id="lblAb">音質</span>
+              <div class="seg" role="radiogroup" aria-labelledby="lblAb">
+                <label><input type="radio" name="ab" value="320000"><span>320 kbps</span></label>
+                <label><input type="radio" name="ab" value="192000" checked><span>192 kbps</span></label>
+                <label><input type="radio" name="ab" value="128000"><span>128 kbps</span></label>
+              </div>
+              <p class="help">192 kbps 一般聽不出差別；320 最好、檔案最大</p>
+            </div>
+          </div>
+          <div class="set-col">
+            <div class="set" id="resSet">
+              <label class="set-label" for="res">解析度</label>
+              <select class="select" id="res">
+                <option value="0">維持原始</option>
+                <option value="2160">4K（2160p）</option>
+                <option value="1080">1080p</option>
+                <option value="720">720p</option>
+                <option value="480">480p</option>
+              </select>
+              <p class="help">比原本小的才會縮；改解析度要重新壓縮</p>
+            </div>
+            <div class="set gif-set" id="gifSet" hidden>
+              <span class="set-label">GIF</span>
+              <div class="selects">
+                <label><span>從（秒）</span><input class="select time-in" type="number" id="gifFrom" min="0" step="0.5" value="0" inputmode="decimal"></label>
+                <label><span>長度</span>
+                  <select class="select" id="gifLen">
+                    <option value="3">3 秒</option>
+                    <option value="5" selected>5 秒</option>
+                    <option value="10">10 秒</option>
+                    <option value="15">15 秒</option>
+                    <option value="30">30 秒</option>
+                  </select>
+                </label>
+                <label><span>寬度</span>
+                  <select class="select" id="gifW">
+                    <option value="320">320 px</option>
+                    <option value="480" selected>480 px</option>
+                    <option value="640">640 px</option>
+                    <option value="800">800 px</option>
+                  </select>
+                </label>
+                <label><span>每秒</span>
+                  <select class="select" id="gifFps">
+                    <option value="8">8 張</option>
+                    <option value="12" selected>12 張</option>
+                    <option value="15">15 張</option>
+                    <option value="24">24 張</option>
+                  </select>
+                </label>
+              </div>
+              <p class="help">GIF 沒有聲音；越長、越寬、每秒越多張，檔案越大</p>
+            </div>
+            <div class="set">
+              <span class="set-label">接下來會</span>
+              <ul class="plan" id="plan"></ul>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="panel-foot">
+        <button type="button" class="btn back" data-goto="1" aria-label="上一步"><span aria-hidden="true">←</span><span class="lbl">上一步</span></button>
+        <span class="foot-note" id="note2"></span>
+        <button type="button" class="btn primary" id="runAll" disabled>開始轉檔 →</button>
+      </div>
+    </section>
+
+    <!-- ============ STEP 3 ============ -->
+    <section class="panel" id="step3" aria-labelledby="h3t" hidden>
+      <div class="panel-head">
+        <span class="step-no" aria-hidden="true">3</span>
+        <div class="head-text">
+          <h2 id="h3t">轉檔與下載</h2>
+          <p id="h3p">處理中請不要關閉這個分頁</p>
+        </div>
+      </div>
+      <div class="panel-body step4-body">
+        <div class="overall-row"><div class="overall" id="overall"></div><button type="button" class="link-btn stop" id="stopRun">停止轉檔</button></div>
+        <ol class="outputs" id="rlist" aria-label="轉檔進度"></ol>
+        <button type="button" class="btn small restart" id="restart" hidden><span aria-hidden="true">↺</span> 換一批影片重新開始</button>
+      </div>
+      <div class="panel-foot">
+        <button type="button" class="btn back" id="back3" data-goto="2" aria-label="回去修改設定"><span aria-hidden="true">←</span><span class="lbl">回去修改設定</span></button>
+        <span class="foot-note" id="note3"></span>
+      </div>
+    </section>
+  </main>
+</div>
+
+<div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+
+<script src="/video/lib/mediabunny.min.js"></script>
+<script src="assets/app.js"></script>
+<script src="/shared/handoff.js" data-tool="convert" data-input="#fileInput"></script>
+<script src="/shared/mobile-nav.js"></script>
+<script src="/shared/tools-nav.js" data-tool="convert"></script>
+</body>
+</html>

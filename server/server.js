@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /* ZhuyuanTools static server + the public counters. No dependencies: `node server/server.js`.
    Clean URLs, each tool still in its own folder:
-     /       → home/ (its 拍攝 side at /photo)            /video → videotools/            /pdf → pdftools/local/     /avatar → avatartools/     /image → imagetools/     /crop → croptools/     /watermark → watermarktools/     /exif → exiftools/     /rename → renametools/     /pick → picktools/     /fonts → fonts/     /shared → shared/
+     /       → home/ (its 拍攝 side at /photo)            /video → videotools/            /pdf → pdftools/local/     /avatar → avatartools/     /image → imagetools/     /crop → croptools/     /watermark → watermarktools/     /exif → exiftools/     /rename → renametools/     /pick → picktools/     /cut → cuttools/     /convert → convtools/     /format → formattools/     /fonts → fonts/     /shared → shared/
    A tool's page is served at /video (no trailing slash) with <base href="/video/"> injected, so its relative
    asset paths keep working both here and when the folder is opened straight from disk.
    Counters keep only totals (files, seconds/pages, bytes saved) per tool — never file content:
@@ -19,6 +19,8 @@
      POST /rename/api/stats/processed ← { files }   (files renamed)
      POST /pick/api/stats/processed   ← { files }   (picked photos saved)
      POST /cut/api/stats/processed    ← { files, seconds }   (films saved from the editor)
+     POST /convert/api/stats/processed ← { files, seconds }   (videos converted)
+     POST /format/api/stats/processed ← { files }   (pictures converted)
    The photo tool's Flickr links are asked from here (server/flickr.js), so the API key stays on this machine:
      GET  /exif/api/flickr/status, /exif/api/flickr/rest?method=…, /exif/api/flickr/oembed?url=…
    照片挑選's second window is /pick/second. Its demo, /pick/demo, is the one place photos come from this server:
@@ -38,7 +40,8 @@ const HOST = process.env.HOST || '127.0.0.1';
 const STATS_FILE = process.env.STATS_FILE || path.join(__dirname, 'data', 'stats.json');
 
 // route → folder. The root mount must stay last. /fonts is shared by every page and never changes, and neither do
-// the photo tool's libraries (version in each file name; its 7.5 MB Perl runtime shouldn't be fetched twice).
+// the photo tool's libraries (version in each file name; its 7.5 MB Perl runtime shouldn't be fetched twice) or the
+// video converter's encoders (the same).
 const MOUNTS = [
   { route: '/video', dir: path.join(ROOT, 'videotools'), tool: 'video' },
   { route: '/pdf', dir: path.join(ROOT, 'pdftools', 'local'), tool: 'pdf' },
@@ -51,6 +54,9 @@ const MOUNTS = [
   { route: '/rename', dir: path.join(ROOT, 'renametools'), tool: 'rename' },
   { route: '/pick', dir: path.join(ROOT, 'picktools'), tool: 'pick' },
   { route: '/cut', dir: path.join(ROOT, 'cuttools'), tool: 'cut' },
+  { route: '/convert/lib', dir: path.join(ROOT, 'convtools', 'lib'), immutable: true },
+  { route: '/convert', dir: path.join(ROOT, 'convtools'), tool: 'convert' },
+  { route: '/format', dir: path.join(ROOT, 'formattools'), tool: 'format' },
   { route: '/fonts', dir: path.join(ROOT, 'fonts'), immutable: true },
   { route: '/shared', dir: path.join(ROOT, 'shared') },
   { route: '', dir: path.join(ROOT, 'home') },
@@ -69,12 +75,14 @@ const LEGACY = [
   [/^\/renametools(\/(index\.html)?)?$/, '/rename'],
   [/^\/picktools(\/(index\.html)?)?$/, '/pick'],
   [/^\/cuttools(\/(index\.html)?)?$/, '/cut'],
+  [/^\/convtools(\/(index\.html)?)?$/, '/convert'],
+  [/^\/formattools(\/(index\.html)?)?$/, '/format'],
   [/^\/pick\/second(\.html|\/)$/, '/pick/second'],
   [/^\/pick\/demo\/(index\.html)?$/, '/pick/demo'],
   [/^\/photo\/$/, '/photo'],
 ];
 
-const FIELDS = { video: ['files', 'seconds', 'savedBytes'], pdf: ['files', 'pages', 'savedBytes'], avatar: ['files'], image: ['files', 'savedBytes'], crop: ['files'], watermark: ['files'], exif: ['files'], rename: ['files'], pick: ['files'], cut: ['files', 'seconds'] };
+const FIELDS = { video: ['files', 'seconds', 'savedBytes'], pdf: ['files', 'pages', 'savedBytes'], avatar: ['files'], image: ['files', 'savedBytes'], crop: ['files'], watermark: ['files'], exif: ['files'], rename: ['files'], pick: ['files'], cut: ['files', 'seconds'], convert: ['files', 'seconds'], format: ['files'] };
 // Upper bounds for one report, so a single bad request can't inflate the counters much. A rename is one report for
 // a whole folder, a pick the whole batch saved.
 const LIMITS = { files: 50, seconds: 6 * 3600 * 50, pages: 5000, savedBytes: 200e9 };
@@ -86,7 +94,7 @@ const TYPES = {
   '.txt': 'text/plain; charset=utf-8', '.woff2': 'font/woff2', '.jpeg': 'image/jpeg', '.webp': 'image/webp', '.heic': 'image/heic', '.heif': 'image/heif', '.wasm': 'application/wasm', '.gz': 'application/gzip', '.ico': 'image/x-icon',
 };
 
-let stats = { video: {}, pdf: {}, avatar: {}, image: {}, crop: {}, watermark: {}, exif: {}, rename: {}, pick: {}, cut: {} };
+let stats = { video: {}, pdf: {}, avatar: {}, image: {}, crop: {}, watermark: {}, exif: {}, rename: {}, pick: {}, cut: {}, convert: {}, format: {} };
 try { stats = { ...stats, ...JSON.parse(fs.readFileSync(STATS_FILE, 'utf8')) }; } catch {}
 for (const [k, fields] of Object.entries(FIELDS)) for (const f of fields) stats[k][f] = +stats[k][f] || 0;
 

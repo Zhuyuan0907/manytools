@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="ZhuyuanLoveConvert">
+  <defs>
+    <linearGradient id="zlcv-bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#eb9a2c"/>
+      <stop offset="1" stop-color="#c46304"/>
+    </linearGradient>
+  </defs>
+  <rect width="64" height="64" rx="15" fill="url(#zlcv-bg)"/>
+  <!-- a strip of film -->
+  <rect x="9" y="15" width="46" height="34" rx="6" fill="#fff"/>
+  <!-- sprocket holes -->
+  <path d="M14.5 20h3M22 20h3M29.5 20h3M37 20h3M44.5 20h3M14.5 44h3M22 44h3M29.5 44h3M37 44h3M44.5 44h3" stroke="#fbe0bd" stroke-width="3" stroke-linecap="round"/>
+  <!-- one format into another: arrows round -->
+  <path d="M15 29a8 8 0 0 1 6.5-4.6M20.4 22.6l1.5 2-2.2 1.5" fill="none" stroke="#c86a05" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M49 35a8 8 0 0 1-6.5 4.6M43.6 41.4l-1.5-2 2.2-1.5" fill="none" stroke="#c86a05" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+  <!-- the heart -->
+  <path transform="translate(24.6 24.4) scale(.64)" d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" fill="#ff5a4e"/>
+</svg>
