@@ -164,7 +164,7 @@
             if (n) countUp(node, n);
           }
         };
-        set('video.files', f('video'));
+        set('video.files', f('video') + f('cut'));        // compressed + cut
         set('pdf.files', f('pdf') + f('watermark'));      // compressed + watermarked
         set('avatar.files', f('avatar') + f('crop'));     // looked up + cropped
         set('photo.files', f('image') + f('exif') + f('pick'));   // compressed + read + picked
@@ -175,11 +175,11 @@
 
   // ---------- files in ----------
   const TOOL_URL = {
-    video: ['/video', '../videotools/index.html'], pdf: ['/pdf', '../pdftools/local/index.html'], watermark: ['/watermark', '../watermarktools/index.html'],
+    video: ['/video', '../videotools/index.html'], cut: ['/cut', '../cuttools/index.html'], pdf: ['/pdf', '../pdftools/local/index.html'], watermark: ['/watermark', '../watermarktools/index.html'],
     avatar: ['/avatar', '../avatartools/index.html'], crop: ['/crop', '../croptools/index.html'], image: ['/image', '../imagetools/index.html'],
     exif: ['/exif', '../exiftools/index.html'], rename: ['/rename', '../renametools/index.html'], pick: ['/pick', '../picktools/index.html'],
   };
-  const TOOL_NAME = { video: '影片碼率壓縮', pdf: 'PDF 壓縮・拆分', watermark: 'PDF 浮水印', avatar: 'Gravatar 頭貼查詢', crop: '頭貼裁切', image: '圖片壓縮', exif: '照片參數查看', rename: '照片改名稱', pick: '照片挑選' };
+  const TOOL_NAME = { video: '影片碼率壓縮', cut: '影片剪輯', pdf: 'PDF 壓縮・拆分', watermark: 'PDF 浮水印', avatar: 'Gravatar 頭貼查詢', crop: '頭貼裁切', image: '圖片壓縮', exif: '照片參數查看', rename: '照片改名稱', pick: '照片挑選' };
   const RAW = /\.(cr3|cr2|crw|nef|nrw|arw|srf|sr2|raf|orf|ori|rw2|rwl|dng|pef|ptx|srw|3fr|fff|iiq|erf|kdc|dcr|mef|mos|mrw|x3f|gpr)$/i;
   const kindOf = (name, type) => (/\.zip$/i.test(name) || /zip/.test(type || '') ? 'zip'
     : RAW.test(name) ? 'raw'
@@ -188,7 +188,7 @@
     : /^image\//.test(type || '') || /\.(jpe?g|png|webp|gif|avif|bmp|heic|heif|hif)$/i.test(name) ? 'image' : 'other');
   // what each tool can open
   const TAKES = {
-    video: ['video'], pdf: ['pdf'], watermark: ['pdf'], avatar: [], crop: ['image'],
+    video: ['video'], cut: ['video', 'image'], pdf: ['pdf'], watermark: ['pdf'], avatar: [], crop: ['image'],
     image: ['image'], exif: ['image', 'raw'], rename: ['image', 'raw', 'video', 'other'], pick: ['image', 'zip'],
   };
   const PHOTO_TOOLS = ['pick', 'rename', 'image', 'exif'];
@@ -254,7 +254,7 @@
     let entries;
     if ((tool === 'pick' || tool === 'rename') && handles) {
       entries = set.tops.map((t) => (t.dir ? { name: t.name, dir: t.dir } : { name: t.name, handle: t.handle }));
-    } else if (!set.folders && handles && (set.bytes > 300e6 || tool === 'video')) {
+    } else if (!set.folders && handles && (set.bytes > 300e6 || tool === 'video' || tool === 'cut')) {
       entries = set.tops.filter((t, i) => takes.includes(set.files[i].kind)).map((t) => ({ name: t.name, handle: t.handle }));
     } else if (useful.reduce((a, f) => a + f.file.size, 0) <= COPY_LIMIT) {
       entries = useful.map((f) => ({ name: f.file.name, file: f.file, path: f.path }));
@@ -277,7 +277,7 @@
       return;
     }
     const photos = set.count(['image', 'raw', 'zip']);
-    if (k.has('video') && k.size === 1) { hand('video', set); return; }
+    if (k.has('video') && k.size === 1) { askVideo(set); return; }
     if (k.has('pdf') && k.size === 1) { hand('pdf', set); return; }
     if (photos && photos === set.files.length - set.count(['other'])) {
       if (side !== 'photo') await turn('photo');
@@ -298,13 +298,14 @@
     // a ZIP (a Drive download): only 照片挑選 reads it as it is
     if (zips && !n) { if (phone) say('ZIP 要用電腦開「照片挑選」，手機請選照片'); else hand('pick', set); return; }
     asking = set;
+    $('#askOptsV').hidden = true; $('#askOpts').hidden = false;
     const can = { pick: !phone && (n - raw > 0 || zips > 0), rename: true, image: n - raw > 0, exif: n > 0 };
     let best = !phone && (n >= 20 || zips) ? 'pick' : raw === n ? 'exif' : n <= 3 ? 'exif' : 'image';
     if (!can[best]) best = PHOTO_TOOLS.find((t) => can[t]);
     // a phone with photos and a ZIP: the photos go on, the ZIP can't (said below, not counted up here)
     const what = [n ? `${num(n)} 張照片` : '', zips && !phone ? `${num(zips)} 個 ZIP` : '', set.folders ? `來自 ${set.tops.filter((t) => t.folder).length} 個資料夾` : ''].filter(Boolean).join('・');
     $('#askN').textContent = what;
-    for (const b of $$('.opt', dlg)) {
+    for (const b of $$('#askOpts .opt')) {
       b.disabled = !can[b.dataset.tool];
       b.classList.toggle('best', b.dataset.tool === best);
     }
@@ -313,7 +314,20 @@
       : raw === n ? '只有 RAW 檔：可以看參數或改名稱，不能壓縮'
       : n <= 3 ? '幾張照片：看看參數，或壓到上限內' : '';
     dlg.showModal();
-    $('.opt.best', dlg).focus();
+    $('#askOpts .opt.best').focus();
+  }
+  // videos in: cut them or make them smaller (a phone has only the second: 影片剪輯 is for a computer or a tablet);
+  // a camcorder's files (MTS, MXF) are usually the ones to make smaller
+  function askVideo(set) {
+    if (PHONE.matches) { hand('video', set); return; }
+    asking = set;
+    $('#askOpts').hidden = true; $('#askOptsV').hidden = false;
+    const cam = set.files.some((f) => /\.(mts|m2ts|mxf)$/i.test(f.file.name)), best = cam ? 'video' : 'cut';
+    $('#askN').textContent = `${num(set.count(['video']))} 部影片`;
+    for (const b of $$('#askOptsV .opt')) b.classList.toggle('best', b.dataset.tool === best);
+    $('#askWhy').textContent = cam ? 'MTS、MXF 是業務機錄的檔案，通常是要壓縮' : '';
+    dlg.showModal();
+    $('#askOptsV .opt.best').focus();
   }
   const outside = (e) => { const r = dlg.getBoundingClientRect(); return e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom; };
   let downOut = false;
@@ -326,7 +340,7 @@
   });
   dlg.addEventListener('keydown', (e) => {
     const i = '1234'.indexOf(e.key);
-    if (i >= 0) { const b = $$('.opt', dlg)[i]; if (b && !b.disabled) b.click(); }
+    if (i >= 0) { const b = $$('.ask-opts:not([hidden]) .opt', dlg)[i]; if (b && !b.disabled) b.click(); }
   });
   dlg.addEventListener('close', () => { asking = null; });
 

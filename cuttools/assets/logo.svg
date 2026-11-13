@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="ZhuyuanLoveCut">
+  <defs>
+    <linearGradient id="zlc-bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#4a5bd6"/>
+      <stop offset="1" stop-color="#2b329c"/>
+    </linearGradient>
+  </defs>
+  <rect width="64" height="64" rx="15" fill="url(#zlc-bg)"/>
+  <!-- a timeline: two clips with a cut between them, the playhead on the cut -->
+  <rect x="8" y="22" width="22" height="11" rx="2.5" fill="#9fb4ee"/>
+  <rect x="34" y="22" width="22" height="11" rx="2.5" fill="#9fb4ee"/>
+  <rect x="8" y="36" width="22" height="9" rx="2.5" fill="#7893de"/>
+  <rect x="34" y="36" width="22" height="9" rx="2.5" fill="#7893de"/>
+  <path d="M32 13v39" stroke="#fff" stroke-width="2.4" stroke-linecap="round"/>
+  <path d="M27 11h10v4.5L32 19l-5-3.5z" fill="#fff"/>
+  <!-- the heart -->
+  <path transform="translate(40.4 41.4) scale(.6)" d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" fill="#ff5a4e" stroke="#2b329c" stroke-width="2.2"/>
+</svg>

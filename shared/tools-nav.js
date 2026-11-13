@@ -13,6 +13,7 @@
   // home page's order
   const TOOLS = [
     ['video', '影片碼率壓縮', '/video', '../videotools/index.html', 'daily'],
+    ['cut', '影片剪輯', '/cut', '../cuttools/index.html', 'daily'],
     ['pdf', 'PDF 壓縮・拆分', '/pdf', '../pdftools/local/index.html', 'daily'],
     ['watermark', 'PDF 浮水印', '/watermark', '../watermarktools/index.html', 'daily'],
     ['avatar', 'Gravatar 頭貼查詢', '/avatar', '../avatartools/index.html', 'daily'],

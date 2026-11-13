@@ -18,6 +18,7 @@
      POST /exif/api/stats/processed   ← { files }   (photos read)
      POST /rename/api/stats/processed ← { files }   (files renamed)
      POST /pick/api/stats/processed   ← { files }   (picked photos saved)
+     POST /cut/api/stats/processed    ← { files, seconds }   (films saved from the editor)
    The photo tool's Flickr links are asked from here (server/flickr.js), so the API key stays on this machine:
      GET  /exif/api/flickr/status, /exif/api/flickr/rest?method=…, /exif/api/flickr/oembed?url=…
    照片挑選's second window is /pick/second. Its demo, /pick/demo, is the one place photos come from this server:
@@ -49,6 +50,7 @@ const MOUNTS = [
   { route: '/exif', dir: path.join(ROOT, 'exiftools'), tool: 'exif' },
   { route: '/rename', dir: path.join(ROOT, 'renametools'), tool: 'rename' },
   { route: '/pick', dir: path.join(ROOT, 'picktools'), tool: 'pick' },
+  { route: '/cut', dir: path.join(ROOT, 'cuttools'), tool: 'cut' },
   { route: '/fonts', dir: path.join(ROOT, 'fonts'), immutable: true },
   { route: '/shared', dir: path.join(ROOT, 'shared') },
   { route: '', dir: path.join(ROOT, 'home') },
@@ -66,12 +68,13 @@ const LEGACY = [
   [/^\/exiftools(\/(index\.html)?)?$/, '/exif'],
   [/^\/renametools(\/(index\.html)?)?$/, '/rename'],
   [/^\/picktools(\/(index\.html)?)?$/, '/pick'],
+  [/^\/cuttools(\/(index\.html)?)?$/, '/cut'],
   [/^\/pick\/second(\.html|\/)$/, '/pick/second'],
   [/^\/pick\/demo\/(index\.html)?$/, '/pick/demo'],
   [/^\/photo\/$/, '/photo'],
 ];
 
-const FIELDS = { video: ['files', 'seconds', 'savedBytes'], pdf: ['files', 'pages', 'savedBytes'], avatar: ['files'], image: ['files', 'savedBytes'], crop: ['files'], watermark: ['files'], exif: ['files'], rename: ['files'], pick: ['files'] };
+const FIELDS = { video: ['files', 'seconds', 'savedBytes'], pdf: ['files', 'pages', 'savedBytes'], avatar: ['files'], image: ['files', 'savedBytes'], crop: ['files'], watermark: ['files'], exif: ['files'], rename: ['files'], pick: ['files'], cut: ['files', 'seconds'] };
 // Upper bounds for one report, so a single bad request can't inflate the counters much. A rename is one report for
 // a whole folder, a pick the whole batch saved.
 const LIMITS = { files: 50, seconds: 6 * 3600 * 50, pages: 5000, savedBytes: 200e9 };
@@ -83,7 +86,7 @@ const TYPES = {
   '.txt': 'text/plain; charset=utf-8', '.woff2': 'font/woff2', '.jpeg': 'image/jpeg', '.webp': 'image/webp', '.heic': 'image/heic', '.heif': 'image/heif', '.wasm': 'application/wasm', '.gz': 'application/gzip', '.ico': 'image/x-icon',
 };
 
-let stats = { video: {}, pdf: {}, avatar: {}, image: {}, crop: {}, watermark: {}, exif: {}, rename: {}, pick: {} };
+let stats = { video: {}, pdf: {}, avatar: {}, image: {}, crop: {}, watermark: {}, exif: {}, rename: {}, pick: {}, cut: {} };
 try { stats = { ...stats, ...JSON.parse(fs.readFileSync(STATS_FILE, 'utf8')) }; } catch {}
 for (const [k, fields] of Object.entries(FIELDS)) for (const f of fields) stats[k][f] = +stats[k][f] || 0;
 
