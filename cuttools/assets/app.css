@@ -88,9 +88,9 @@ kbd { display: inline-block; min-width: 1.5em; padding: 0 4px; border-radius: 3p
 #fTools { flex: 0 0 32px; margin-right: 4px; }
 #fTl { flex: 1 1 0; min-width: 300px; }
 #fMeter { flex: 0 0 46px; margin-left: 4px; }
-/* ` : the panel under the pointer fills the frame */
-.ws.max .row-top, .ws.max .row-bot, .ws.max .rz { display: none; }
-.ws.max .frame.maxed { position: fixed; inset: 42px 4px 4px; z-index: 30; flex: none; width: auto; }
+/* ` : the panel under the pointer fills the frame (the others hidden, not taken away: it lives among them) */
+.ws.max .row-top, .ws.max .row-bot, .ws.max .rz { visibility: hidden; }
+.ws.max .frame.maxed { visibility: visible; position: fixed; inset: 42px 4px 4px; z-index: 30; flex: none; width: auto; }
 
 /* tabs */
 .tabs { flex: none; display: flex; align-items: stretch; height: 27px; padding: 0 4px; overflow: hidden; }
@@ -104,9 +104,13 @@ kbd { display: inline-block; min-width: 1.5em; padding: 0 4px; border-radius: 3p
 .tab-body { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
 
 /* ================= monitors ================= */
-.mon-view { position: relative; flex: 1 1 auto; min-height: 0; overflow: hidden; display: grid; place-items: center; }
-.mon-view.zoomed { overflow: auto; place-items: start; }
-.mon-frame { position: relative; background: #000; overflow: hidden; }
+/* (size containment: a picture zoomed past the view scrolls inside it instead of widening the workspace; auto margins
+   centre it, and let a zoomed one scroll from its edge) */
+.mon-view { position: relative; flex: 1 1 auto; min-height: 0; overflow: hidden; display: grid; contain: size; }
+.mon-view.zoomed { overflow: auto; cursor: grab; }
+.mon-view.zoomed.panning { cursor: grabbing; }
+.mon-frame { position: relative; margin: auto; background: #000; overflow: hidden; }
+.frame:fullscreen { border-radius: 0; }
 .mon-frame video, .mon-frame img, .mon-frame audio { display: block; width: 100%; height: 100%; object-fit: contain; }
 .mon-empty { position: absolute; inset: 0; display: grid; place-items: center; margin: 0; padding: 20px; color: #5c5c5c; text-align: center; font-size: 12px; pointer-events: none; }
 .layers { position: absolute; inset: 0; }

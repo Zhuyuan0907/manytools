@@ -64,6 +64,7 @@
   <symbol id="i-proj" viewBox="0 0 16 16"><path d="M1.6 3.2h4.8l1.4 1.4h6.6v8.2H1.6z" opacity=".55"/><path d="M4 7.2h8v1.2H4zm0 2.2h5.6v1.2H4z"/></symbol>
   <symbol id="i-home" viewBox="0 0 16 16"><path d="M8 1.8l6.6 5.6-.9 1.1-.9-.8v6.5H9.6v-4H6.4v4H3.2V7.7l-.9.8-.9-1.1z"/></symbol>
   <symbol id="i-full" viewBox="0 0 16 16"><path d="M1.8 1.8h4.6v1.4H3.2v3.2H1.8zm7.8 0h4.6v4.6h-1.4V3.2H9.6zM1.8 9.6h1.4v3.2h3.2v1.4H1.8zm11 0h1.4v4.6H9.6v-1.4h3.2z"/></symbol>
+  <symbol id="i-full-x" viewBox="0 0 16 16"><path d="M5 1.8h1.4v4.6H1.8V5H5zm4.6 0H11V5h3.2v1.4H9.6zM1.8 9.6h4.6v4.6H5V11H1.8zm7.8 0h4.6V11H11v3.2H9.6z"/></symbol>
   <symbol id="i-vid" viewBox="0 0 16 16"><path fill-rule="evenodd" d="M1.4 3h13.2v10H1.4zm1.3 1.2v1.2h1.4V4.2zm9.2 0v1.2h1.4V4.2zM2.7 10.6v1.2h1.4v-1.2zm9.2 0v1.2h1.4v-1.2zM5.2 4.2v7.6h5.6V4.2z"/></symbol>
   <symbol id="i-aud" viewBox="0 0 16 16"><path d="M1.2 7.2h1.3v1.6H1.2zM3.4 5.4h1.3v5.2H3.4zM5.6 2.8h1.3v10.4H5.6zM7.8 5h1.3v6H7.8zM10 3.8h1.3v8.4H10zM12.2 6h1.3v4h-1.3zM14.4 7.2h.6v1.6h-.6z"/></symbol>
   <symbol id="i-close" viewBox="0 0 16 16"><path d="M4.2 3.2 8 7l3.8-3.8 1 1L9 8l3.8 3.8-1 1L8 9l-3.8 3.8-1-1L7 8 3.2 4.2z"/></symbol>
@@ -132,7 +133,7 @@
           <div class="mon-view" id="srcView"><div class="mon-frame" id="srcFrame"></div><p class="mon-empty" id="srcEmpty">在專案面板按兩下剪輯，在這裡看、標入點出點</p></div>
           <div class="mon-bar">
             <span class="tc tc-blue" id="srcTc">00:00:00:00</span>
-            <label class="mon-sel"><select id="srcZoom" aria-label="縮放層級"><option value="fit">適合</option><option value="25">25%</option><option value="50">50%</option><option value="75">75%</option><option value="100">100%</option></select></label>
+            <label class="mon-sel"><select id="srcZoom" aria-label="縮放層級"><option value="fit">適合</option><option value="10">10%</option><option value="25">25%</option><option value="50">50%</option><option value="75">75%</option><option value="100">100%</option><option value="150">150%</option><option value="200">200%</option><option value="400">400%</option><option class="z-free" value="free" hidden></option></select></label>
             <span class="mon-mid"><button type="button" class="drag-only" id="srcDragV" draggable="true" title="只拖曳影片" aria-label="只拖曳影片"><svg><use href="#i-vid"/></svg></button><button type="button" class="drag-only" id="srcDragA" draggable="true" title="只拖曳音訊" aria-label="只拖曳音訊"><svg><use href="#i-aud"/></svg></button></span>
             <span class="tc tc-dur" id="srcDur" title="入點到出點的長度">00:00:00:00</span>
           </div>
@@ -151,6 +152,7 @@
             <button type="button" data-act="overwrite" title="覆蓋 (.)"><svg><use href="#i-ovr"/></svg></button>
             <i class="t-gap"></i>
             <button type="button" data-act="frame" title="匯出影格 (⌘⇧E)"><svg><use href="#i-cam"/></svg></button>
+            <button type="button" class="t-full" data-act="full" title="全螢幕 (⌃`)" aria-label="全螢幕"><svg><use href="#i-full"/></svg></button>
           </div>
         </div>
         <div class="tab-body fxc" data-body="fx" id="fxBody" hidden></div>
@@ -166,7 +168,7 @@
           <div class="mon-view" id="prgView"><div class="mon-frame" id="prgFrame"><div class="layers" id="layers"></div><div class="mon-off" id="prgOffline" hidden><b id="prgOfflineT">媒體離線</b><span id="prgOfflineName"></span></div></div><div class="xf" id="xf" hidden><i data-h="nw"></i><i data-h="ne"></i><i data-h="sw"></i><i data-h="se"></i></div></div>
           <div class="mon-bar">
             <span class="tc tc-blue" id="prgTc">00:00:00:00</span>
-            <label class="mon-sel"><select id="prgZoom" aria-label="縮放層級"><option value="fit">適合</option><option value="25">25%</option><option value="50">50%</option><option value="75">75%</option><option value="100">100%</option></select></label>
+            <label class="mon-sel"><select id="prgZoom" aria-label="縮放層級"><option value="fit">適合</option><option value="10">10%</option><option value="25">25%</option><option value="50">50%</option><option value="75">75%</option><option value="100">100%</option><option value="150">150%</option><option value="200">200%</option><option value="400">400%</option><option class="z-free" value="free" hidden></option></select></label>
             <span class="mon-mid"></span>
             <span class="tc tc-dur" id="prgDur" title="序列的長度（有入點出點時是那一段）">00:00:00:00</span>
           </div>
@@ -185,6 +187,7 @@
             <button type="button" data-act="extract" title="擷取：拿掉入點到出點，後面補上來 (')"><svg><use href="#i-ext"/></svg></button>
             <i class="t-gap"></i>
             <button type="button" data-act="frame" title="匯出影格 (⌘⇧E)"><svg><use href="#i-cam"/></svg></button>
+            <button type="button" class="t-full" data-act="full" title="全螢幕 (⌃`)" aria-label="全螢幕"><svg><use href="#i-full"/></svg></button>
           </div>
         </div>
       </section>
@@ -379,7 +382,9 @@
       <dt><kbd>S</kbd></dt><dd>靠齊開關</dd>
       <dt><kbd>⌘</kbd><kbd>Z</kbd>・<kbd>⇧</kbd><kbd>⌘</kbd><kbd>Z</kbd></dt><dd>復原・重做</dd>
       <dt><kbd>⌘</kbd><kbd>M</kbd></dt><dd>匯出</dd>
-      <dt><kbd>`</kbd></dt><dd>放大游標下的面板</dd>
+      <dt><kbd>`</kbd></dt><dd>放大游標下的面板（或在面板標籤上按兩下）</dd>
+      <dt><kbd>⌃</kbd><kbd>`</kbd></dt><dd>監視器全螢幕（游標下的，不然是節目）</dd>
+      <dt><kbd>⌘</kbd> 捲動・雙指開合</dt><dd>放大、縮小監視器的畫面；放大後拖曳移動</dd>
     </dl>
     <div class="dlg-btns"><button type="button" class="pbtn on" id="keysOk">確定</button></div>
   </div>

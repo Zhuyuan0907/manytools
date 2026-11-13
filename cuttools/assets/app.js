@@ -477,11 +477,18 @@
   }
 
   // ---------- monitors: the frame as big as fits (or a zoom level), the mini ruler ----------
-  function fitFrame(view, frame, w, h, zoom) {
+  const fitScale = (view, w, h) => Math.min(Math.max(40, view.clientWidth - 8) / w, Math.max(30, view.clientHeight - 8) / h);
+  // (zoomed in, the point of the picture under `at` — the view's middle unless a pinch says where — stays where it is)
+  function fitFrame(view, frame, w, h, zoom, at) {
     const vw = Math.max(40, view.clientWidth - 8), vh = Math.max(30, view.clientHeight - 8);
-    const s = zoom === 'fit' ? Math.min(vw / w, vh / h) : +zoom / 100;
+    const s = zoom === 'fit' ? fitScale(view, w, h) : +zoom / 100;
+    const vb = view.getBoundingClientRect(), fb = frame.getBoundingClientRect();
+    const ax = at ? at.x : vb.left + view.clientWidth / 2, ay = at ? at.y : vb.top + view.clientHeight / 2;
+    const rx = fb.width ? (ax - fb.left) / fb.width : 0.5, ry = fb.height ? (ay - fb.top) / fb.height : 0.5;
     frame.style.width = `${Math.round(w * s)}px`; frame.style.height = `${Math.round(h * s)}px`;
-    view.classList.toggle('zoomed', zoom !== 'fit' && (w * s > vw || h * s > vh));
+    const zoomed = zoom !== 'fit' && (w * s > vw || h * s > vh);
+    view.classList.toggle('zoomed', zoomed);
+    if (zoomed) { const nb = frame.getBoundingClientRect(); view.scrollLeft += nb.left + rx * nb.width - ax; view.scrollTop += nb.top + ry * nb.height - ay; }
     return s;
   }
   function miniDrag(mini, total, seek) {
@@ -618,9 +625,11 @@
       $('#srcTabName').textContent = '來源：(無剪輯)';
       this.render(); renderMeta();
     },
-    fit() {
-      const m = this.m, w = m && m.w ? m.w : 16, h = m && m.h ? m.h : 9;
-      fitFrame($('#srcView'), $('#srcFrame'), m && m.kind === 'audio' ? 16 : w, m && m.kind === 'audio' ? 9 : h, $('#srcZoom').value);
+    // (the picture's size in the view: w, h and the scale k)
+    size() { const m = this.m, aud = !m || m.kind === 'audio'; return { w: !aud && m.w ? m.w : 16, h: !aud && m.h ? m.h : 9 }; },
+    fit(at) {
+      const m = this.m, { w, h } = this.size();
+      this.k = fitFrame($('#srcView'), $('#srcFrame'), w, h, $('#srcZoom').value, at);
       if (m && m.kind === 'audio') this.drawWave();
     },
     drawWave() {
@@ -702,7 +711,7 @@
       io.classList.toggle('on', on);
       if (on) { const a = m.srcIn != null ? m.srcIn : 0, b = m.srcOut != null ? m.srcOut : d; io.style.left = `${(a / d) * 100}%`; io.style.width = `${((b - a) / d) * 100}%`; }
       const has = !!m;
-      for (const b of $$('#srcTransport button')) b.disabled = !has || (m.kind === 'still' && !['insert', 'overwrite', 'frame'].includes(b.dataset.act));
+      for (const b of $$('#srcTransport button')) b.disabled = !has || (m.kind === 'still' && !['insert', 'overwrite', 'frame', 'full'].includes(b.dataset.act));
     },
   };
   miniDrag($('#srcMini'), () => SRC.dur(), (t) => { if (SRC.el) SRC.el.pause(); SRC.seek(t); });
@@ -757,9 +766,10 @@
     fps() { return P.seq ? fpsOf(P.seq.rate) : 30; },
     endFrame() { return seqEnd(); },
     fitKey: '',
-    fit() {
+    size() { return P.seq ? { w: P.seq.w, h: P.seq.h } : { w: 16, h: 9 }; },
+    fit(at) {
       if (!P.seq) { fitFrame($('#prgView'), $('#prgFrame'), 16, 9, 'fit'); this.k = 1; this.fitKey = ''; return; }
-      this.k = fitFrame($('#prgView'), $('#prgFrame'), P.seq.w, P.seq.h, $('#prgZoom').value);
+      this.k = fitFrame($('#prgView'), $('#prgFrame'), P.seq.w, P.seq.h, $('#prgZoom').value, at);
       this.fitKey = `${P.seq.w}x${P.seq.h}`;
       this.show(PH.frame, true);
     },
@@ -954,6 +964,66 @@
   tcScrub($('#prgTc'), () => Math.round(PH.frame), (f) => { PL.stop(); setPh(f); }, () => (P.seq ? P.seq.rate : { num: 30, den: 1 }));
   tcScrub($('#tlTc'), () => Math.round(PH.frame), (f) => { PL.stop(); setPh(f); }, () => (P.seq ? P.seq.rate : { num: 30, den: 1 }));
   $('#prgZoom').addEventListener('change', () => PL.fit());
+
+  // ---------- zooming the monitors: 適合 or Premiere's levels (10–400%) from the menu; ⌘/Ctrl-scroll or a pinch for
+  // anything from 適合 to 800%, about the pointer. Zoomed in, the picture is dragged about (or scrolled) ----------
+  const MONS = { prg: { mon: () => PL, view: $('#prgView'), sel: $('#prgZoom'), ready: () => !!P.seq }, src: { mon: () => SRC, view: $('#srcView'), sel: $('#srcZoom'), ready: () => !!SRC.m } };
+  function setZoom(which, z, at) {
+    const M = MONS[which], sel = M.sel;
+    if (z === 'fit') sel.value = 'fit';
+    else {
+      const pct = String(Math.round(z)), preset = [...sel.options].find((o) => o.value === pct && !o.hidden);
+      if (preset) sel.value = pct;
+      else { const o = sel.querySelector('.z-free'); o.value = pct; o.textContent = `${pct}%`; sel.value = pct; }
+    }
+    M.mon().fit(at);
+  }
+  for (const which of Object.keys(MONS)) {
+    const M = MONS[which], view = M.view;
+    // to z% (from k, the scale it's at); shrinking past what fits is 適合
+    const zoomBy = (f, at) => {
+      if (!M.ready()) return;
+      const { w, h } = M.mon().size(), fit = fitScale(view, w, h), k = M.sel.value === 'fit' ? fit : M.mon().k || fit, z = clamp(k * f, 0.1, 8);
+      setZoom(which, f < 1 && z <= fit * 1.001 ? 'fit' : z * 100, at);
+    };
+    // (a pinch comes as ⌃-scroll, exp(−Δ/100) a step, followed one to one; a mouse's notch is about a fifth)
+    let g = 0;
+    view.addEventListener('wheel', (e) => {
+      if (!e.ctrlKey && !e.metaKey) return;   // (a plain wheel scrolls a zoomed picture)
+      e.preventDefault();
+      if (g) return;
+      const d = e.deltaY * (e.deltaMode === 1 ? 33 : e.deltaMode === 2 ? 800 : 1);
+      zoomBy(Math.exp(-clamp(d, -25, 25) / 100), { x: e.clientX, y: e.clientY });
+    }, { passive: false });
+    // (Safari pinches with gesture events)
+    view.addEventListener('gesturestart', (e) => { e.preventDefault(); g = 1; });
+    view.addEventListener('gesturechange', (e) => { e.preventDefault(); if (!g) return; zoomBy(e.scale / g, { x: e.clientX, y: e.clientY }); g = e.scale; });
+    view.addEventListener('gestureend', (e) => { e.preventDefault(); g = 0; });
+    view.addEventListener('pointerdown', (e) => {
+      if (!view.classList.contains('zoomed') || (e.button !== 0 && e.button !== 1) || e.target.closest('#xf') || (which === 'prg' && S.tool === 'type')) return;
+      e.preventDefault();
+      view.setPointerCapture(e.pointerId);
+      view.classList.add('panning');
+      const x0 = e.clientX, y0 = e.clientY, l0 = view.scrollLeft, t0 = view.scrollTop;
+      view.onpointermove = (ev) => { view.scrollLeft = l0 - (ev.clientX - x0); view.scrollTop = t0 - (ev.clientY - y0); };
+      view.onpointerup = view.onpointercancel = () => { view.onpointermove = view.onpointerup = view.onpointercancel = null; view.classList.remove('panning'); };
+    });
+  }
+  // ---------- full screen (Premiere's ⌃`): the monitor under the pointer, else 節目, with its controls ----------
+  const fullEl = () => document.fullscreenElement || document.webkitFullscreenElement || null;
+  function toggleFull(which) {
+    if (fullEl()) { (document.exitFullscreen || document.webkitExitFullscreen).call(document); return; }
+    const f = which ? $(`[data-panel="${which}"]`) : hoverFrame && (hoverFrame.id === 'fSrc' || hoverFrame.id === 'fPrg') ? hoverFrame : $('#fPrg'), go = f.requestFullscreen || f.webkitRequestFullscreen;
+    if (!go) { toast('這個瀏覽器不能全螢幕'); return; }
+    Promise.resolve(go.call(f)).catch(() => toast('這個瀏覽器不能全螢幕'));
+  }
+  const onFull = () => {
+    const f = fullEl();
+    for (const b of $$('.t-full')) { const on = !!f && f.contains(b); b.querySelector('use').setAttribute('href', on ? '#i-full-x' : '#i-full'); b.title = on ? '結束全螢幕 (Esc)' : `全螢幕 (${K('⌃`')})`; }
+    requestAnimationFrame(() => { PL.fit(); SRC.fit(); placeXf(); });
+  };
+  document.addEventListener('fullscreenchange', onFull);
+  document.addEventListener('webkitfullscreenchange', onFull);
   function setPh(f, keepView) {
     if (!P.seq) return;
     PH.frame = clamp(Math.round(f), 0, Math.max(0, seqEnd()));
@@ -2155,6 +2225,7 @@
   }
   let hoverFrame = null;
   addEventListener('pointermove', (e) => { hoverFrame = e.target.closest && e.target.closest('.frame'); }, { passive: true });
+  document.addEventListener('dblclick', (e) => { const t = e.target.closest && e.target.closest('.frame .tab'); if (t && !e.target.closest('.tab-menu, .tab-x')) { hoverFrame = t.closest('.frame'); toggleMax(); } });
   function toggleMax() {
     const ws = $('#ws'), on = ws.classList.contains('max');
     for (const f of $$('.frame')) f.classList.remove('maxed');
@@ -2271,10 +2342,10 @@
   $('#bKeys').addEventListener('click', () => $('#dlgKeys').showModal());
 
   // ---------- menus (right-click, and each panel's ≡) ----------
-  const K = (k) => (MAC ? k : k.replace('⌘', 'Ctrl+').replace('⌥', 'Alt+').replace('⇧', 'Shift+').replace('⌫', 'Delete'));
+  const K = (k) => (MAC ? k : k.replace('⌘', 'Ctrl+').replace('⌃', 'Ctrl+').replace('⌥', 'Alt+').replace('⇧', 'Shift+').replace('⌫', 'Delete'));
   // on Windows the keys as Windows writes them (Ctrl, Alt, Shift)
   if (!MAC) {
-    for (const k of $$('kbd')) k.textContent = { '⌘': 'Ctrl', '⌥': 'Alt', '⇧': 'Shift' }[k.textContent] || k.textContent;
+    for (const k of $$('kbd')) k.textContent = { '⌘': 'Ctrl', '⌃': 'Ctrl', '⌥': 'Alt', '⇧': 'Shift' }[k.textContent] || k.textContent;
     for (const k of $$('kbd')) { const b = k.previousElementSibling; if (k.textContent === 'Ctrl' && b && b.tagName === 'KBD' && b.textContent === 'Shift') k.after(b); }   // Ctrl+Shift, Windows's order
     for (const n of $$('[title]')) if (/[⌘⌥⇧]/.test(n.title)) n.title = K(n.title);
   }
@@ -2402,7 +2473,7 @@
     if (!b || !SRC.m) return;
     const a = b.dataset.act;
     if (a === 'play') SRC.toggle(); else if (a === 'in' || a === 'out') SRC.mark(a); else if (a === 'goin') SRC.seek(SRC.m.srcIn || 0); else if (a === 'goout') SRC.seek(SRC.m.srcOut != null ? SRC.m.srcOut : SRC.dur());
-    else if (a === 'sb') SRC.step(-1); else if (a === 'sf') SRC.step(1); else if (a === 'insert') srcEdit('insert'); else if (a === 'overwrite') srcEdit('overwrite'); else if (a === 'frame') exportFrame('src');
+    else if (a === 'sb') SRC.step(-1); else if (a === 'sf') SRC.step(1); else if (a === 'insert') srcEdit('insert'); else if (a === 'overwrite') srcEdit('overwrite'); else if (a === 'frame') exportFrame('src'); else if (a === 'full') toggleFull('src');
     else if (a === 'mark') toast('來源剪輯的標記：這個版本只在時間軸上加標記', 2200);
   });
   $('#prgTransport').addEventListener('click', (e) => {
@@ -2412,7 +2483,7 @@
     if (a === 'play') PL.toggle(); else if (a === 'in' || a === 'out') markSeq(a); else if (a === 'mark') addMarker();
     else if (a === 'goin') { PL.stop(); setPh(P.seq.in != null ? P.seq.in : 0); } else if (a === 'goout') { PL.stop(); setPh(P.seq.out != null ? P.seq.out : seqEnd()); }
     else if (a === 'sb') { PL.stop(); setPh(PH.frame - 1); } else if (a === 'sf') { PL.stop(); setPh(PH.frame + 1); }
-    else if (a === 'lift') liftExtract(false); else if (a === 'extract') liftExtract(true); else if (a === 'frame') exportFrame('prg');
+    else if (a === 'lift') liftExtract(false); else if (a === 'extract') liftExtract(true); else if (a === 'frame') exportFrame('prg'); else if (a === 'full') toggleFull('prg');
   });
 
   // ---------- keys: Premiere Pro's (the 來源 monitor's when it has the focus) ----------
@@ -2430,6 +2501,7 @@
     const k = e.key, lk = k.length === 1 ? k.toLowerCase() : k, mod = e.metaKey || e.ctrlKey, sh = e.shiftKey, alt = e.altKey;
     const src = S.focus === 'src' && SRC.m;
     let done = true;
+    if (e.ctrlKey && !e.metaKey && (k === '`' || e.code === 'Backquote')) { e.preventDefault(); toggleFull(); return; }
     if (mod) {
       switch (lk) {
         case 'z': if (sh) doRedo(); else doUndo(); break;
